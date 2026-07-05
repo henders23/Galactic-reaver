@@ -65,6 +65,40 @@ const U = {
     return Math.hypot(c.x - px, c.y - py) < r;
   },
 
+  /* ---- movement curves (inertia) ----
+     Cubic Bézier whose tangents match the start heading and the final facing,
+     so a ship swings through a smooth arc and settles onto its new heading. */
+  curveFn(from, to) {
+    const d = U.dist(from, to);
+    if (d < 4) {
+      // rotation in place
+      return (t) => ({ x: from.x, y: from.y, angle: U.lerpAngle(from.angle, to.angle, t) });
+    }
+    const k = d * 0.42;
+    const a0 = from.angle * U.D2R, a1 = to.angle * U.D2R;
+    const p0 = { x: from.x, y: from.y };
+    const p1 = { x: from.x + Math.cos(a0) * k, y: from.y + Math.sin(a0) * k };
+    const p2 = { x: to.x - Math.cos(a1) * k, y: to.y - Math.sin(a1) * k };
+    const p3 = { x: to.x, y: to.y };
+    return (t) => {
+      const u = 1 - t;
+      const x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
+      const y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
+      // derivative for the facing along the arc
+      const dx = 3 * u * u * (p1.x - p0.x) + 6 * u * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x);
+      const dy = 3 * u * u * (p1.y - p0.y) + 6 * u * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y);
+      const angle = (Math.abs(dx) + Math.abs(dy) > 0.001) ? Math.atan2(dy, dx) / U.D2R : to.angle;
+      return { x, y, angle };
+    };
+  },
+
+  sampleCurve(from, to, n) {
+    const f = U.curveFn(from, to);
+    const pts = [];
+    for (let i = 0; i <= n; i++) pts.push(f(i / n));
+    return pts;
+  },
+
   fmtPct(p) { return Math.round(p * 100) + '%'; },
   padTurn(n) { return String(n).padStart(2, '0'); },
 

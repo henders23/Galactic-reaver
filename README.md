@@ -23,17 +23,27 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 - **The prototype's core rules, expanded:**
   - Three-phase turns: plot helm orders and movement for every ship, all ships
     maneuver simultaneously, then exchange fire, then resolve.
+  - **Dice-pool gunnery** — every gun throws a pool of D6: a light escort flicks
+    2 dice, a capital broadside hurls 10. Each die hits on the weapon's to-hit
+    number (lances 3+ at any range; batteries 4+, worse at long range, better
+    point-blank), shifted by orders, criticals, evasion and nebulae. Each hit
+    deals its damage; the engagement log shows every die rolled.
   - Six helm orders: New Heading, All Ahead Full, Come About, Evasive Pattern,
-    Hold & Lock, Brace for Impact.
-  - Facing shields (fore/side/aft). The stern is unshielded and crits on 5+.
-    Shields recharge only on turns a ship isn't under fire.
-  - Fore/side weapon arcs; lances (accurate beams) vs. batteries (shell volleys);
-    long-range accuracy penalties.
-  - Critical hits: weapons, engines, shield emitter, bridge, **fires** (burn every
+    Hold & Lock, Brace for Impact — expressed as ±1/±2 shifts to the dice.
+  - **Inertial movement** — ships fly smooth arcs (cubic curves whose tangents
+    match the start heading and final facing), and the dashed plot preview shows
+    the exact curve the ship will swing through. Asteroid collisions are checked
+    against the real flight arc.
+  - Facing shields (fore/side/aft) that soak hits from a volley one-for-one.
+    The stern is unshielded and crits on 5+. Shields recharge only on turns a
+    ship isn't under fire.
+  - Critical hits (one roll per damaging volley; massed volleys of 4+ hits crit
+    one easier): weapons, engines, shield emitter, bridge, **fires** (burn every
     turn until contained) and **hull breaches**. Damage-control repair rolls each turn.
 - **Torpedoes as real ordnance** — salvos travel the map each movement phase and hit
-  *whatever* crosses their path, friend or foe. Point-defense turrets and evasive
-  maneuvers thin incoming salvos. They bypass shields and crit hard.
+  *whatever* crosses their path, friend or foe. Each fish deals a D6 of hull,
+  bypasses shields and crits hard. Point-defense turrets and evasive
+  maneuvers thin incoming salvos.
 - **Terrain** — asteroid shoals block line of fire and grind hulls that transit them;
   nebulae hide ships (−15% to be hit).
 - **Role-based enemy AI** — raiders hunt your stern, brawlers close head-on, snipers
