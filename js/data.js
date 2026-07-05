@@ -8,10 +8,13 @@ DATA.WORLD = { w: 1400, h: 900 };
 /* ---------------- weapon templates ----------------
    type: 'lance' (beam), 'battery' (shells), 'torp' (ordnance salvo)
    arc:  'fore' | 'side'
-*/
+   Direct fire is a dice pool: roll `dice` D6, each die hits on `need`+,
+   each hit deals `dmgPer` hull (shields absorb hits one-for-one).
+   Lances hit on 3+ and ignore range penalties; batteries hit on 4+,
+   suffer at long range and improve point-blank. */
 DATA.weapon = (over) => Object.assign({
   name: 'BATTERY', type: 'battery', arc: 'side',
-  range: 320, acc: 0.6, dmg: [2, 3],
+  range: 320, dice: 4, need: 4, dmgPer: 1,
   salvo: 0, reloadTime: 0, reload: 0, target: null
 }, over);
 
@@ -24,9 +27,9 @@ DATA.CLASSES = {
     speed: 170, maxTurn: 90, turrets: 1, pts: 160,
     desc: 'Fast, agile line ship. Fore lance, side batteries, one torpedo tube.',
     weapons: [
-      { name: 'LANCE BATTERY', type: 'lance', arc: 'fore', range: 430, acc: 0.75, dmg: [3, 5] },
-      { name: 'FLANK BATTERIES', type: 'battery', arc: 'side', range: 320, acc: 0.60, dmg: [2, 4] },
-      { name: 'MK-II TORPEDOES', type: 'torp', arc: 'fore', range: 560, acc: 0, dmg: [3, 5], salvo: 2, reloadTime: 2 }
+      { name: 'LANCE BATTERY', type: 'lance', arc: 'fore', range: 430, dice: 2, need: 3, dmgPer: 2 },
+      { name: 'FLANK BATTERIES', type: 'battery', arc: 'side', range: 320, dice: 4, need: 4, dmgPer: 1 },
+      { name: 'MK-II TORPEDOES', type: 'torp', arc: 'fore', range: 560, salvo: 2, reloadTime: 2 }
     ]
   },
   frigate: {
@@ -35,8 +38,8 @@ DATA.CLASSES = {
     speed: 150, maxTurn: 60, turrets: 2, pts: 220,
     desc: 'Tough gun platform. Heavy broadsides, light fore lance.',
     weapons: [
-      { name: 'LIGHT LANCE', type: 'lance', arc: 'fore', range: 380, acc: 0.70, dmg: [2, 4] },
-      { name: 'HEAVY BROADSIDE', type: 'battery', arc: 'side', range: 360, acc: 0.65, dmg: [3, 5] }
+      { name: 'LIGHT LANCE', type: 'lance', arc: 'fore', range: 380, dice: 2, need: 3, dmgPer: 2 },
+      { name: 'HEAVY BROADSIDE', type: 'battery', arc: 'side', range: 360, dice: 6, need: 4, dmgPer: 1 }
     ]
   },
   lcruiser: {
@@ -45,9 +48,9 @@ DATA.CLASSES = {
     speed: 125, maxTurn: 45, turrets: 3, pts: 340,
     desc: 'Ship of the line. Lance decks, massed batteries, triple torpedo tubes.',
     weapons: [
-      { name: 'LANCE DECK', type: 'lance', arc: 'side', range: 420, acc: 0.75, dmg: [4, 6] },
-      { name: 'GUN BATTERIES', type: 'battery', arc: 'side', range: 380, acc: 0.60, dmg: [3, 6] },
-      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 560, acc: 0, dmg: [3, 5], salvo: 3, reloadTime: 2 }
+      { name: 'LANCE DECK', type: 'lance', arc: 'side', range: 420, dice: 3, need: 3, dmgPer: 2 },
+      { name: 'GUN BATTERIES', type: 'battery', arc: 'side', range: 380, dice: 8, need: 4, dmgPer: 1 },
+      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 560, salvo: 3, reloadTime: 2 }
     ]
   },
   /* --- civilian --- */
@@ -65,7 +68,7 @@ DATA.CLASSES = {
     speed: 210, maxTurn: 90, turrets: 1, pts: 90,
     desc: 'Fast attack craft. Weak alone, deadly in packs at your stern.',
     weapons: [
-      { name: 'AUTOGUNS', type: 'battery', arc: 'fore', range: 280, acc: 0.50, dmg: [1, 3] }
+      { name: 'AUTOGUNS', type: 'battery', arc: 'fore', range: 280, dice: 2, need: 4, dmgPer: 1 }
     ]
   },
   ravager: {
@@ -74,7 +77,7 @@ DATA.CLASSES = {
     speed: 150, maxTurn: 45, turrets: 1, pts: 150,
     desc: 'Dominion raider. Closes fast and hammers with flak cannon.',
     weapons: [
-      { name: 'FLAK CANNON', type: 'battery', arc: 'fore', range: 380, acc: 0.55, dmg: [2, 4] }
+      { name: 'FLAK CANNON', type: 'battery', arc: 'fore', range: 380, dice: 4, need: 4, dmgPer: 1 }
     ]
   },
   marauder: {
@@ -83,8 +86,8 @@ DATA.CLASSES = {
     speed: 130, maxTurn: 45, turrets: 2, pts: 250,
     desc: 'Destroyer with heavy broadsides and torpedo tubes.',
     weapons: [
-      { name: 'HEAVY BATTERY', type: 'battery', arc: 'side', range: 370, acc: 0.60, dmg: [3, 5] },
-      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 560, acc: 0, dmg: [3, 5], salvo: 2, reloadTime: 2 }
+      { name: 'HEAVY BATTERY', type: 'battery', arc: 'side', range: 370, dice: 6, need: 4, dmgPer: 1 },
+      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 560, salvo: 2, reloadTime: 2 }
     ]
   },
   dreadmaw: {
@@ -93,9 +96,9 @@ DATA.CLASSES = {
     speed: 100, maxTurn: 30, turrets: 4, pts: 500,
     desc: 'Dominion flagship of the Drift. Kill it and the line breaks.',
     weapons: [
-      { name: 'LANCE SPINE', type: 'lance', arc: 'side', range: 440, acc: 0.70, dmg: [4, 6] },
-      { name: 'MASS BATTERIES', type: 'battery', arc: 'side', range: 380, acc: 0.60, dmg: [3, 6] },
-      { name: 'TORPEDO MAW', type: 'torp', arc: 'fore', range: 560, acc: 0, dmg: [3, 5], salvo: 3, reloadTime: 2 }
+      { name: 'LANCE SPINE', type: 'lance', arc: 'side', range: 440, dice: 3, need: 3, dmgPer: 2 },
+      { name: 'MASS BATTERIES', type: 'battery', arc: 'side', range: 380, dice: 10, need: 4, dmgPer: 1 },
+      { name: 'TORPEDO MAW', type: 'torp', arc: 'fore', range: 560, salvo: 3, reloadTime: 2 }
     ]
   }
 };
@@ -106,19 +109,21 @@ DATA.CLASSES = {
 DATA.orders = (ship) => {
   const spd = Game.effSpeed(ship);
   const brg = ship.sys['BRIDGE'];
+  /* accShift: added to this ship's own to-hit numbers (+ is worse)
+     dodgeShift: added to enemy to-hit numbers when firing at this ship */
   const all = [
     { id: 'heading', name: 'NEW HEADING', range: spd, minMove: 30, maxTurn: ship.maxTurn,
-      desc: 'move · turn ≤' + ship.maxTurn + '°', accMod: 0, dodge: 0 },
+      desc: 'move · turn ≤' + ship.maxTurn + '°', accShift: 0, dodgeShift: 0 },
     { id: 'full', name: 'ALL AHEAD FULL', range: spd * 1.55, minMove: spd * 0.75, maxTurn: Math.min(22.5, ship.maxTurn),
-      desc: 'long move · shallow turn · −10% acc', accMod: -0.10, dodge: 0.05 },
+      desc: 'long move · shallow turn · own guns hit on +1', accShift: 1, dodgeShift: 0 },
     { id: 'about', name: 'COME ABOUT', range: spd * 0.55, minMove: 0, maxTurn: 180,
-      desc: 'short move · any facing', accMod: 0, dodge: 0 },
+      desc: 'short move · any facing', accShift: 0, dodgeShift: 0 },
     { id: 'evasive', name: 'EVASIVE PATTERN', range: spd * 0.8, minMove: 30, maxTurn: Math.min(45, ship.maxTurn),
-      desc: '+20% dodge · own fire −15%', accMod: -0.15, dodge: 0.20 },
+      desc: 'enemies hit you on +1 · own guns +1 · dodges torpedoes', accShift: 1, dodgeShift: 1, evade: true },
     { id: 'hold', name: 'HOLD & LOCK', range: 0, minMove: 0, maxTurn: 0,
-      desc: 'no move · +15% acc', accMod: 0.15, dodge: -0.05 },
+      desc: 'no move · own guns hit on −1 · easier to hit', accShift: -1, dodgeShift: -1 },
     { id: 'brace', name: 'BRACE FOR IMPACT', range: spd * 0.5, minMove: 0, maxTurn: Math.min(30, ship.maxTurn),
-      desc: 'incoming dmg halved · own fire −25% · no torpedoes', accMod: -0.25, dodge: 0.10, brace: true }
+      desc: 'incoming dmg halved · own guns +2 · no torpedoes', accShift: 2, dodgeShift: 0, brace: true }
   ];
   if (brg >= 1) return all.filter(o => o.id === 'heading' || o.id === 'hold' || o.id === 'brace');
   return all;
@@ -141,7 +146,7 @@ DATA.STORE_SHIPS = [
   { cls: 'lcruiser', cost: 380 }
 ];
 DATA.UPGRADES = [
-  { id: 'uplink', name: 'TARGETING UPLINK', cost: 140, desc: '+10% accuracy, all ships, all weapons' },
+  { id: 'uplink', name: 'TARGETING UPLINK', cost: 140, desc: 'All guns hit on −1 (e.g. 4+ becomes 3+), fleet-wide' },
   { id: 'shields', name: 'REINFORCED EMITTERS', cost: 120, desc: '+1 fore shield on every fleet ship' },
   { id: 'crews', name: 'VETERAN DAMAGE CREWS', cost: 100, desc: 'Repairs succeed on 4+ instead of 5+' }
 ];

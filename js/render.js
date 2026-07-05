@@ -74,6 +74,19 @@ const Rend = {
       }
     },
 
+    // one tracer per die in the pool; misses streak wide of the hull
+    volley(from, to, dieHits, color) {
+      dieHits.forEach((hit, i) => {
+        const tx = (hit ? to.x + U.frand(-10, 10) : to.x + U.frand(-95, 95));
+        const ty = (hit ? to.y + U.frand(-10, 10) : to.y + U.frand(-95, 95));
+        Rend.fx.add({
+          type: 'tracer', x1: from.x + U.frand(-10, 10), y1: from.y + U.frand(-10, 10),
+          x2: tx, y2: ty, color, dur: 340, delay: i * 55
+        });
+        if (hit) Rend.fx.add({ type: 'flash', x: tx, y: ty, r: 10, color, dur: 200, delay: i * 55 + 280 });
+      });
+    },
+
     spark(x, y, color, n) {
       for (let i = 0; i < (n || 10); i++) {
         const a = Math.random() * U.TAU, sp = U.frand(30, 160);
@@ -240,10 +253,10 @@ const Rend = {
   shipPos(s, b, now) {
     if (b.phase === 'anim' && s.animFrom && s.plot && b.anim) {
       const t = U.easeInOut(U.clamp((now - b.anim.start) / b.anim.dur, 0, 1));
+      const curve = s.animCurve || (s.animCurve = U.curveFn(s.animFrom, s.plot));
+      const p = curve(t); // position AND facing follow the inertial arc
       return {
-        x: U.lerp(s.animFrom.x, s.plot.x, t),
-        y: U.lerp(s.animFrom.y, s.plot.y, t),
-        angle: U.lerpAngle(s.animFrom.angle, s.plot.angle, t),
+        x: p.x, y: p.y, angle: p.angle, t,
         moving: t < 1 && (Math.abs(s.plot.x - s.animFrom.x) + Math.abs(s.plot.y - s.animFrom.y) > 4)
       };
     }
@@ -322,14 +335,18 @@ const Rend = {
     }
   },
 
+  // dashed preview of the inertial arc the ship will actually fly
   drawPath(ctx, from, to, color) {
+    const pts = U.sampleCurve(
+      { x: from.x, y: from.y, angle: from.angle },
+      { x: to.x, y: to.y, angle: to.angle !== undefined ? to.angle : from.angle },
+      22);
     ctx.save();
     ctx.strokeStyle = color;
     ctx.setLineDash([6, 8]);
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -421,6 +438,23 @@ const Rend = {
     const ally = s.side !== 'enemy';
     const sel = b.sel === s.id;
     const armedHover = b.phase === 'fire' && b.armed && s.side === 'enemy' && b.hover === s.id;
+
+    // engine wake along the arc already flown — mass takes a while to answer the helm
+    if (pos.moving && s.animCurve) {
+      const t0 = Math.max(0, (pos.t || 0) - 0.24);
+      ctx.save();
+      ctx.lineCap = 'round';
+      const trailCol = ally ? '150,220,255' : '255,150,110';
+      const SEGS = 7;
+      for (let i = 0; i < SEGS; i++) {
+        const pa = s.animCurve(U.lerp(t0, pos.t, i / SEGS));
+        const pb = s.animCurve(U.lerp(t0, pos.t, (i + 1) / SEGS));
+        ctx.strokeStyle = 'rgba(' + trailCol + ',' + (0.02 + 0.055 * i) + ')';
+        ctx.lineWidth = s.h * 0.3 * (i / SEGS + 0.15);
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(pos.x, pos.y);

@@ -189,19 +189,28 @@ const Game = {
 
     const sArc = U.shieldArcHit(target, shooter.x, shooter.y);
     if (w.type === 'torp') {
-      return { ok: true, pct: 100, dist: Math.round(d), sArc, stern: sArc === 'A', torp: true };
+      return { ok: true, dist: Math.round(d), sArc, stern: sArc === 'A', torp: true };
     }
-    let pct = w.acc;
-    if (shooter.order) pct += shooter.order.accMod;
-    if (shooter.side === 'player' && Game.mode === 'campaign' && Game.save.upgrades.uplink) pct += 0.10;
-    pct -= shooter.sys['WEAPONS'] * 0.10;
-    if (shooter.sys['BRIDGE'] >= 2) pct -= 0.15;
-    if (d > 0.7 * w.range) pct -= 0.15;
-    if (target.order) pct -= target.order.dodge;
-    if (Game.inNebula(target)) pct -= 0.15;
-    if (Game.inNebula(shooter)) pct -= 0.10;
-    pct = U.clamp(pct, 0.05, 0.95);
-    return { ok: true, pct: Math.round(pct * 100), dist: Math.round(d), sArc, stern: sArc === 'A', torp: false };
+    // dice-pool gunnery: roll w.dice D6, each die hits on `need`+
+    let need = w.need;
+    if (shooter.order) need += shooter.order.accShift;
+    if (shooter.side === 'player' && Game.mode === 'campaign' && Game.save.upgrades.uplink) need -= 1;
+    need += shooter.sys['WEAPONS'];
+    if (shooter.sys['BRIDGE'] >= 2) need += 1;
+    if (w.type === 'battery') {
+      if (d > 0.7 * w.range) need += 1;          // shells scatter at long range
+      else if (d < 0.35 * w.range) need -= 1;    // point-blank broadside
+    }
+    if (target.order) need += target.order.dodgeShift;
+    if (Game.inNebula(target)) need += 1;
+    if (Game.inNebula(shooter)) need += 1;
+    need = U.clamp(need, 2, 6);
+    const exp = w.dice * (7 - need) / 6 * w.dmgPer;
+    return {
+      ok: true, dice: w.dice, need, dmgPer: w.dmgPer,
+      exp: Math.round(exp * 10) / 10,
+      dist: Math.round(d), sArc, stern: sArc === 'A', torp: false
+    };
   },
 
   /* ================= movement phase: player plotting ================= */
@@ -358,15 +367,17 @@ const Game = {
     if (b.phase !== 'move' || !Game.allPlotted()) return;
     // AI plots
     Game.active(b).filter(s => s.side !== 'player').forEach(s => AI.plot(s, b));
-    // stage animation
+    // stage animation — each ship swings along an inertial arc from its
+    // current heading onto its plotted facing
     Game.active(b).forEach(s => {
       s.animFrom = { x: s.x, y: s.y, angle: s.angle };
       if (!s.plot) s.plot = { x: s.x, y: s.y, angle: s.angle };
+      s.animCurve = U.curveFn(s.animFrom, s.plot);
     });
     // torpedo paths (against destination positions)
     Game.stageTorpedoes(b);
     b.phase = 'anim';
-    b.anim = { start: performance.now(), dur: 1150 };
+    b.anim = { start: performance.now(), dur: 1500 };
     b.sel = null; b.ghost = null; b.curOrder = null;
     Snd.click();
     if (window.UI) UI.refresh();
@@ -400,12 +411,13 @@ const Game = {
 
   finishAnim() {
     const b = Game.b;
-    // asteroid transit damage: test start -> destination segment before finalizing
+    // asteroid transit damage: sample the actual flight arc before finalizing
     Game.active(b).forEach(s => {
       if (!s.animFrom || !s.plot) return;
       const from = s.animFrom, to = s.plot;
+      const path = U.sampleCurve(from, to, 18);
       const grazed = b.terrain.some(a => a.type === 'ast' &&
-        (U.segHitsCircle(from, to, a, a.r) || U.dist(from, a) < a.r || U.dist(to, a) < a.r));
+        path.some(p => Math.hypot(a.x - p.x, a.y - p.y) < a.r));
       if (grazed) {
         const dmg = U.rand(1, 3);
         s.hull -= dmg;
@@ -419,6 +431,7 @@ const Game = {
     Game.active(b).forEach(s => {
       if (s.plot) { s.x = s.plot.x; s.y = s.plot.y; s.angle = s.plot.angle; }
       s.animFrom = null;
+      s.animCurve = null;
     });
     // exits (convoy / fleeing vip)
     Game.active(b).forEach(s => {
@@ -527,7 +540,7 @@ const Game = {
         x: s.x + Math.cos(rad) * (s.w * 0.55 + 14),
         y: s.y + Math.sin(rad) * (s.w * 0.55 + 14),
         angle: ang, speed: 250, fuel: 3,
-        count: w.salvo, dmg: w.dmg.slice(),
+        count: w.salvo,
         side: s.side, launcher: s.id
       });
       Snd.torp();
@@ -536,32 +549,49 @@ const Game = {
       return;
     }
 
-    // direct fire
+    // direct fire: roll the dice pool
     const isLance = w.type === 'lance';
-    const roll = U.rand(1, 100);
-    const hit = roll <= sol.pct;
+    const rolls = [];
+    let hits = 0;
+    for (let i = 0; i < sol.dice; i++) {
+      const r = U.rand(1, 6);
+      rolls.push(r);
+      if (r >= sol.need) hits++;
+    }
+    const diceStr = sol.dice + 'd6 [' + rolls.join(' ') + '] need ' + sol.need + '+';
     if (isLance) {
       Snd.laser();
-      Rend.fx.beam(s, target, hit, s.side === 'player' ? '#7ce8f7' : '#ff7a72');
+      for (let i = 0; i < sol.dice; i++) Rend.fx.beam(s, target, rolls[i] >= sol.need, s.side === 'player' ? '#7ce8f7' : '#ff7a72');
     } else {
       Snd.cannon();
-      Rend.fx.tracers(s, target, hit, s.side === 'player' ? '#ffd9a0' : '#ff9a92');
+      if (sol.dice >= 6) Snd.cannon();
+      Rend.fx.volley(s, target, rolls.map(r => r >= sol.need), s.side === 'player' ? '#ffd9a0' : '#ff9a92');
     }
-    if (!hit) {
-      Game.log(s.name + ' ' + w.name + ' → ' + target.name + ' — MISS (' + sol.pct + '% · rolled ' + roll + ')', '#5c7089');
+    if (hits === 0) {
+      Game.log(s.name + ' ' + w.name + ' → ' + target.name + ' — MISSES · ' + diceStr, '#5c7089');
       return;
     }
-    // shields
-    if (sol.sArc !== 'A' && target.sh[sol.sArc] > 0 && target.sys['SHIELD EMITTER'] < 2) {
-      target.sh[sol.sArc]--;
-      target.tookFire = true;
-      Snd.shield();
-      Rend.fx.shieldFlash(target, sol.sArc);
-      Game.log(s.name + ' hits ' + target.name + ' — absorbed by ' + (sol.sArc === 'F' ? 'fore' : 'side') + ' shield', '#7ba8b8');
+    // shields absorb hits one-for-one (stern shots and dead emitters bypass)
+    let absorbed = 0;
+    if (sol.sArc !== 'A' && target.sys['SHIELD EMITTER'] < 2) {
+      absorbed = Math.min(hits, target.sh[sol.sArc]);
+      if (absorbed > 0) {
+        target.sh[sol.sArc] -= absorbed;
+        target.tookFire = true;
+        hits -= absorbed;
+        Snd.shield();
+        Rend.fx.shieldFlash(target, sol.sArc);
+      }
+    }
+    if (hits <= 0) {
+      Game.log(s.name + ' ' + w.name + ' → ' + target.name + ' — ' + absorbed + ' hit' + (absorbed > 1 ? 's' : '') +
+        ', all absorbed by ' + (sol.sArc === 'F' ? 'fore' : 'side') + ' shield · ' + diceStr, '#7ba8b8');
       return;
     }
-    let dmg = U.rand(w.dmg[0], w.dmg[1]);
-    Game.applyDamage(target, dmg, { shooter: s, sol, wname: w.name, roll });
+    const dmg = hits * sol.dmgPer;
+    Game.applyDamage(target, dmg, {
+      shooter: s, sol, wname: w.name, hits, absorbed, diceStr
+    });
   },
 
   applyDamage(target, dmg, opts) {
@@ -579,11 +609,13 @@ const Game = {
     const braced = target.order && target.order.brace ? ' (braced)' : '';
     if (opts.shooter) {
       Game.log(opts.shooter.name + ' ' + (opts.wname || '') + ' hits ' + target.name + (sol.stern ? ' STERN' : '') +
-        ' — ' + dmg + ' hull' + braced + (opts.roll ? ' (' + sol.pct + '% · rolled ' + opts.roll + ')' : ''), '#e8c9a0');
+        ' — ' + (opts.hits ? opts.hits + ' hit' + (opts.hits > 1 ? 's' : '') + (opts.absorbed ? ' (' + opts.absorbed + ' shielded)' : '') + ' · ' : '') +
+        dmg + ' hull' + braced + (opts.diceStr ? ' · ' + opts.diceStr : ''), '#e8c9a0');
     }
-    // critical roll
+    // critical roll — one per damaging volley; stern shots and massed volleys find seams
     const die = U.rand(1, 6);
-    const need = sol.stern ? 5 : 6;
+    let need = sol.stern ? 5 : 6;
+    if ((opts.hits || 0) >= 4) need = Math.max(4, need - 1);
     if (die >= need) {
       Game.rollCrit(target, die);
     } else if (!opts.quiet) {
@@ -647,7 +679,7 @@ const Game = {
       Game.log(target.name + ' point defense — ' + shot + ' torpedo' + (shot > 1 ? 'es' : '') + ' shot down', '#7ba8b8');
     }
     // evasion
-    if (torps > 0 && target.order && target.order.dodge >= 0.15) {
+    if (torps > 0 && target.order && target.order.evade) {
       let dodged = 0;
       for (let i = 0; i < torps; i++) if (Math.random() < 0.35) dodged++;
       torps -= dodged;
@@ -662,9 +694,10 @@ const Game = {
     Rend.shake(12);
     for (let i = 0; i < torps; i++) {
       if (!target.alive) break;
-      const dmg = U.rand(tp.dmg[0], tp.dmg[1]);
-      Game.log('Torpedo strikes ' + target.name + ' — ' + dmg + ' hull (shields bypassed)', '#ffb454');
-      Game.applyDamage(target, dmg, { sol: { stern: true, pct: 100 }, quiet: true });
+      const die = U.rand(1, 6);
+      const dmg = Math.max(2, die); // a torpedo never tickles
+      Game.log('Torpedo strikes ' + target.name + ' — D6 [' + die + '] · ' + dmg + ' hull (shields bypassed)', '#ffb454');
+      Game.applyDamage(target, dmg, { sol: { stern: true }, quiet: true });
     }
   },
 
@@ -912,18 +945,10 @@ const AI = {
       if (w.reload > 0) return;
       let best = null, bestScore = -1;
       foes.forEach(f => {
-        if (s.role === 'hunter' && f.role !== 'convoy' && foes.some(x => x.role === 'convoy')) {
-          // hunters strongly prefer the convoy but will take other shots
-          const sol = Game.solution(s, w, f);
-          if (sol.ok) {
-            const score = (f.role === 'convoy' ? 3 : 1) * (w.type === 'torp' ? 60 : sol.pct);
-            if (score > bestScore) { bestScore = score; best = f; }
-          }
-          return;
-        }
         const sol = Game.solution(s, w, f);
         if (!sol.ok) return;
-        let score = w.type === 'torp' ? 60 : sol.pct;
+        let score = w.type === 'torp' ? 60 : sol.exp * 12;
+        if (s.role === 'hunter' && f.role === 'convoy' && foes.some(x => x.role === 'convoy')) score *= 3;
         if (f.vip) score += 5;
         if (f.hull < f.maxHull * 0.4) score += 15;
         if (score > bestScore) { bestScore = score; best = f; }

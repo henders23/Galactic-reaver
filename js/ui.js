@@ -154,14 +154,14 @@ const UI = {
         else if (w.target) {
           const t = Game.ship(w.target);
           const sol = t ? Game.solution(s, w, t) : null;
-          ds = '→ ' + (t ? t.name.replace('DKV ', '') : '?') + (sol && sol.ok && !sol.torp ? ' · ' + sol.pct + '%' : '') + ' · click to clear';
+          ds = '→ ' + (t ? t.name.replace('DKV ', '') : '?') + (sol && sol.ok && !sol.torp ? ' · ' + sol.dice + 'd6 on ' + sol.need + '+' : '') + ' · click to clear';
           dsCls = 'hot';
         }
         else if (armed) { ds = 'ARMED — click a target on the map'; dsCls = 'hot'; }
         else {
           ds = w.type === 'torp'
             ? 'salvo of ' + w.salvo + ' · ignores shields · ' + w.arc + ' arc'
-            : w.dmg[0] + '–' + w.dmg[1] + ' dmg · ' + w.arc + ' arc · rng ' + w.range;
+            : w.dice + 'd6 hit on ' + w.need + '+ · ' + w.dmgPer + ' dmg/hit · ' + w.arc + ' arc · rng ' + w.range;
         }
         const card = U.el('div', 'weaponcard' + (armed ? ' armed' : '') + (w.target ? ' assigned' : '') + (offline || charging || braced ? ' disabled' : ''));
         card.innerHTML = '<div class="nm">' + w.name + '</div><div class="ds ' + dsCls + '">' + ds + '</div>';
@@ -235,12 +235,12 @@ const UI = {
     if (sol.ok && w.type === 'torp') {
       html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
         '<div class="t2">SALVO OF ' + w.salvo + ' · RANGE ' + sol.dist + '</div>' +
-        '<div class="t3">torpedoes run ' + 250 + '/turn · point defense can thin the salvo<br>bypasses shields · heavy crits</div>';
+        '<div class="t3">torpedoes run 250/turn · D6 hull per fish · point defense can thin the salvo<br>bypasses shields · heavy crits</div>';
     } else if (sol.ok) {
       html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
-        '<div class="t2">TO HIT ' + sol.pct + '% · RANGE ' + sol.dist + '</div>' +
-        '<div class="t3">DMG ' + w.dmg[0] + '–' + w.dmg[1] + ' HULL' +
-        (sol.stern ? '<br>⚅ STERN SHOT — bypasses shields · crits on 5+' : '<br>⚅ crit on 6 per damaging hit') + '</div>';
+        '<div class="t2">' + sol.dice + 'd6 · HIT ON ' + sol.need + '+ · ' + sol.dmgPer + ' DMG/HIT · RANGE ' + sol.dist + '</div>' +
+        '<div class="t3">expected ~' + sol.exp + ' hull · shields soak hits one-for-one' +
+        (sol.stern ? '<br>⚅ STERN SHOT — bypasses shields · crits on 5+' : '<br>⚅ crit on 6 per damaging volley (4+ hits: on 5+)') + '</div>';
     } else {
       html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
         '<div class="t2">' + sol.why + '</div><div class="t3">reposition next movement phase</div>';
@@ -279,7 +279,7 @@ const UI = {
       html += '<div class="sect">ARMAMENT</div>';
       s.weapons.forEach(w => {
         const st = w.reload > 0 ? '<span class="warn">RELOAD ' + w.reload + '</span>' : '<span class="ok">READY</span>';
-        html += '<div class="row"><span>' + w.name + ' · ' + w.arc.toUpperCase() + (w.type === 'torp' ? ' ×' + w.salvo : ' ' + w.dmg[0] + '–' + w.dmg[1]) + '</span>' + st + '</div>';
+        html += '<div class="row"><span>' + w.name + ' · ' + w.arc.toUpperCase() + (w.type === 'torp' ? ' ×' + w.salvo : ' ' + w.dice + 'd6@' + w.need + '+') + '</span>' + st + '</div>';
       });
     }
     html += '<div class="sect">SPEED ' + Math.round(Game.effSpeed(s)) + ' · TURN ±' + s.maxTurn + '° · TURRETS ' + s.turrets + '</div>';
@@ -559,11 +559,12 @@ const UI = {
       '<div class="briefsub">CAPITAL SHIPS TURN SLOWLY · FACING IS EVERYTHING</div>' +
       '<div class="helpbody">' +
       '<h4>THE TURN</h4>Each turn has three phases. <b>MOVE</b> — give every ship a helm order, click a destination inside the cone, set its final facing, and press ENGAGE. All ships (yours and theirs) maneuver simultaneously. <b>FIRE</b> — select a ship, arm a weapon, click an enemy in arc and range, then OPEN FIRE. <b>RESOLVE</b> — read the log, END TURN. Damage crews then fight fires, repair systems — and shields recharge one point on any ship that wasn\'t hit this turn.' +
-      '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields. Shots are absorbed by the shield facing the attacker — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Get behind them; keep them off your tail.' +
-      '<h4>WEAPON ARCS</h4><b>Lances</b> are accurate beams. <b>Batteries</b> throw shells. Each weapon covers a fore or side arc — a broadside ship wants enemies abeam, a lance ship wants them ahead. Accuracy drops at long range (beyond 70% of max) and against evading or nebula-shrouded targets.' +
-      '<h4>TORPEDOES</h4>Torpedo salvos are physical objects: they launch toward their mark and keep running each movement phase until they hit <b>whatever crosses their path — friend or foe</b> — or run out of fuel. They ignore shields and crit hard. Point-defense turrets and evasive maneuvers can thin an incoming salvo. Reloading takes 2 turns.' +
-      '<h4>CRITICAL HITS</h4>Every damaging hull hit rolls a die. On a crit: <b>WEAPONS</b> (accuracy, then silence) · <b>ENGINES</b> (speed) · <b>SHIELD EMITTER</b> (no regen, then collapse) · <b>BRIDGE</b> (orders limited) · <b>FIRE</b> (burns every turn until contained) · <b>HULL BREACH</b> (extra damage).' +
-      '<h4>HELM ORDERS</h4><b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> spins you around a short move. <b>EVASIVE</b> +20% dodge. <b>HOLD & LOCK</b> +15% accuracy. <b>BRACE FOR IMPACT</b> halves incoming damage but seals the tubes.' +
+      '<h4>GUNNERY — DICE POOLS</h4>Every gun throws a pool of D6 — a light escort flicks 2 dice, a capital broadside hurls 10. Each die <b>hits on its to-hit number</b> (lances 3+, batteries 4+), and each hit deals its damage. Orders, criticals, evasion and nebulae shift the to-hit number up or down; the engagement log shows every die rolled.' +
+      '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields, and each shield point soaks one hit from a volley — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Get behind them; keep them off your tail.' +
+      '<h4>WEAPON ARCS</h4><b>Lances</b> are precise beams: they hit on 3+ at any range. <b>Batteries</b> throw shells: +1 to hit at long range (beyond 70% of max), −1 point-blank. Each weapon covers a fore or side arc — a broadside ship wants enemies abeam, a lance ship wants them ahead.' +
+      '<h4>TORPEDOES</h4>Torpedo salvos are physical objects: they launch toward their mark and keep running each movement phase until they hit <b>whatever crosses their path — friend or foe</b> — or run out of fuel. Each fish that strikes deals a D6 of hull, ignores shields and crits hard. Point-defense turrets and evasive maneuvers can thin an incoming salvo. Reloading takes 2 turns.' +
+      '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier). On a crit: <b>WEAPONS</b> (accuracy, then silence) · <b>ENGINES</b> (speed) · <b>SHIELD EMITTER</b> (no regen, then collapse) · <b>BRIDGE</b> (orders limited) · <b>FIRE</b> (burns every turn until contained) · <b>HULL BREACH</b> (extra damage).' +
+      '<h4>HELM ORDERS & INERTIA</h4>Ships fly smooth inertial arcs — the dashed preview shows the exact curve your ship will swing through, from its current heading onto its final facing. <b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals the tubes.' +
       '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through. Nebulae hide ships inside (−15% to hit them).' +
       '<h4>KEYS</h4><b>1–3</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
       '</div>' +
