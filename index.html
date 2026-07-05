@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GALACTIC REAVER — Battle for the Kessel Drift</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='2,13 16,8 24,2 30,14 30,18 24,30 16,24 2,19' fill='%2317414f' stroke='%234cd7ea' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div id="brand">GALACTIC <span>REAVER</span></div>
+    <div id="missionTag"></div>
+    <div id="phasePips">
+      <div class="pip" id="pipTurn">TURN 01</div>
+      <div class="pip" id="pipMove">MOVE</div>
+      <div class="pip" id="pipFire">FIRE</div>
+      <div class="pip" id="pipRes">RESOLVE</div>
+    </div>
+    <div id="topRight">
+      <div id="reqTag" title="Requisition"></div>
+      <button class="tbtn" id="btnMute" title="Mute (M)">SND</button>
+      <button class="tbtn" id="btnHelp" title="How to play (H)">?</button>
+      <button class="tbtn" id="btnMenu" title="Abandon battle">MENU</button>
+    </div>
+  </header>
+
+  <main id="mainrow">
+    <aside id="left">
+      <div id="roster"></div>
+      <div id="context"></div>
+      <div id="actionbar">
+        <button id="btnAction">ENGAGE ▸</button>
+      </div>
+    </aside>
+
+    <div id="mapwrap">
+      <canvas id="map"></canvas>
+      <div id="hint"></div>
+      <div id="tip" class="hidden"></div>
+      <div id="inspector" class="hidden"></div>
+      <div id="banner" class="hidden">
+        <div id="bannerText"></div>
+        <div id="bannerSub"></div>
+        <button id="bannerBtn">CONTINUE ▸</button>
+      </div>
+    </div>
+
+    <aside id="right">
+      <div class="paneltitle">ENGAGEMENT LOG</div>
+      <div id="log"></div>
+    </aside>
+  </main>
+
+  <div id="screen" class="hidden"><div id="screenInner"></div></div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
