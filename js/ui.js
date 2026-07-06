@@ -1,8 +1,10 @@
-/* Galactic Reaver — DOM UI: panels, screens, campaign flow */
+/* Galactic Reaver — DOM UI: panels, screens, sector map, campaign flow */
 'use strict';
 
 const UI = {
   el: {},
+  panState: null,
+  squelchClick: false,
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
@@ -13,16 +15,41 @@ const UI = {
     const cv = UI.el.map;
     Rend.init(cv);
 
+    /* ---- pointer: click / hover / pan ---- */
     cv.addEventListener('click', e => {
+      if (UI.squelchClick) { UI.squelchClick = false; return; }
       Snd.init(); Snd.resume();
       const p = Rend.toWorld(e);
       Game.mapClick(p.x, p.y);
     });
     cv.addEventListener('mousemove', e => {
+      if (UI.panState) {
+        const dx = UI.panState.x - e.clientX, dy = UI.panState.y - e.clientY;
+        Rend.pan(dx, dy);
+        UI.panState.x = e.clientX; UI.panState.y = e.clientY;
+        UI.panState.moved += Math.abs(dx) + Math.abs(dy);
+        return;
+      }
       const p = Rend.toWorld(e);
       Game.mapMove(p.x, p.y);
       UI.updateTip(e);
     });
+    cv.addEventListener('mousedown', e => {
+      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+        e.preventDefault();
+        UI.panState = { x: e.clientX, y: e.clientY, moved: 0 };
+      }
+    });
+    window.addEventListener('mouseup', e => {
+      if (UI.panState) {
+        if (UI.panState.moved > 6) UI.squelchClick = true;
+        UI.panState = null;
+      }
+    });
+    cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      Rend.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0012));
+    }, { passive: false });
     cv.addEventListener('contextmenu', e => { e.preventDefault(); Game.cancel(); });
 
     UI.el.btnAction.addEventListener('click', () => { Snd.init(); UI.mainAction(); });
@@ -36,12 +63,19 @@ const UI = {
     UI.el.bannerBtn.addEventListener('click', () => UI.afterBattle());
 
     document.addEventListener('keydown', e => {
-      if (e.repeat) return;
-      if (!UI.el.screen.classList.contains('hidden')) {
-        if (e.key === 'Escape') { /* screens have own close */ }
-        return;
-      }
+      if (!UI.el.screen.classList.contains('hidden')) return;
       if (!Game.b) return;
+      const pan = 90 / Rend.cam.z;
+      switch (e.key) {
+        case 'w': case 'W': case 'ArrowUp': e.preventDefault(); Rend.pan(0, -pan / 3); return;
+        case 's': case 'S': case 'ArrowDown': e.preventDefault(); Rend.pan(0, pan / 3); return;
+        case 'a': case 'A': case 'ArrowLeft': e.preventDefault(); Rend.pan(-pan / 3, 0); return;
+        case 'd': case 'D': case 'ArrowRight': e.preventDefault(); Rend.pan(pan / 3, 0); return;
+        case 'c': case 'C': Rend.fitCamera(); return;
+        case '+': case '=': Rend.zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.2); return;
+        case '-': case '_': Rend.zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1 / 1.2); return;
+      }
+      if (e.repeat) return;
       Snd.init();
       if (e.key === ' ') { e.preventDefault(); if (UI.el.banner.classList.contains('hidden')) UI.mainAction(); else UI.afterBattle(); }
       else if (e.key === 'Escape') Game.cancel();
@@ -66,7 +100,7 @@ const UI = {
     else if (b.phase === 'resolve') Game.endTurn();
   },
 
-  /* ================= refresh (called by Game on state change) ================= */
+  /* ================= refresh ================= */
   refresh() {
     const b = Game.b;
     if (!b) return;
@@ -102,6 +136,7 @@ const UI = {
       if (!s.alive) status = '<span class="st" style="color:#ff6159">LOST</span>';
       else if (s.exited) status = '<span class="st">JUMPED</span>';
       else if (b.phase === 'move' && s.side === 'player') status = s.plotted ? '<span class="st">PLOTTED ✓</span>' : '<span class="st" style="color:#ffb454">AWAITING</span>';
+      const rank = DATA.RANKS[s.rank];
       const meta = [];
       if (s.alive && !s.exited) {
         meta.push('SHD F' + s.sh.F + ' S' + s.sh.S + ' A' + s.sh.A);
@@ -110,8 +145,8 @@ const UI = {
         if (s.order) meta.push('<span class="ord">' + s.order.name + '</span>');
       }
       card.innerHTML =
-        '<div class="nm">' + U.esc(s.name) + status + '</div>' +
-        '<div class="cls">' + U.esc(s.short) + ' · HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
+        '<div class="nm">' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(s.name) + status + '</div>' +
+        '<div class="cls">' + U.esc(s.short) + (s.side === 'player' && rank.name !== 'GREEN' ? ' · ' + rank.name : '') + ' · HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
         '<div class="hullbar"><i class="' + hclass + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
         (meta.length ? '<div class="meta">' + meta.join(' ') + '</div>' : '');
       if (s.alive && !s.exited && s.side === 'player') card.addEventListener('click', () => Game.selectShip(s.id));
@@ -127,7 +162,7 @@ const UI = {
     if (b.phase === 'move') {
       host.appendChild(U.el('div', 'paneltitle', s ? 'HELM ORDERS — ' + U.esc(s.name.replace('VSS ', '')) : 'HELM ORDERS'));
       if (!s) {
-        host.appendChild(U.el('div', 'ds', '<div style="font:400 10px \'IBM Plex Mono\',monospace;color:#5c7089;line-height:1.6">Select a ship from the fleet roster (or press 1–3).</div>'));
+        host.appendChild(U.el('div', '', '<div style="font:400 10px \'IBM Plex Mono\',monospace;color:#5c7089;line-height:1.6">Select a ship from the fleet roster (or press 1–4).</div>'));
         return;
       }
       DATA.orders(s).forEach(o => {
@@ -145,34 +180,50 @@ const UI = {
       s.weapons.forEach((w, i) => {
         const armed = b.armed && b.armed.shipId === s.id && b.armed.wIdx === i;
         const offline = s.sys['WEAPONS'] >= 2;
-        const braced = w.type === 'torp' && s.order && s.order.brace;
+        const braced = (w.type === 'torp' || w.type === 'bay') && s.order && s.order.brace;
         const charging = w.reload > 0;
+        const isFighters = w.type === 'bay' && w.craft === 'fighters';
         let ds, dsCls = '';
         if (offline) { ds = 'WEAPONS DESTROYED'; dsCls = 'cold'; }
-        else if (braced) { ds = 'crews braced — tubes sealed'; dsCls = 'cold'; }
-        else if (charging) { ds = 'reloading — ' + w.reload + ' turn' + (w.reload > 1 ? 's' : ''); dsCls = 'cold'; }
+        else if (braced) { ds = 'crews braced — decks sealed'; dsCls = 'cold'; }
+        else if (charging) { ds = (w.type === 'bay' ? 'rearming' : 'reloading') + ' — ' + w.reload + ' turn' + (w.reload > 1 ? 's' : ''); dsCls = 'cold'; }
         else if (w.target) {
           const t = Game.ship(w.target);
-          const sol = t ? Game.solution(s, w, t) : null;
-          ds = '→ ' + (t ? t.name.replace('DKV ', '') : '?') + (sol && sol.ok && !sol.torp ? ' · ' + sol.dice + 'd6 on ' + sol.need + '+' : '') + ' · click to clear';
+          const sol = (t && !isFighters) ? Game.solution(s, w, t) : null;
+          ds = '→ ' + (t ? t.name.replace('DKV ', '').replace('VSS ', '') : '?') +
+            (sol && sol.ok && sol.dice ? ' · ' + sol.dice + 'd6 on ' + sol.need + '+' : '') + ' · click to clear';
           dsCls = 'hot';
         }
-        else if (armed) { ds = 'ARMED — click a target on the map'; dsCls = 'hot'; }
+        else if (armed) { ds = isFighters ? 'ARMED — click a FRIENDLY ship to cover' : 'ARMED — click a target on the map'; dsCls = 'hot'; }
         else {
-          ds = w.type === 'torp'
-            ? 'salvo of ' + w.salvo + ' · ignores shields · ' + w.arc + ' arc'
-            : w.dice + 'd6 hit on ' + w.need + '+ · ' + w.dmgPer + ' dmg/hit · ' + w.arc + ' arc · rng ' + w.range;
+          if (w.type === 'torp') ds = 'salvo of ' + w.salvo + ' · ignores shields · ' + w.arc + ' arc';
+          else if (w.type === 'bay') ds = w.craft === 'bombers'
+            ? 'wave of ' + w.salvo + ' · homes on target · flak & fighters can stop it'
+            : 'screen of ' + w.salvo + ' · escorts a ship · intercepts ordnance';
+          else ds = w.dice + 'd6 hit on ' + w.need + '+ · ' + w.dmgPer + ' dmg/hit · ' + w.arc + ' arc · rng ' + w.range;
         }
         const card = U.el('div', 'weaponcard' + (armed ? ' armed' : '') + (w.target ? ' assigned' : '') + (offline || charging || braced ? ' disabled' : ''));
         card.innerHTML = '<div class="nm">' + w.name + '</div><div class="ds ' + dsCls + '">' + ds + '</div>';
         card.addEventListener('click', () => Game.armWeapon(s.id, i));
         host.appendChild(card);
       });
-      const note = U.el('div', '', '<div style="font:400 9px \'IBM Plex Mono\',monospace;color:#43536a;margin-top:8px;line-height:1.6">Weapons may be left silent. Torpedoes travel the map and strike whatever they meet — friend or foe.</div>');
-      host.appendChild(note);
+      // boarding action
+      const targets = s ? Game.boardTargets(s) : [];
+      const boardable = s && !s.boarded && targets.length > 0 && b.phase === 'fire';
+      const boarding = b.boardMode === s.id;
+      const bCard = U.el('div', 'weaponcard board' + (boarding ? ' armed' : '') + (!boardable ? ' disabled' : ''));
+      let bds;
+      if (s.boarded) bds = 'boarding parties committed this turn';
+      else if (!targets.length) bds = 'no enemy ship or hulk within ' + DATA.BOARD_RANGE + ' — close alongside';
+      else if (boarding) bds = 'click an adjacent enemy or hulk';
+      else bds = targets.length + ' target' + (targets.length > 1 ? 's' : '') + ' alongside · raid a live ship or seize a hulk';
+      bCard.innerHTML = '<div class="nm">⚔ BOARDING ACTION</div><div class="ds ' + (boarding ? 'hot' : '') + '">' + bds + '</div>';
+      if (boardable) bCard.addEventListener('click', () => Game.toggleBoardMode(s.id));
+      host.appendChild(bCard);
+      host.appendChild(U.el('div', '', '<div style="font:400 9px \'IBM Plex Mono\',monospace;color:#43536a;margin-top:8px;line-height:1.6">Ordnance travels the map and strikes whatever it meets — friend or foe.</div>'));
     } else if (b.phase === 'resolve') {
       host.appendChild(U.el('div', 'paneltitle', 'RESOLUTION'));
-      host.appendChild(U.el('div', '', '<div style="font:400 10.5px \'IBM Plex Mono\',monospace;color:#8ba0b8;line-height:1.7">Review the engagement log, then end the turn. Damage-control crews will fight fires, attempt repairs and restore shields.</div>'));
+      host.appendChild(U.el('div', '', '<div style="font:400 10.5px \'IBM Plex Mono\',monospace;color:#8ba0b8;line-height:1.7">Review the engagement log, then end the turn. Damage-control crews will fight fires, attempt repairs — and shields recharge on any ship that wasn\'t hit.</div>'));
     } else if (b.phase === 'anim') {
       host.appendChild(U.el('div', 'paneltitle', 'MANEUVERING'));
     }
@@ -215,7 +266,10 @@ const UI = {
       else if (b.plotStep === 'angle') h = '③ MOVE MOUSE TO SET FACING · CLICK TO LOCK';
     }
     else if (b.phase === 'anim') h = 'ALL SHIPS MANEUVERING…';
-    else if (b.phase === 'fire') h = b.armed ? 'CLICK AN ENEMY SHIP TO ASSIGN TARGET' : 'SELECT WEAPONS AND TARGETS, THEN OPEN FIRE (SPACE) · click any ship to inspect';
+    else if (b.phase === 'fire') {
+      if (b.boardMode) h = '⚔ CLICK AN ADJACENT ENEMY OR HULK TO BOARD';
+      else h = b.armed ? 'CLICK A TARGET ON THE MAP' : 'SELECT WEAPONS AND TARGETS, THEN OPEN FIRE (SPACE) · wheel zoom · shift-drag pan';
+    }
     else if (b.phase === 'firing' || b.phase === 'firewait') h = 'EXCHANGING FIRE…';
     else if (b.phase === 'resolve') h = 'RESULTS LOGGED — END TURN (SPACE)';
     UI.el.hint.textContent = h;
@@ -230,12 +284,17 @@ const UI = {
     const w = s && s.weapons[b.armed.wIdx];
     const t = Game.ship(b.hover);
     if (!s || !w || !t || !t.alive) { tip.classList.add('hidden'); return; }
+    if (w.type === 'bay' && w.craft === 'fighters') { tip.classList.add('hidden'); return; }
     const sol = Game.solution(s, w, t);
     let html;
     if (sol.ok && w.type === 'torp') {
       html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
         '<div class="t2">SALVO OF ' + w.salvo + ' · RANGE ' + sol.dist + '</div>' +
-        '<div class="t3">torpedoes run 250/turn · D6 hull per fish · point defense can thin the salvo<br>bypasses shields · heavy crits</div>';
+        '<div class="t3">torpedoes run 270/turn · D6 hull per fish · point defense can thin the salvo<br>bypasses shields · heavy crits</div>';
+    } else if (sol.ok && w.type === 'bay') {
+      html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
+        '<div class="t2">WAVE OF ' + w.salvo + ' · RANGE ' + sol.dist + '</div>' +
+        '<div class="t3">bombers home on their mark each turn · 2 hull per hit, bypasses shields<br>flak turrets and fighter screens can break the wave</div>';
     } else if (sol.ok) {
       html = '<div class="t1">' + w.name + ' → ' + U.esc(t.name) + '</div>' +
         '<div class="t2">' + sol.dice + 'd6 · HIT ON ' + sol.need + '+ · ' + sol.dmgPer + ' DMG/HIT · RANGE ' + sol.dist + '</div>' +
@@ -259,30 +318,43 @@ const UI = {
     const enemy = s.side === 'enemy';
     host.className = enemy ? 'enemy' : '';
     const hp = Math.max(0, s.hull / s.maxHull);
+    const rank = DATA.RANKS[s.rank];
     let html = '<div class="close" id="insClose">✕</div>' +
       '<h3>' + U.esc(s.name) + '</h3>' +
-      '<div class="sub">' + U.esc(s.label) + (enemy ? ' · HOSTILE' : (s.side === 'ally' ? ' · PROTECTED' : ' · YOUR SHIP')) + (s.vip ? ' · ◆ PRIORITY TARGET' : '') + '</div>' +
-      '<div class="sect">HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
-      '<div class="hullbar" style="margin-bottom:4px"><i class="' + (hp > 0.55 ? '' : hp > 0.25 ? 'warn' : 'crit') + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
-      '<div class="sect">SHIELDS</div>' +
-      '<div class="row"><span>FORE ' + '▮'.repeat(s.sh.F) + '▯'.repeat(Math.max(0, s.shMax.F - s.sh.F)) +
-      ' · SIDE ' + '▮'.repeat(s.sh.S) + '▯'.repeat(Math.max(0, s.shMax.S - s.sh.S)) +
-      ' · AFT ' + '▮'.repeat(s.sh.A) + '▯'.repeat(Math.max(0, s.shMax.A - s.sh.A)) + '</span></div>' +
-      '<div class="sect">INTERNAL SYSTEMS</div>';
-    DATA.SYS.forEach(n => {
-      const lvl = s.sys[n];
-      const st = lvl === 0 ? '<span class="ok">OK</span>' : (lvl === 1 ? '<span class="warn">DAMAGED</span>' : '<span class="bad">DESTROYED</span>');
-      html += '<div class="row' + (lvl > 0 ? ' dmg' : '') + '"><span>' + n + '</span>' + st + '</div>';
-    });
-    if (s.fires > 0) html += '<div class="row dmg"><span>FIRES BURNING</span><span class="bad">×' + s.fires + '</span></div>';
-    if (s.weapons.length) {
-      html += '<div class="sect">ARMAMENT</div>';
-      s.weapons.forEach(w => {
-        const st = w.reload > 0 ? '<span class="warn">RELOAD ' + w.reload + '</span>' : '<span class="ok">READY</span>';
-        html += '<div class="row"><span>' + w.name + ' · ' + w.arc.toUpperCase() + (w.type === 'torp' ? ' ×' + w.salvo : ' ' + w.dice + 'd6@' + w.need + '+') + '</span>' + st + '</div>';
-      });
+      '<div class="sub">' + U.esc(s.label) +
+      (s.hulked ? ' · DRIFTING HULK' : (enemy ? ' · HOSTILE' : (s.side === 'ally' ? ' · PROTECTED' : ' · YOUR SHIP'))) +
+      (s.vip ? ' · ◆ PRIORITY TARGET' : '') + '</div>';
+    if (s.side === 'player' && rank.name !== 'GREEN') {
+      html += '<div class="row"><span>' + rank.chev + ' ' + rank.name + ' CREW</span><span class="ok">' + rank.desc + '</span></div>';
     }
-    html += '<div class="sect">SPEED ' + Math.round(Game.effSpeed(s)) + ' · TURN ±' + s.maxTurn + '° · TURRETS ' + s.turrets + '</div>';
+    if (s.hulked) {
+      html += '<div class="sect">STATUS</div>' +
+        '<div class="row"><span>' + (s.captured ? '⚑ PRIZE SECURED — salvage or commission after battle' : 'Adrift and burning. Board her (within ' + DATA.BOARD_RANGE + ') to take a prize.') + '</span></div>';
+    } else {
+      html += '<div class="sect">HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
+        '<div class="hullbar" style="margin-bottom:4px"><i class="' + (hp > 0.55 ? '' : hp > 0.25 ? 'warn' : 'crit') + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
+        '<div class="sect">SHIELDS</div>' +
+        '<div class="row"><span>FORE ' + '▮'.repeat(s.sh.F) + '▯'.repeat(Math.max(0, s.shMax.F - s.sh.F)) +
+        ' · SIDE ' + '▮'.repeat(s.sh.S) + '▯'.repeat(Math.max(0, s.shMax.S - s.sh.S)) +
+        ' · AFT ' + '▮'.repeat(s.sh.A) + '▯'.repeat(Math.max(0, s.shMax.A - s.sh.A)) + '</span></div>' +
+        '<div class="sect">INTERNAL SYSTEMS</div>';
+      DATA.SYS.forEach(n => {
+        const lvl = s.sys[n];
+        const st = lvl === 0 ? '<span class="ok">OK</span>' : (lvl === 1 ? '<span class="warn">DAMAGED</span>' : '<span class="bad">DESTROYED</span>');
+        html += '<div class="row' + (lvl > 0 ? ' dmg' : '') + '"><span>' + n + '</span>' + st + '</div>';
+      });
+      if (s.fires > 0) html += '<div class="row dmg"><span>FIRES BURNING</span><span class="bad">×' + s.fires + '</span></div>';
+      if (s.weapons.length) {
+        html += '<div class="sect">ARMAMENT</div>';
+        s.weapons.forEach(w => {
+          const st = w.reload > 0 ? '<span class="warn">RELOAD ' + w.reload + '</span>' : '<span class="ok">READY</span>';
+          const stat = w.type === 'torp' ? ' ×' + w.salvo : (w.type === 'bay' ? ' ' + w.craft.toUpperCase() + ' ×' + w.salvo : ' ' + w.dice + 'd6@' + w.need + '+');
+          html += '<div class="row"><span>' + w.name + ' · ' + w.arc.toUpperCase() + stat + '</span>' + st + '</div>';
+        });
+      }
+      html += '<div class="sect">SPEED ' + Math.round(Game.effSpeed(s)) + ' · TURN ±' + s.maxTurn + '° · TURRETS ' + s.turrets +
+        (s.side === 'player' ? ' · KILLS ' + s.kills : '') + '</div>';
+    }
     host.innerHTML = html;
     host.classList.remove('hidden');
     document.getElementById('insClose').addEventListener('click', () => { Game.b.inspect = null; UI.refresh(); });
@@ -331,14 +403,17 @@ const UI = {
     if (win) {
       const earned = Game.earnings();
       Game.save.req += earned;
-      Game.save.mIdx = Math.min(Game.missionIdx + 1, DATA.MISSIONS.length);
-      if (Game.missionIdx >= DATA.MISSIONS.length - 1) {
+      const report = Game.applyBattleResults();
+      const node = DATA.sectorNode(Game.currentNode);
+      if (!Game.save.completed.includes(Game.currentNode)) Game.save.completed.push(Game.currentNode);
+      Game.save.node = Game.currentNode;
+      if (node.final) {
         Game.save.done = true;
         Game.persist();
-        UI.showCampaignVictory(earned);
+        UI.showCampaignVictory();
       } else {
         Game.persist();
-        UI.showFleet(earned);
+        UI.showDebrief(report, earned);
       }
     } else {
       UI.showRetry();
@@ -369,64 +444,140 @@ const UI = {
     UI.screen(
       '<div class="title-big">GALACTIC <span>REAVER</span></div>' +
       '<div class="title-sub">BATTLE FOR THE KESSEL DRIFT</div>' +
-      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN — MISSION ' + (save.mIdx + 1) + '</button>' : '') +
+      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN — ' + save.completed.length + '/4 ENGAGEMENTS</button>' : '') +
       '<button class="menu-btn' + (save && !save.done ? '' : ' primary') + '" id="mnNew">NEW CAMPAIGN</button>' +
       '<button class="menu-btn" id="mnSkirmish">SKIRMISH</button>' +
       '<button class="menu-btn" id="mnHelp">HOW TO PLAY</button>' +
-      '<div style="margin-top:34px;font:400 9.5px \'IBM Plex Mono\',monospace;color:#3a4a5e">a Battlefleet Gothic–inspired tactical space combat game<br>fore lances · broadsides · torpedo salvos · the Verge keeps what it takes</div>'
+      '<div style="margin-top:34px;font:400 9.5px \'IBM Plex Mono\',monospace;color:#3a4a5e">a Battlefleet Gothic–inspired tactical space combat game<br>dice-pool broadsides · torpedo salvos · bomber waves · boarding actions · the Verge keeps what it takes</div>'
     );
     const cont = document.getElementById('mnContinue');
-    if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; UI.showBriefing(save.mIdx); });
+    if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; UI.showSector(); });
     document.getElementById('mnNew').addEventListener('click', () => {
       Snd.init();
       Game.save = Game.freshSave();
       Game.persist();
-      UI.showBriefing(0);
+      UI.showSector();
     });
     document.getElementById('mnSkirmish').addEventListener('click', () => { Snd.init(); UI.showSkirmishSetup(); });
     document.getElementById('mnHelp').addEventListener('click', () => UI.showHelp());
   },
 
-  showBriefing(mIdx) {
+  /* ---------------- sector map ---------------- */
+  showSector() {
+    const sv = Game.save;
+    const avail = DATA.sectorNext(sv.node).filter(id => !sv.completed.includes(id));
+    const nodes = DATA.SECTOR.nodes;
+    const pos = {};
+    nodes.forEach(n => pos[n.id] = n);
+    const lines = DATA.SECTOR.edges.map(e => {
+      const a = pos[e[0]], b2 = pos[e[1]];
+      const done = sv.completed.includes(e[0]) && (sv.completed.includes(e[1]) || avail.includes(e[1]));
+      return '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b2.x + '" y2="' + b2.y + '" stroke="' +
+        (done ? 'rgba(111,224,168,.5)' : 'rgba(76,215,234,.22)') + '" stroke-width="0.4" stroke-dasharray="1.6 1.2"/>';
+    }).join('');
+    const nodeHtml = nodes.map(n => {
+      const m = DATA.MISSION_DEFS[n.mission];
+      const done = sv.completed.includes(n.id);
+      const open = avail.includes(n.id);
+      const cls = done ? 'done' : (open ? 'open' : 'locked');
+      return '<div class="secnode ' + cls + '" data-node="' + n.id + '" style="left:' + n.x + '%;top:' + n.y + '%">' +
+        '<div class="dot"></div>' +
+        '<div class="lbl">' + (done ? '✓ ' : '') + m.name + (n.final ? ' ◆' : '') + '</div>' +
+        '<div class="sub2">' + (done ? 'SECURED' : (open ? 'ENGAGE ▸' : 'NO ROUTE')) + '</div></div>';
+    }).join('');
+    UI.screen(
+      '<div class="brieftitle">KESSEL DRIFT — SECTOR MAP</div>' +
+      '<div class="briefsub">CHOOSE YOUR NEXT ENGAGEMENT · ROUTES BRANCH — EACH CAMPAIGN FIGHTS 4 OF 6 BATTLES</div>' +
+      '<div id="secmap">' +
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines + '</svg>' +
+      nodeHtml +
+      '</div>' +
+      '<div class="fleetline">⬡ ' + sv.req + ' REQ · FLEET: ' + sv.fleet.map(f => f.name.replace('VSS ', '')).join(' · ') + '</div>' +
+      '<button class="menu-btn" id="mnFleetMgmt">FLEET & REQUISITION</button>' +
+      '<button class="menu-btn" id="mnTitleSec">BACK TO MENU</button>'
+    );
+    UI.el.screenInner.querySelectorAll('.secnode.open').forEach(el => {
+      el.addEventListener('click', () => { Snd.select(); UI.showBriefing(el.dataset.node); });
+    });
+    document.getElementById('mnFleetMgmt').addEventListener('click', () => UI.showDebrief(null, 0));
+    document.getElementById('mnTitleSec').addEventListener('click', () => UI.showTitle());
+  },
+
+  showBriefing(nodeId) {
     Game.mode = 'campaign';
-    const m = DATA.MISSIONS[mIdx];
+    const node = DATA.sectorNode(nodeId);
+    const m = node && DATA.MISSION_DEFS[node.mission];
     if (!m) { UI.showTitle(); return; }
     const fleet = Game.save.fleet.map(f => f.name + ' (' + DATA.CLASSES[f.cls].short + ')').join(' · ');
     UI.screen(
-      '<div class="brieftitle">MISSION ' + (mIdx + 1) + ' — ' + m.name + '</div>' +
+      '<div class="brieftitle">' + m.name + '</div>' +
       '<div class="briefsub">' + m.sub + '</div>' +
       '<div class="briefbody">' + m.briefing.map(p =>
         '<p class="' + (p.startsWith('OBJECTIVE') ? 'obj' : '') + '">' + U.esc(p) + '</p>').join('') + '</div>' +
       '<div class="fleetline">YOUR FLEET — ' + U.esc(fleet) + '</div>' +
       '<button class="menu-btn primary" id="mnBegin">BEGIN ENGAGEMENT ▸</button>' +
-      '<button class="menu-btn" id="mnTitleB">BACK TO MENU</button>'
+      '<button class="menu-btn" id="mnBackSec">SECTOR MAP</button>'
     );
     document.getElementById('mnBegin').addEventListener('click', () => {
       Snd.init(); Snd.click();
       UI.closeScreen();
-      Game.startMission(mIdx);
+      Game.startMission(nodeId);
       UI.rebuildLog();
     });
-    document.getElementById('mnTitleB').addEventListener('click', () => UI.showTitle());
+    document.getElementById('mnBackSec').addEventListener('click', () => UI.showSector());
   },
 
   showRetry() {
-    const m = DATA.MISSIONS[Game.missionIdx];
+    const node = DATA.sectorNode(Game.currentNode);
+    const m = node && DATA.MISSION_DEFS[node.mission];
     UI.screen(
       '<div class="brieftitle" style="color:#ff6159">MISSION FAILED</div>' +
       '<div class="briefsub">' + (m ? m.name : '') + '</div>' +
       '<div class="briefbody"><p>' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</p>' +
       '<p>The Coalition tows what\'s left of your fleet back to the tender. Hulls are patched, crews replaced. The mission remains.</p></div>' +
       '<button class="menu-btn primary" id="mnRetry">RETRY MISSION ▸</button>' +
-      '<button class="menu-btn" id="mnTitleR">BACK TO MENU</button>'
+      '<button class="menu-btn" id="mnTitleR">SECTOR MAP</button>'
     );
-    document.getElementById('mnRetry').addEventListener('click', () => UI.showBriefing(Game.missionIdx));
-    document.getElementById('mnTitleR').addEventListener('click', () => UI.showTitle());
+    document.getElementById('mnRetry').addEventListener('click', () => UI.showBriefing(Game.currentNode));
+    document.getElementById('mnTitleR').addEventListener('click', () => UI.showSector());
     Game.b = null;
   },
 
-  showFleet(earned) {
+  /* ---------------- debrief + fleet management ---------------- */
+  showDebrief(report, earned) {
     const sv = Game.save;
+    let reportHtml = '';
+    if (report) {
+      const rows = [];
+      report.gains.forEach(g => rows.push('<div class="row"><span>' + U.esc(g.name) + ' — +' + g.xp + ' XP' +
+        (g.kills ? ' · ' + g.kills + ' kill' + (g.kills > 1 ? 's' : '') : '') + '</span>' +
+        (g.rankUp ? '<span class="ok">▲ PROMOTED — ' + g.rankUp + '</span>' : '<span></span>') + '</div>'));
+      report.losses.forEach(n => rows.push('<div class="row dmg"><span>' + U.esc(n) + '</span><span class="bad">LOST WITH ALL HANDS</span></div>'));
+      if (report.replacement) rows.push('<div class="row"><span>' + report.replacement + ' commissioned to replace the fleet</span><span class="ok">NEW</span></div>');
+      if (report.salvage) rows.push('<div class="row"><span>Scavenger teams strip the drifting wrecks</span><span class="ok">+' + report.salvage + ' REQ</span></div>');
+      report.prizes.forEach((p, i) => {
+        const c = DATA.CLASSES[p.cls];
+        const full = sv.fleet.length >= DATA.MAX_FLEET;
+        rows.push('<div class="row prize"><span>⚑ PRIZE — ' + U.esc(p.name) + ' (' + c.short + ')</span>' +
+          '<span><button class="pbtn" data-salv="' + i + '">SALVAGE +' + Math.round(p.pts * 0.6) + ' REQ</button> ' +
+          '<button class="pbtn" data-comm="' + i + '" ' + (full ? 'disabled' : '') + '>COMMISSION</button></span></div>');
+      });
+      reportHtml = '<div class="paneltitle" style="text-align:left">BATTLE REPORT · +' + earned + ' REQ EARNED</div>' +
+        '<div class="reportbox">' + (rows.join('') || '<div class="row"><span>No changes to report.</span></div>') + '</div>';
+    }
+    const fleetHtml = sv.fleet.map((f, i) => {
+      const c = DATA.CLASSES[f.cls];
+      const rank = DATA.RANKS[Game.rankOf(f.xp)];
+      const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
+      const cost = DATA.refitCost(f.cls);
+      return '<div class="storecard"><h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
+        '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
+        '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
+        (f.refit ? '<br>✓ GUNNERY REFIT (+1 die, all guns)' : '') + '</div>' +
+        (f.refit ? '<button disabled>REFITTED ✓</button>'
+          : '<button data-refit="' + i + '" ' + (sv.req < cost ? 'disabled' : '') + '>GUNNERY REFIT +1 DIE — ' + cost + ' REQ</button>') +
+        '</div>';
+    }).join('');
     const shipRows = DATA.STORE_SHIPS.map((st, i) => {
       const c = DATA.CLASSES[st.cls];
       const full = sv.fleet.length >= DATA.MAX_FLEET;
@@ -444,15 +595,48 @@ const UI = {
         (owned ? 'INSTALLED ✓' : 'INSTALL — ' + u.cost + ' REQ') + '</button></div>';
     }).join('');
     UI.screen(
-      '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div>' +
-      '<div class="briefsub">REQUISITION EARNED +' + earned + ' · HULLS REPAIRED · CREWS RESTED</div>' +
+      (report
+        ? '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div><div class="briefsub">HULLS REPAIRED · CREWS RESTED</div>'
+        : '<div class="brieftitle">FLEET COMMAND</div><div class="briefsub">TENDER & REQUISITION</div>') +
       '<div class="reqbig">⬡ ' + sv.req + ' REQUISITION</div>' +
-      '<div class="paneltitle" style="text-align:left">COMMISSION SHIPS — FLEET ' + sv.fleet.length + '/' + DATA.MAX_FLEET + '</div>' +
+      reportHtml +
+      '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + DATA.MAX_FLEET + ' · veterans keep their crews as long as they live</div>' +
+      '<div class="storegrid">' + fleetHtml + '</div>' +
+      '<div class="paneltitle" style="text-align:left">COMMISSION SHIPS</div>' +
       '<div class="storegrid">' + shipRows + '</div>' +
       '<div class="paneltitle" style="text-align:left">FLEET UPGRADES</div>' +
       '<div class="storegrid">' + upRows + '</div>' +
-      '<button class="menu-btn primary" id="mnNext">NEXT MISSION ▸</button>'
+      '<button class="menu-btn primary" id="mnToSector">SECTOR MAP ▸</button>'
     );
+    const rerender = () => { Game.persist(); UI.showDebrief(report, earned); };
+    UI.el.screenInner.querySelectorAll('[data-salv]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = report.prizes.splice(Number(btn.dataset.salv), 1)[0];
+        sv.req += Math.round(p.pts * 0.6);
+        Snd.repair();
+        rerender();
+      });
+    });
+    UI.el.screenInner.querySelectorAll('[data-comm]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (sv.fleet.length >= DATA.MAX_FLEET) return;
+        const p = report.prizes.splice(Number(btn.dataset.comm), 1)[0];
+        sv.fleet.push({ cls: p.cls, name: p.name.replace('DKV ', 'VSS ') + ' ⚑', xp: 0, refit: false });
+        Snd.repair();
+        rerender();
+      });
+    });
+    UI.el.screenInner.querySelectorAll('[data-refit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const f = sv.fleet[Number(btn.dataset.refit)];
+        const cost = DATA.refitCost(f.cls);
+        if (f.refit || sv.req < cost) return;
+        sv.req -= cost;
+        f.refit = true;
+        Snd.repair();
+        rerender();
+      });
+    });
     UI.el.screenInner.querySelectorAll('[data-buy]').forEach(btn => {
       btn.addEventListener('click', () => {
         const st = DATA.STORE_SHIPS[Number(btn.dataset.buy)];
@@ -460,11 +644,9 @@ const UI = {
         sv.req -= st.cost;
         const used = sv.fleet.map(f => f.name);
         const name = DATA.SHIP_NAMES.find(n => !used.includes(n)) || ('VSS ESCORT ' + (sv.fleet.length + 1));
-        sv.fleet.push({ cls: st.cls, name });
-        Game.persist();
+        sv.fleet.push({ cls: st.cls, name, xp: 0, refit: false });
         Snd.repair();
-        UI.showFleet(0);
-        UI.el.screenInner.querySelector('.briefsub').textContent = name + ' JOINS THE FLEET';
+        rerender();
       });
     });
     UI.el.screenInner.querySelectorAll('[data-up]').forEach(btn => {
@@ -473,26 +655,26 @@ const UI = {
         if (!u || sv.upgrades[u.id] || sv.req < u.cost) return;
         sv.req -= u.cost;
         sv.upgrades[u.id] = true;
-        Game.persist();
         Snd.repair();
-        UI.showFleet(0);
+        rerender();
       });
     });
-    document.getElementById('mnNext').addEventListener('click', () => UI.showBriefing(sv.mIdx));
+    document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showSector(); });
     Game.b = null;
   },
 
-  showCampaignVictory(earned) {
+  showCampaignVictory() {
     UI.screen(
       '<div class="title-big" style="font-size:44px">DRIFT <span>SECURED</span></div>' +
       '<div class="title-sub">CAMPAIGN COMPLETE</div>' +
       '<div class="briefbody"><p>The DREADMAW is gone, and with her the Dominion\'s claim on the Kessel Drift. Coalition traffic moves under its own lights again.</p>' +
-      '<p>Voss: "They\'ll be back — they always come back. But not this year, and not through you. Good gunnery, Captain. Log it and move on."</p></div>' +
+      '<p>Voss: "They\'ll be back — they always come back. But not this year, and not through you. Good gunnery, Captain. Log it and move on."</p>' +
+      '<p>Fleet honours: ' + Game.save.fleet.map(f => f.name + ' (' + DATA.RANKS[Game.rankOf(f.xp)].name + ', ' + f.xp + ' XP)').join(' · ') + '</p></div>' +
       '<button class="menu-btn primary" id="mnAgain">NEW CAMPAIGN</button>' +
       '<button class="menu-btn" id="mnSk2">SKIRMISH</button>'
     );
     document.getElementById('mnAgain').addEventListener('click', () => {
-      Game.save = Game.freshSave(); Game.persist(); UI.showBriefing(0);
+      Game.save = Game.freshSave(); Game.persist(); UI.showSector();
     });
     document.getElementById('mnSk2').addEventListener('click', () => UI.showSkirmishSetup());
     Game.b = null;
@@ -512,8 +694,9 @@ const UI = {
 
   showSkirmishSetup() {
     const picks = ['corvette'];
+    const HULLS = ['corvette', 'frigate', 'lcruiser', 'argus'];
     const render = () => {
-      const cards = ['corvette', 'frigate', 'lcruiser'].map(cls => {
+      const cards = HULLS.map(cls => {
         const c = DATA.CLASSES[cls];
         const n = picks.filter(p => p === cls).length;
         return '<div class="pickcard' + (n ? ' sel' : '') + '" data-cls="' + cls + '">' +
@@ -558,15 +741,17 @@ const UI = {
       '<div class="brieftitle">HOW TO PLAY</div>' +
       '<div class="briefsub">CAPITAL SHIPS TURN SLOWLY · FACING IS EVERYTHING</div>' +
       '<div class="helpbody">' +
-      '<h4>THE TURN</h4>Each turn has three phases. <b>MOVE</b> — give every ship a helm order, click a destination inside the cone, set its final facing, and press ENGAGE. All ships (yours and theirs) maneuver simultaneously. <b>FIRE</b> — select a ship, arm a weapon, click an enemy in arc and range, then OPEN FIRE. <b>RESOLVE</b> — read the log, END TURN. Damage crews then fight fires, repair systems — and shields recharge one point on any ship that wasn\'t hit this turn.' +
-      '<h4>GUNNERY — DICE POOLS</h4>Every gun throws a pool of D6 — a light escort flicks 2 dice, a capital broadside hurls 10. Each die <b>hits on its to-hit number</b> (lances 3+, batteries 4+), and each hit deals its damage. Orders, criticals, evasion and nebulae shift the to-hit number up or down; the engagement log shows every die rolled.' +
-      '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields, and each shield point soaks one hit from a volley — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Get behind them; keep them off your tail.' +
-      '<h4>WEAPON ARCS</h4><b>Lances</b> are precise beams: they hit on 3+ at any range. <b>Batteries</b> throw shells: +1 to hit at long range (beyond 70% of max), −1 point-blank. Each weapon covers a fore or side arc — a broadside ship wants enemies abeam, a lance ship wants them ahead.' +
-      '<h4>TORPEDOES</h4>Torpedo salvos are physical objects: they launch toward their mark and keep running each movement phase until they hit <b>whatever crosses their path — friend or foe</b> — or run out of fuel. Each fish that strikes deals a D6 of hull, ignores shields and crits hard. Point-defense turrets and evasive maneuvers can thin an incoming salvo. Reloading takes 2 turns.' +
-      '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier). On a crit: <b>WEAPONS</b> (accuracy, then silence) · <b>ENGINES</b> (speed) · <b>SHIELD EMITTER</b> (no regen, then collapse) · <b>BRIDGE</b> (orders limited) · <b>FIRE</b> (burns every turn until contained) · <b>HULL BREACH</b> (extra damage).' +
-      '<h4>HELM ORDERS & INERTIA</h4>Ships fly smooth inertial arcs — the dashed preview shows the exact curve your ship will swing through, from its current heading onto its final facing. <b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals the tubes.' +
-      '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through. Nebulae hide ships inside (−15% to hit them).' +
-      '<h4>KEYS</h4><b>1–3</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
+      '<h4>THE TURN</h4>Each turn has three phases. <b>MOVE</b> — give every ship a helm order, click a destination inside the cone, set its final facing, and press ENGAGE. All ships (yours and theirs) maneuver simultaneously along smooth inertial arcs. <b>FIRE</b> — select a ship, arm a weapon, click a target, then OPEN FIRE. <b>RESOLVE</b> — read the log, END TURN.' +
+      '<h4>CAMERA</h4><b>Mouse wheel</b> zooms to the cursor · <b>shift-drag</b> or <b>middle-drag</b> pans · <b>WASD / arrows</b> pan · <b>C</b> re-fits the whole battle on screen.' +
+      '<h4>GUNNERY — DICE POOLS</h4>Every gun throws a pool of D6 — a light escort flicks 3 dice, a capital broadside hurls 12. Each die <b>hits on its to-hit number</b> (lances 3+, batteries 4+), and each hit deals its damage. Orders, criticals, evasion and nebulae shift the to-hit number; the log shows every die rolled.' +
+      '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields, and each shield point soaks one hit from a volley — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Shields recharge only on turns a ship wasn\'t hit.' +
+      '<h4>TORPEDOES & ATTACK CRAFT</h4><b>Torpedoes</b> run straight each movement phase and strike whatever crosses their path — friend or foe — D6 hull per fish, shields bypassed. <b>Bombers</b> (from carriers) home on their mark each turn and bomb through shields; flak turrets thin both. <b>Fighters</b> fly cover over a friendly ship and intercept incoming torpedoes and bomber waves. Bays and tubes take 2 turns to rearm.' +
+      '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet.' +
+      '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier): <b>WEAPONS</b> · <b>ENGINES</b> · <b>SHIELD EMITTER</b> · <b>BRIDGE</b> · <b>FIRE</b> (burns until contained) · <b>HULL BREACH</b>. Damage crews attempt repairs each turn.' +
+      '<h4>VETERANCY</h4>Named ships earn XP for kills, boarding actions and surviving missions: <b>SEASONED</b> ' + DATA.RANKS[1].desc + ' · <b>VETERAN</b> ' + DATA.RANKS[2].desc + ' · <b>ELITE</b> ' + DATA.RANKS[3].desc + '. Ships lost in battle are gone for good — with all their experience.' +
+      '<h4>HELM ORDERS</h4><b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit and dodges torpedoes. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals tubes and bays.' +
+      '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through (torpedoes die in the rocks; bombers fly over). Nebulae hide ships inside (+1 to be hit).' +
+      '<h4>KEYS</h4><b>1–4</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
       '</div>' +
       '<button class="menu-btn primary" id="mnCloseHelp">' + (inBattle ? 'RETURN TO BATTLE' : 'BACK') + '</button>'
     );
