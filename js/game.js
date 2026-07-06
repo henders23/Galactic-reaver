@@ -2,16 +2,17 @@
 'use strict';
 
 const Game = {
-  SAVE_KEY: 'galactic-reaver-save',
+  SAVE_KEY: 'galactic-reaver-save2',
   mode: 'campaign',       // 'campaign' | 'skirmish'
   save: null,             // campaign persistence
   b: null,                // current battle state
+  currentNode: null,      // sector node being fought
 
   /* ================= campaign persistence ================= */
   freshSave() {
     return {
-      mIdx: 0, req: 0,
-      fleet: [{ cls: 'corvette', name: 'VSS KESTREL' }],
+      node: null, completed: [], req: 0,
+      fleet: [{ cls: 'corvette', name: 'VSS KESTREL', xp: 0, refit: false }],
       upgrades: {},
       done: false
     };
@@ -22,7 +23,7 @@ const Game = {
       const raw = localStorage.getItem(Game.SAVE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && Array.isArray(s.fleet) && typeof s.mIdx === 'number') return s;
+        if (s && Array.isArray(s.fleet) && Array.isArray(s.completed)) return s;
       }
     } catch (e) { /* corrupt/blocked storage -> fresh */ }
     return null;
@@ -35,11 +36,20 @@ const Game = {
 
   wipeSave() { try { localStorage.removeItem(Game.SAVE_KEY); } catch (e) { } },
 
+  /* ================= veterancy ================= */
+  rankOf(xp) {
+    let r = 0;
+    DATA.RANKS.forEach((rk, i) => { if ((xp || 0) >= rk.xp) r = i; });
+    return r;
+  },
+
   /* ================= ship construction ================= */
   mkShip(cls, name, side, role, x, y, angle, opts) {
+    opts = opts || {};
     const c = DATA.CLASSES[cls];
     const sh = Object.assign({}, c.sh);
     const shMax = Object.assign({}, c.sh);
+    const rank = Game.rankOf(opts.xp || 0);
     const s = {
       id: name.replace(/\W+/g, '_').toLowerCase() + '_' + Math.floor(Math.random() * 1e6),
       cls, name, side, role: role || 'brawler',
@@ -51,13 +61,22 @@ const Game = {
       fires: 0,
       speed: c.speed, maxTurn: c.maxTurn, turrets: c.turrets, pts: c.pts,
       weapons: c.weapons.map(w => DATA.weapon(Object.assign({}, w))),
-      alive: true, exited: false,
+      alive: true, exited: false, hulked: false, captured: false,
       order: null, plot: null, plotted: false,
-      animFrom: null,
-      vip: !!(opts && opts.vip)
+      animFrom: null, animCurve: null,
+      boarded: false, lastHitBy: null,
+      xp: opts.xp || 0, rank, kills: 0, xpEarned: 0,
+      fleetRef: (opts.fleetRef !== undefined) ? opts.fleetRef : null,
+      refit: !!opts.refit,
+      vip: !!opts.vip
     };
-    if (side === 'player' && Game.mode === 'campaign' && Game.save) {
-      if (Game.save.upgrades.shields) { s.shMax.F += 1; s.sh.F += 1; }
+    // weapon refit: +1 die on all direct-fire weapons
+    if (s.refit) s.weapons.forEach(w => { if (w.type === 'lance' || w.type === 'battery') w.dice += 1; });
+    // veterancy bonuses
+    if (rank >= 1) s.turrets += 1;                                      // SEASONED
+    if (rank >= 3) { ['F', 'S', 'A'].forEach(a => { s.shMax[a] += 1; s.sh[a] += 1; }); } // ELITE
+    if (side === 'player' && Game.mode === 'campaign' && Game.save && Game.save.upgrades.shields) {
+      s.shMax.F += 1; s.sh.F += 1;
     }
     return s;
   },
@@ -70,60 +89,68 @@ const Game = {
   /* ================= battle setup ================= */
   genTerrain(density) {
     const t = [];
-    const counts = { light: [1, 1], medium: [2, 1], heavy: [4, 2] }[density] || [1, 1];
+    const counts = { light: [2, 1], medium: [3, 2], heavy: [5, 2] }[density] || [2, 1];
     const W = DATA.WORLD.w, H = DATA.WORLD.h;
     const placed = [];
     const tryPlace = (type, r) => {
       for (let i = 0; i < 40; i++) {
-        const x = U.frand(420, W - 420), y = U.frand(170, H - 170);
-        if (placed.every(p => Math.hypot(p.x - x, p.y - y) > p.r + r + 60)) {
+        const x = U.frand(520, W - 520), y = U.frand(220, H - 220);
+        if (placed.every(p => Math.hypot(p.x - x, p.y - y) > p.r + r + 70)) {
           const o = { type, x, y, r, seed: Math.floor(Math.random() * 9999) };
           placed.push(o); t.push(o);
           return;
         }
       }
     };
-    for (let i = 0; i < counts[0]; i++) tryPlace('ast', U.frand(58, 105));
-    for (let i = 0; i < counts[1]; i++) tryPlace('neb', U.frand(110, 170));
+    for (let i = 0; i < counts[0]; i++) tryPlace('ast', U.frand(65, 120));
+    for (let i = 0; i < counts[1]; i++) tryPlace('neb', U.frand(120, 190));
     return t;
   },
 
   fleetSpawn(spawn, fleet) {
-    // stack player fleet vertically around the spawn point
     return fleet.map((f, i) => {
-      const y = spawn.y + (i - (fleet.length - 1) / 2) * 130;
-      return Game.mkShip(f.cls, f.name, 'player', 'player', spawn.x, y, -15 + i * 10);
+      const y = spawn.y + (i - (fleet.length - 1) / 2) * 150;
+      return Game.mkShip(f.cls, f.name, 'player', 'player', spawn.x, y, -15 + i * 8,
+        { xp: f.xp, refit: f.refit, fleetRef: i });
     });
   },
 
-  startMission(mIdx) {
+  startMission(nodeId) {
     Game.mode = 'campaign';
-    Game.missionIdx = mIdx;
-    const m = DATA.MISSIONS[mIdx];
+    Game.currentNode = nodeId;
+    const node = DATA.sectorNode(nodeId);
+    const m = DATA.MISSION_DEFS[node.mission];
     const ships = Game.fleetSpawn(m.playerSpawn, Game.save.fleet);
     (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
-    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip })));
+    m.enemies.forEach(e => {
+      const role = e.cls === 'hive' ? 'carrier' : e.role;
+      ships.push(Game.mkShip(e.cls, e.name, 'enemy', role, e.x, e.y, e.angle, { vip: e.vip }));
+    });
     Game.beginBattle(m, ships, m.terrain);
   },
 
   startSkirmish(fleetSel) {
     Game.mode = 'skirmish';
-    const fleet = fleetSel.map((cls, i) => ({ cls, name: i === 0 ? 'VSS KESTREL' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length] }));
-    const ships = Game.fleetSpawn({ x: 240, y: 450 }, fleet);
-    let budget = fleet.reduce((a, f) => a + DATA.CLASSES[f.cls].pts, 0) + 60;
+    const fleet = fleetSel.map((cls, i) => ({
+      cls, name: i === 0 ? 'VSS KESTREL' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
+      xp: 0, refit: false
+    }));
+    const ships = Game.fleetSpawn({ x: 340, y: 650 }, fleet);
+    let budget = fleet.reduce((a, f) => a + DATA.CLASSES[f.cls].pts, 0) + 80;
     const names = DATA.DKV_NAMES.slice();
     let n = 0;
-    while (budget > 80 && n < 5) {
+    while (budget > 80 && n < 6) {
       const affordable = DATA.SKIRMISH_POOL.filter(p => DATA.CLASSES[p.cls].pts <= budget);
       if (!affordable.length) break;
       const p = U.pick(affordable);
       budget -= DATA.CLASSES[p.cls].pts;
       const nm = names.length ? names.splice(Math.floor(Math.random() * names.length), 1)[0] : 'DKV NULL';
-      ships.push(Game.mkShip(p.cls, nm, 'enemy', p.role, U.frand(1000, 1280), U.frand(160, 740), 180 + U.frand(-25, 25)));
+      const role = p.cls === 'hive' ? 'carrier' : p.role;
+      ships.push(Game.mkShip(p.cls, nm, 'enemy', role, U.frand(1450, 1850), U.frand(240, 1060), 180 + U.frand(-25, 25)));
       n++;
     }
     const m = {
-      id: 'skirmish', name: 'SKIRMISH', sub: 'KESSEL DRIFT · CONTESTED VOLUME',
+      name: 'SKIRMISH', sub: 'KESSEL DRIFT · CONTESTED VOLUME',
       reward: 0,
       win: (b) => Game.sideDead(b, 'enemy') ? 'Hostiles destroyed. Sector clear.' : null,
       lose: (b) => Game.sideDead(b, 'player') ? 'Escape pods away. The Verge keeps what it takes.' : null
@@ -134,10 +161,10 @@ const Game = {
   beginBattle(mission, ships, terrainDensity) {
     Game.b = {
       mission, turn: 1, phase: 'move',
-      ships, torps: [],
+      ships, torps: [], craft: [],
       terrain: Game.genTerrain(terrainDensity),
       sel: null, plotStep: 'order', curOrder: null, ghost: null,
-      armed: null, hover: null, inspect: null,
+      armed: null, boardMode: null, hover: null, inspect: null,
       log: [], banner: null,
       queue: [], nextShotAt: 0, anim: null,
       killPts: 0
@@ -153,17 +180,13 @@ const Game = {
   active(b) { return (b || Game.b).ships.filter(s => s.alive && !s.exited); },
   playerShips(b) { return Game.active(b).filter(s => s.side === 'player'); },
   enemyShips(b) { return Game.active(b).filter(s => s.side === 'enemy'); },
+  hulks(b) { return (b || Game.b).ships.filter(s => s.hulked); },
   sideDead(b, side) { return !b.ships.some(s => s.side === side && s.alive && !s.exited); },
 
   log(t, c, extra) {
     const e = Object.assign({ t, c: c || '#8ba0b8' }, extra || {});
     Game.b.log.push(e);
     if (window.UI) UI.pushLog(e);
-  },
-
-  nose(ship) {
-    const rad = ship.angle * U.D2R;
-    return { x: ship.x + Math.cos(rad) * ship.w * 0.5, y: ship.y + Math.sin(rad) * ship.w * 0.5 };
   },
 
   inNebula(pt) {
@@ -181,20 +204,23 @@ const Game = {
     if (w.reload > 0) return { ok: false, why: 'RELOADING' };
     if (shooter.sys['WEAPONS'] >= 2) return { ok: false, why: 'WEAPONS DESTROYED' };
     if (d > w.range) return { ok: false, why: 'OUT OF RANGE' };
-    const arc = U.arcOf(U.bearingFrom(shooter, target.x, target.y));
-    if (w.arc === 'fore' && arc !== 'fore') return { ok: false, why: 'NOT IN FORE ARC' };
-    if (w.arc === 'side' && arc !== 'side') return { ok: false, why: 'NOT IN SIDE ARC' };
-    if (w.type !== 'torp' && Game.losBlocked(shooter, target)) return { ok: false, why: 'LINE OF FIRE BLOCKED' };
-    if (w.type === 'torp' && shooter.order && shooter.order.brace) return { ok: false, why: 'CREWS BRACED' };
+    if (w.arc !== 'any') {
+      const arc = U.arcOf(U.bearingFrom(shooter, target.x, target.y));
+      if (w.arc === 'fore' && arc !== 'fore') return { ok: false, why: 'NOT IN FORE ARC' };
+      if (w.arc === 'side' && arc !== 'side') return { ok: false, why: 'NOT IN SIDE ARC' };
+    }
+    if (w.type !== 'torp' && w.type !== 'bay' && Game.losBlocked(shooter, target)) return { ok: false, why: 'LINE OF FIRE BLOCKED' };
+    if ((w.type === 'torp' || w.type === 'bay') && shooter.order && shooter.order.brace) return { ok: false, why: 'CREWS BRACED' };
 
     const sArc = U.shieldArcHit(target, shooter.x, shooter.y);
-    if (w.type === 'torp') {
-      return { ok: true, dist: Math.round(d), sArc, stern: sArc === 'A', torp: true };
+    if (w.type === 'torp' || w.type === 'bay') {
+      return { ok: true, dist: Math.round(d), sArc, stern: sArc === 'A', torp: w.type === 'torp', bay: w.type === 'bay' };
     }
     // dice-pool gunnery: roll w.dice D6, each die hits on `need`+
     let need = w.need;
     if (shooter.order) need += shooter.order.accShift;
     if (shooter.side === 'player' && Game.mode === 'campaign' && Game.save.upgrades.uplink) need -= 1;
+    if (shooter.rank >= 2) need -= 1;                                  // VETERAN gunnery
     need += shooter.sys['WEAPONS'];
     if (shooter.sys['BRIDGE'] >= 2) need += 1;
     if (w.type === 'battery') {
@@ -225,13 +251,11 @@ const Game = {
     const b = Game.b, s = Game.ship(id);
     if (!b || !s || !s.alive) return;
     if (b.phase === 'move' && s.side === 'player') {
-      if (s.plotted) { // re-plot
-        s.plotted = false; s.plot = null; s.order = null;
-      }
+      if (s.plotted) { s.plotted = false; s.plot = null; s.order = null; }
       b.sel = id; b.plotStep = 'order'; b.curOrder = null; b.ghost = null;
       Snd.select();
     } else if (b.phase === 'fire' && s.side === 'player') {
-      b.sel = id; b.armed = null;
+      b.sel = id; b.armed = null; b.boardMode = null;
       Snd.select();
     }
     if (window.UI) UI.refresh();
@@ -244,7 +268,6 @@ const Game = {
     b.curOrder = o;
     Snd.click();
     if (o.range === 0) {
-      // hold: instant plot at current position
       Game.commitPlot(s, { x: s.x, y: s.y, angle: s.angle }, o);
     } else {
       b.plotStep = 'dest'; b.ghost = null;
@@ -263,10 +286,11 @@ const Game = {
     if (window.UI) UI.refresh();
   },
 
-  shipAt(x, y) {
-    // topmost active ship near the point
+  shipAt(x, y, includeHulks) {
     let best = null, bd = 1e9;
-    Game.active(Game.b).forEach(s => {
+    Game.b.ships.forEach(s => {
+      const targetable = (s.alive && !s.exited) || (includeHulks && s.hulked);
+      if (!targetable) return;
       const d = Math.hypot(s.x - x, s.y - y);
       if (d < s.r + 12 && d < bd) { best = s; bd = d; }
     });
@@ -277,13 +301,13 @@ const Game = {
     const b = Game.b;
     if (!b || b.banner) return;
     if (b.inspect) { b.inspect = null; if (window.UI) UI.refresh(); return; }
-    const hit = Game.shipAt(x, y);
+    const hit = Game.shipAt(x, y, true);
 
     if (b.phase === 'move') {
       const s = Game.ship(b.sel);
       // map clicks only re-select before an order is chosen; while aiming,
       // every click is a destination (switch ships via roster or number keys)
-      const reselect = hit && hit.side === 'player' && (!s || hit.id !== s.id) && b.plotStep === 'order';
+      const reselect = hit && !hit.hulked && hit.side === 'player' && (!s || hit.id !== s.id) && b.plotStep === 'order';
       if (reselect) { Game.selectShip(hit.id); return; }
       if (!s) { if (hit) { b.inspect = hit.id; if (window.UI) UI.refresh(); } return; }
       if (b.plotStep === 'dest' && b.curOrder) {
@@ -307,23 +331,32 @@ const Game = {
     }
 
     if (b.phase === 'fire') {
-      if (b.armed && hit && hit.side === 'enemy') {
+      // boarding mode: click an adjacent enemy or hulk
+      if (b.boardMode && hit) {
+        const s = Game.ship(b.boardMode);
+        if (s && Game.tryBoard(s, hit)) return;
+      }
+      if (b.armed && hit) {
         const s = Game.ship(b.armed.shipId);
         const w = s && s.weapons[b.armed.wIdx];
-        if (s && w) {
-          const sol = Game.solution(s, w, hit);
-          if (sol.ok) {
-            w.target = hit.id;
-            b.armed = null; b.hover = null;
-            Snd.lock();
-            if (window.UI) UI.refresh();
-            return;
-          } else { Snd.deny(); }
+        if (s && w && !hit.hulked) {
+          const isFighters = w.type === 'bay' && w.craft === 'fighters';
+          const validSide = isFighters ? hit.side !== 'enemy' : hit.side === 'enemy';
+          if (validSide) {
+            const sol = isFighters ? { ok: true } : Game.solution(s, w, hit);
+            if (sol.ok) {
+              w.target = hit.id;
+              b.armed = null; b.hover = null;
+              Snd.lock();
+              if (window.UI) UI.refresh();
+              return;
+            } else { Snd.deny(); }
+          }
         }
       }
-      if (hit && hit.side === 'player') { Game.selectShip(hit.id); return; }
+      if (hit && !hit.hulked && hit.side === 'player') { Game.selectShip(hit.id); return; }
       if (hit) { b.inspect = hit.id; if (window.UI) UI.refresh(); return; }
-      if (b.armed) { b.armed = null; if (window.UI) UI.refresh(); }
+      if (b.armed || b.boardMode) { b.armed = null; b.boardMode = null; if (window.UI) UI.refresh(); }
       return;
     }
 
@@ -353,7 +386,7 @@ const Game = {
     if (b.inspect) { b.inspect = null; }
     else if (b.phase === 'move' && b.plotStep === 'angle') { b.plotStep = 'dest'; b.ghost = null; }
     else if (b.phase === 'move' && b.plotStep === 'dest') { b.plotStep = 'order'; b.curOrder = null; }
-    else if (b.phase === 'fire' && b.armed) { b.armed = null; }
+    else if (b.phase === 'fire' && (b.armed || b.boardMode)) { b.armed = null; b.boardMode = null; }
     if (window.UI) UI.refresh();
   },
 
@@ -361,24 +394,82 @@ const Game = {
     return Game.playerShips(Game.b).every(s => s.plotted);
   },
 
+  /* ================= boarding ================= */
+  canBoard(s) {
+    if (!s || s.boarded || s.side !== 'player') return false;
+    return Game.boardTargets(s).length > 0;
+  },
+
+  boardTargets(s) {
+    return Game.b.ships.filter(t =>
+      t.id !== s.id && !t.exited &&
+      ((t.side === 'enemy' && t.alive) || (t.hulked && !t.captured)) &&
+      U.dist(s, t) <= DATA.BOARD_RANGE);
+  },
+
+  tryBoard(s, target) {
+    const b = Game.b;
+    if (!s || s.boarded) return false;
+    if (U.dist(s, target) > DATA.BOARD_RANGE) { Snd.deny(); Game.log(s.name + ' — boarding target out of range', '#5c7089'); return false; }
+    const valid = (target.side === 'enemy' && target.alive) || (target.hulked && !target.captured);
+    if (!valid) return false;
+    s.boarded = true;
+    b.boardMode = null;
+    Rend.fx.ring(s.x, s.y, 26, 'rgba(255,212,101,.7)');
+    Rend.fx.ring(target.x, target.y, 26, 'rgba(255,212,101,.7)');
+    Snd.lock();
+    if (target.hulked) {
+      const die = U.rand(1, 6);
+      if (die + s.rank >= 5) {
+        target.captured = true;
+        s.xpEarned += 10;
+        Snd.repair();
+        Game.log('★ ' + s.name + ' boarding teams secure the wreck of ' + target.name + ' — PRIZE TAKEN', '#ffd465', { big: true });
+      } else {
+        Game.log(s.name + ' boarding teams pull back from ' + target.name + ' — fire and vacuum below decks (rolled ' + die + ', need 5+)', '#7ba8b8');
+      }
+    } else {
+      const att = U.rand(1, 6) + s.rank + (s.hull > s.maxHull * 0.5 ? 1 : 0);
+      const def = U.rand(1, 6) + Math.round(target.hull / target.maxHull * 2) + (target.r > 70 ? 1 : 0);
+      if (att > def) {
+        s.xpEarned += 6;
+        Game.log('⚔ ' + s.name + ' hit-and-run boarding on ' + target.name + ' — charges set (' + att + ' vs ' + def + ')', '#ffd465', { big: true });
+        Game.rollCrit(target, 6);
+        if (target.alive) Game.applyDamage(target, U.rand(1, 3), { quiet: true, sol: {}, shooterRef: s });
+      } else if (att === def) {
+        Game.log('⚔ ' + s.name + ' boarding action on ' + target.name + ' — fought to a bloody draw (' + att + ' vs ' + def + ')', '#e8c9a0');
+        s.hull -= 1; target.hull -= 1;
+        if (s.hull <= 0) Game.killShip(s);
+        if (target.hull <= 0) { target.lastHitBy = s.id; Game.killShip(target); }
+      } else {
+        const dmg = U.rand(1, 3);
+        s.hull -= dmg;
+        s.tookFire = true;
+        Game.log('⚔ ' + s.name + ' boarding parties repelled by ' + target.name + ' — ' + dmg + ' hull lost (' + att + ' vs ' + def + ')', '#ff8a84');
+        if (s.hull <= 0) Game.killShip(s);
+      }
+    }
+    if (Game.checkEnd()) return true;
+    if (window.UI) UI.refresh();
+    return true;
+  },
+
   /* ================= engage: AI plots + simultaneous animation ================= */
   engage() {
     const b = Game.b;
     if (b.phase !== 'move' || !Game.allPlotted()) return;
-    // AI plots
     Game.active(b).filter(s => s.side !== 'player').forEach(s => AI.plot(s, b));
-    // stage animation — each ship swings along an inertial arc from its
-    // current heading onto its plotted facing
     Game.active(b).forEach(s => {
       s.animFrom = { x: s.x, y: s.y, angle: s.angle };
       if (!s.plot) s.plot = { x: s.x, y: s.y, angle: s.angle };
       s.animCurve = U.curveFn(s.animFrom, s.plot);
     });
-    // torpedo paths (against destination positions)
     Game.stageTorpedoes(b);
+    Game.stageCraft(b);
+    Game.stageIntercepts(b);
     b.phase = 'anim';
     b.anim = { start: performance.now(), dur: 1500 };
-    b.sel = null; b.ghost = null; b.curOrder = null;
+    b.sel = null; b.ghost = null; b.curOrder = null; b.boardMode = null;
     Snd.click();
     if (window.UI) UI.refresh();
   },
@@ -389,7 +480,6 @@ const Game = {
       const rad = tp.angle * U.D2R;
       let travel = tp.speed;
       let hitShip = null, hitAst = null;
-      // step along path, test against ships' PLOTTED positions
       const step = 8;
       for (let t = step; t <= tp.speed; t += step) {
         const px = tp.x + Math.cos(rad) * t, py = tp.y + Math.sin(rad) * t;
@@ -409,64 +499,122 @@ const Game = {
     });
   },
 
-  finishAnim() {
-    const b = Game.b;
-    // asteroid transit damage: sample the actual flight arc before finalizing
-    Game.active(b).forEach(s => {
-      if (!s.animFrom || !s.plot) return;
-      const from = s.animFrom, to = s.plot;
-      const path = U.sampleCurve(from, to, 18);
-      const grazed = b.terrain.some(a => a.type === 'ast' &&
-        path.some(p => Math.hypot(a.x - p.x, a.y - p.y) < a.r));
-      if (grazed) {
-        const dmg = U.rand(1, 3);
-        s.hull -= dmg;
-        Rend.fx.spark(to.x, to.y, '#c8b89a', 12);
-        Rend.fx.floater(to.x, to.y - s.h / 2 - 14, '-' + dmg + ' ROCKS', '#c8b89a');
-        Game.log(s.name + ' grinds through the asteroid shoal — ' + dmg + ' hull', '#c8b89a');
-        if (s.hull <= 0) Game.killShip(s);
+  /* ---- attack craft: bombers home on targets, fighters fly cover ---- */
+  stageCraft(b) {
+    b.craft.forEach(c => {
+      c.from = { x: c.x, y: c.y };
+      c.strike = null;
+      if (c.kind === 'bombers') {
+        let t = Game.ship(c.targetId);
+        if (!t || !t.alive || t.exited) {
+          // retarget nearest foe
+          const foes = Game.active(b).filter(x => c.side === 'enemy' ? x.side !== 'enemy' : x.side === 'enemy');
+          t = foes.sort((a, z) => U.dist(c, a) - U.dist(c, z))[0];
+          c.targetId = t ? t.id : null;
+        }
+        if (!t) { c.expired = true; c.to = { x: c.x, y: c.y }; return; }
+        const dest = t.plot ? { x: t.plot.x, y: t.plot.y } : { x: t.x, y: t.y };
+        const d = U.dist(c, dest);
+        c.angle = U.angleTo(c, dest);
+        if (d <= c.speed) {
+          c.to = dest;
+          c.strike = t.id;
+        } else {
+          const rad = c.angle * U.D2R;
+          c.to = { x: c.x + Math.cos(rad) * c.speed, y: c.y + Math.sin(rad) * c.speed };
+        }
+      } else {
+        // fighters: orbit their charge
+        let e = Game.ship(c.escortId);
+        if (!e || !e.alive || e.exited) e = Game.ship(c.launcher);
+        if (!e || !e.alive || e.exited) { c.expired = true; c.to = { x: c.x, y: c.y }; return; }
+        c.orbit = (c.orbit || 0) + 1;
+        const oa = c.orbit * 85 * U.D2R;
+        const base = e.plot ? e.plot : e;
+        c.to = { x: base.x + Math.cos(oa) * (e.r + 55), y: base.y + Math.sin(oa) * (e.r + 55) };
+        c.angle = U.angleTo(c, c.to);
       }
+      c.fuel--;
+      if (c.fuel <= 0 && !c.strike) c.expired = true;
     });
-    // finalize ship positions
-    Game.active(b).forEach(s => {
-      if (s.plot) { s.x = s.plot.x; s.y = s.plot.y; s.angle = s.plot.angle; }
-      s.animFrom = null;
-      s.animCurve = null;
-    });
-    // exits (convoy / fleeing vip)
-    Game.active(b).forEach(s => {
-      if ((s.role === 'convoy' || s.role === 'flee') && s.x > DATA.WORLD.w - 55) {
-        s.exited = true;
-        Game.log((s.side === 'enemy' ? '⚠ ' : '★ ') + s.name + ' has left the field', s.side === 'enemy' ? '#ff8a84' : '#6fe0a8', { big: true });
-      }
-      s.plot = null; s.plotted = false;
-    });
-    // torpedo strikes
-    b.torps.forEach(tp => {
-      tp.x = tp.to.x; tp.y = tp.to.y;
-      if (tp.strike) {
-        const target = Game.ship(tp.strike);
-        if (target && target.alive && !target.exited) Game.resolveTorpedoStrike(tp, target);
-        tp.expired = true;
-      } else if (tp.splashAst) {
-        Rend.fx.boom(tp.x, tp.y, false);
-        Game.log('Torpedo salvo detonates in the asteroid shoal', '#5c7089');
-        tp.expired = true;
-      } else if (tp.expired) {
-        Rend.fx.ring(tp.x, tp.y, 26, 'rgba(120,180,220,.5)');
-        Game.log('Torpedo salvo runs dry and self-destructs', '#5c7089');
-      }
-    });
-    b.torps = b.torps.filter(tp => !tp.expired);
+  },
 
-    if (Game.checkEnd()) return;
-    b.phase = 'fire';
-    b.sel = null;
-    const first = Game.playerShips(b).find(s => s.weapons.some(w => w.reload === 0));
-    b.sel = first ? first.id : (Game.playerShips(b)[0] || {}).id || null;
-    b.armed = null;
-    Game.log('— TURN ' + U.padTurn(b.turn) + ' · FIRING —', '#ffb454');
-    if (window.UI) UI.refresh();
+  /* fighters intercept hostile ordnance whose path ends near them */
+  stageIntercepts(b) {
+    b.craft.filter(c => c.kind === 'fighters' && !c.expired).forEach(f => {
+      if (f.intercepting) return;
+      // hostile bomber squadrons first, then torpedoes
+      const bomber = b.craft.find(c => c.kind === 'bombers' && c.side !== f.side && !c.expired && !c.intercepted &&
+        U.dist(c.to, f.to) < 190);
+      if (bomber) { f.intercepting = { type: 'craft', id: bomber.id }; bomber.intercepted = true; return; }
+      const torp = b.torps.find(tp => tp.side !== f.side && !tp.expired && !tp.intercepted &&
+        U.dist(tp.to, f.to) < 190);
+      if (torp) { f.intercepting = { type: 'torp', id: torp.id }; torp.intercepted = true; }
+    });
+  },
+
+  resolveDogfights(b) {
+    b.craft.filter(c => c.kind === 'fighters' && c.intercepting).forEach(f => {
+      const iv = f.intercepting;
+      f.intercepting = null;
+      let kills = 0;
+      for (let i = 0; i < f.count; i++) if (U.rand(1, 6) >= 4) kills++;
+      if (iv.type === 'torp') {
+        const tp = b.torps.find(t => t.id === iv.id);
+        if (!tp) return;
+        tp.intercepted = false;
+        const shot = Math.min(kills, tp.count);
+        tp.count -= shot;
+        Rend.fx.spark(tp.to.x, tp.to.y, '#9fe8ff', 12);
+        Snd.cannon();
+        Game.log((f.side === 'player' ? 'VSS' : 'DKV') + ' fighter screen sweeps the torpedo salvo — ' + shot + ' torpedo' + (shot === 1 ? '' : 'es') + ' destroyed', '#7ce8f7');
+        if (tp.count <= 0) { tp.expired = true; tp.strike = null; }
+      } else {
+        const bo = b.craft.find(c => c.id === iv.id);
+        if (!bo) return;
+        bo.intercepted = false;
+        const shot = Math.min(kills, bo.count);
+        bo.count -= shot;
+        Rend.fx.spark(bo.to.x, bo.to.y, '#9fe8ff', 14);
+        Snd.cannon();
+        Game.log('Fighters tangle with the bomber wave — ' + shot + ' bomber' + (shot === 1 ? '' : 's') + ' splashed', '#7ce8f7');
+        // bombers' tail guns
+        let fLost = 0;
+        for (let i = 0; i < bo.count; i++) if (U.rand(1, 6) >= 6) fLost++;
+        if (fLost > 0) {
+          f.count -= fLost;
+          Game.log('Tail guns claim ' + fLost + ' fighter' + (fLost === 1 ? '' : 's'), '#ff8a84');
+        }
+        if (bo.count <= 0) { bo.expired = true; bo.strike = null; }
+        if (f.count <= 0) f.expired = true;
+      }
+    });
+  },
+
+  resolveBomberStrike(b, c) {
+    const target = Game.ship(c.strike);
+    if (!target || !target.alive || target.exited) return;
+    let n = c.count;
+    let flak = 0;
+    for (let i = 0; i < target.turrets && n > 0; i++) {
+      if (U.rand(1, 6) >= 4) { n--; flak++; }
+    }
+    if (flak > 0) {
+      Rend.fx.spark(c.to.x, c.to.y, '#ffd9a0', 10);
+      Game.log(target.name + ' flak — ' + flak + ' bomber' + (flak === 1 ? '' : 's') + ' shot down', '#7ba8b8');
+    }
+    let hits = 0;
+    for (let i = 0; i < n; i++) if (U.rand(1, 6) >= 4) hits++;
+    if (hits <= 0) {
+      Game.log('Bomber run on ' + target.name + ' — all payloads wide', '#5c7089');
+      return;
+    }
+    Snd.explosion(false);
+    Rend.fx.boom(c.to.x, c.to.y, false);
+    Rend.shake(9);
+    const launcher = Game.ship(c.launcher);
+    Game.log('Bombers dive on ' + target.name + ' — ' + hits + ' hit' + (hits === 1 ? '' : 's') + ' · ' + (hits * 2) + ' hull (shields bypassed)', '#ffb454');
+    Game.applyDamage(target, hits * 2, { quiet: false, sol: { stern: false }, shooterRef: launcher, hits });
   },
 
   /* ================= fire phase ================= */
@@ -477,10 +625,20 @@ const Game = {
     const w = s && s.weapons[wIdx];
     if (!s || !w) return;
     if (w.reload > 0 || s.sys['WEAPONS'] >= 2) { Snd.deny(); return; }
-    if (w.type === 'torp' && s.order && s.order.brace) { Snd.deny(); return; }
+    if ((w.type === 'torp' || w.type === 'bay') && s.order && s.order.brace) { Snd.deny(); return; }
+    b.boardMode = null;
     if (w.target) { w.target = null; b.armed = null; Snd.click(); if (window.UI) UI.refresh(); return; }
     if (b.armed && b.armed.shipId === shipId && b.armed.wIdx === wIdx) b.armed = null;
     else b.armed = { shipId, wIdx };
+    Snd.select();
+    if (window.UI) UI.refresh();
+  },
+
+  toggleBoardMode(shipId) {
+    const b = Game.b;
+    if (b.phase !== 'fire') return;
+    b.armed = null;
+    b.boardMode = b.boardMode === shipId ? null : shipId;
     Snd.select();
     if (window.UI) UI.refresh();
   },
@@ -493,13 +651,11 @@ const Game = {
     const b = Game.b;
     if (b.phase !== 'fire') return;
     b.queue = [];
-    // player shots
     Game.playerShips(b).forEach(s => {
       s.weapons.forEach((w, i) => {
         if (w.target && w.reload === 0) b.queue.push({ shooterId: s.id, wIdx: i, targetId: w.target });
       });
     });
-    // enemy shots (assigned now)
     Game.enemyShips(b).forEach(s => {
       AI.assignFire(s, b).forEach(q => b.queue.push(q));
     });
@@ -509,7 +665,7 @@ const Game = {
       return;
     }
     b.phase = 'firing';
-    b.armed = null; b.hover = null;
+    b.armed = null; b.hover = null; b.boardMode = null;
     b.nextShotAt = performance.now() + 150;
     if (window.UI) UI.refresh();
   },
@@ -525,27 +681,50 @@ const Game = {
       Game.log(s.name + ' ' + w.name + ' — target lost', '#5c7089');
       return;
     }
-    const sol = Game.solution(s, w, target);
+    const isFighters = w.type === 'bay' && w.craft === 'fighters';
+    const sol = isFighters ? { ok: true } : Game.solution(s, w, target);
     if (!sol.ok) {
       Game.log(s.name + ' ' + w.name + ' — no firing solution (' + sol.why + ')', '#5c7089');
       return;
     }
 
     if (w.type === 'torp') {
-      w.reload = w.reloadTime + 1; // ticks down at end of this turn
+      w.reload = w.reloadTime + 1;
       const ang = U.angleTo(s, target);
       const rad = ang * U.D2R;
       Game.b.torps.push({
         id: 'tp' + Math.floor(Math.random() * 1e9),
         x: s.x + Math.cos(rad) * (s.w * 0.55 + 14),
         y: s.y + Math.sin(rad) * (s.w * 0.55 + 14),
-        angle: ang, speed: 250, fuel: 3,
+        angle: ang, speed: 270, fuel: 3,
         count: w.salvo,
         side: s.side, launcher: s.id
       });
       Snd.torp();
       Rend.fx.ring(s.x, s.y, 30, 'rgba(255,180,84,.6)');
       Game.log(s.name + ' — TORPEDOES AWAY (' + w.salvo + ' fish, running toward ' + target.name + ')', '#ffb454');
+      return;
+    }
+
+    if (w.type === 'bay') {
+      w.reload = w.reloadTime + 1;
+      const ang = U.angleTo(s, target);
+      const rad = ang * U.D2R;
+      Game.b.craft.push({
+        id: 'cr' + Math.floor(Math.random() * 1e9),
+        kind: w.craft, side: s.side,
+        x: s.x + Math.cos(rad) * (s.w * 0.55 + 16),
+        y: s.y + Math.sin(rad) * (s.w * 0.55 + 16),
+        angle: ang, speed: 340, fuel: 4,
+        count: w.salvo,
+        targetId: w.craft === 'bombers' ? target.id : null,
+        escortId: w.craft === 'fighters' ? target.id : null,
+        launcher: s.id, orbit: 0
+      });
+      Snd.torp();
+      Rend.fx.ring(s.x, s.y, 26, 'rgba(126,232,247,.6)');
+      if (w.craft === 'bombers') Game.log(s.name + ' — BOMBERS AWAY (' + w.salvo + ' craft, vectoring on ' + target.name + ')', '#ffb454');
+      else Game.log(s.name + ' — fighter screen launched, flying cover for ' + target.name, '#7ce8f7');
       return;
     }
 
@@ -571,7 +750,6 @@ const Game = {
       Game.log(s.name + ' ' + w.name + ' → ' + target.name + ' — MISSES · ' + diceStr, '#5c7089');
       return;
     }
-    // shields absorb hits one-for-one (stern shots and dead emitters bypass)
     let absorbed = 0;
     if (sol.sArc !== 'A' && target.sys['SHIELD EMITTER'] < 2) {
       absorbed = Math.min(hits, target.sh[sol.sArc]);
@@ -590,7 +768,7 @@ const Game = {
     }
     const dmg = hits * sol.dmgPer;
     Game.applyDamage(target, dmg, {
-      shooter: s, sol, wname: w.name, hits, absorbed, diceStr
+      shooter: s, shooterRef: s, sol, wname: w.name, hits, absorbed, diceStr
     });
   },
 
@@ -602,6 +780,7 @@ const Game = {
     }
     target.hull -= dmg;
     target.tookFire = true;
+    if (opts.shooterRef) target.lastHitBy = opts.shooterRef.id;
     Snd.hit();
     Rend.fx.spark(target.x, target.y, target.side === 'enemy' ? '#ffd9a0' : '#ff9a92', 14);
     Rend.fx.floater(target.x, target.y - target.h / 2 - 14, '-' + dmg, sol.stern ? '#ff8a84' : '#e8c9a0');
@@ -655,13 +834,29 @@ const Game = {
     if (!target.alive) return;
     target.alive = false; target.hull = 0;
     target.weapons.forEach(w => { w.target = null; });
-    // clear anyone targeting it handled at shot time
-    const big = target.r > 60;
-    Snd.explosion(big);
-    Rend.fx.boom(target.x, target.y, big);
-    Rend.shake(big ? 16 : 10);
-    Game.log('✸ ' + target.name + ' DESTROYED', target.side === 'enemy' ? '#6fe0a8' : '#ff6159', { big: true });
+    // kill credit & XP
+    const credit = target.lastHitBy ? Game.ship(target.lastHitBy) : null;
+    if (credit && credit.side === 'player' && target.side === 'enemy') {
+      credit.kills++;
+      credit.xpEarned += Math.max(3, Math.round(target.pts / 10));
+    }
     if (target.side === 'enemy') b.killPts += target.pts;
+    // hulk or fireball? big overkill vaporizes; otherwise she may break and drift
+    const big = target.r > 60;
+    if (target.side === 'enemy' && !target.exited && U.rand(1, 6) >= 4) {
+      target.hulked = true;
+      target.sh = { F: 0, S: 0, A: 0 };
+      target.fires = Math.max(1, target.fires);
+      Snd.explosion(false);
+      Rend.fx.boom(target.x, target.y, false);
+      Rend.shake(8);
+      Game.log('✸ ' + target.name + ' breaks — a drifting hulk, ripe for boarding', '#ffd465', { big: true });
+    } else {
+      Snd.explosion(big);
+      Rend.fx.boom(target.x, target.y, big);
+      Rend.shake(big ? 16 : 10);
+      Game.log('✸ ' + target.name + ' DESTROYED', target.side === 'enemy' ? '#6fe0a8' : '#ff6159', { big: true });
+    }
     if (b.sel === target.id) b.sel = null;
     if (b.inspect === target.id) b.inspect = null;
   },
@@ -669,7 +864,6 @@ const Game = {
   resolveTorpedoStrike(tp, target) {
     const b = Game.b;
     let torps = tp.count;
-    // point defense
     let shot = 0;
     for (let i = 0; i < target.turrets && torps > 0; i++) {
       if (U.rand(1, 6) >= 4) { torps--; shot++; }
@@ -678,7 +872,6 @@ const Game = {
       Rend.fx.spark(tp.x, tp.y, '#ffd9a0', 8);
       Game.log(target.name + ' point defense — ' + shot + ' torpedo' + (shot > 1 ? 'es' : '') + ' shot down', '#7ba8b8');
     }
-    // evasion
     if (torps > 0 && target.order && target.order.evade) {
       let dodged = 0;
       for (let i = 0; i < torps; i++) if (Math.random() < 0.35) dodged++;
@@ -692,13 +885,89 @@ const Game = {
     Snd.explosion(false);
     Rend.fx.boom(tp.x, tp.y, false);
     Rend.shake(12);
+    const launcher = Game.ship(tp.launcher);
     for (let i = 0; i < torps; i++) {
       if (!target.alive) break;
       const die = U.rand(1, 6);
-      const dmg = Math.max(2, die); // a torpedo never tickles
+      const dmg = Math.max(2, die);
       Game.log('Torpedo strikes ' + target.name + ' — D6 [' + die + '] · ' + dmg + ' hull (shields bypassed)', '#ffb454');
-      Game.applyDamage(target, dmg, { sol: { stern: true }, quiet: true });
+      Game.applyDamage(target, dmg, { sol: { stern: true }, quiet: true, shooterRef: launcher });
     }
+  },
+
+  finishAnim() {
+    const b = Game.b;
+    // asteroid transit damage: sample the actual flight arc before finalizing
+    Game.active(b).forEach(s => {
+      if (!s.animFrom || !s.plot) return;
+      const from = s.animFrom, to = s.plot;
+      const path = U.sampleCurve(from, to, 18);
+      const grazed = b.terrain.some(a => a.type === 'ast' &&
+        path.some(p => Math.hypot(a.x - p.x, a.y - p.y) < a.r));
+      if (grazed) {
+        const dmg = U.rand(1, 3);
+        s.hull -= dmg;
+        Rend.fx.spark(to.x, to.y, '#c8b89a', 12);
+        Rend.fx.floater(to.x, to.y - s.h / 2 - 14, '-' + dmg + ' ROCKS', '#c8b89a');
+        Game.log(s.name + ' grinds through the asteroid shoal — ' + dmg + ' hull', '#c8b89a');
+        if (s.hull <= 0) Game.killShip(s);
+      }
+    });
+    // finalize ship positions
+    Game.active(b).forEach(s => {
+      if (s.plot) { s.x = s.plot.x; s.y = s.plot.y; s.angle = s.plot.angle; }
+      s.animFrom = null;
+      s.animCurve = null;
+    });
+    // exits (convoy / fleeing vip)
+    Game.active(b).forEach(s => {
+      if ((s.role === 'convoy' || s.role === 'flee') && s.x > DATA.WORLD.w - 60) {
+        s.exited = true;
+        Game.log((s.side === 'enemy' ? '⚠ ' : '★ ') + s.name + ' has left the field', s.side === 'enemy' ? '#ff8a84' : '#6fe0a8', { big: true });
+      }
+      s.plot = null; s.plotted = false;
+    });
+    // craft/torps arrive
+    b.craft.forEach(c => { c.x = c.to ? c.to.x : c.x; c.y = c.to ? c.to.y : c.y; });
+    b.torps.forEach(tp => { tp.x = tp.to.x; tp.y = tp.to.y; });
+    // fighters sweep first, then ordnance lands
+    Game.resolveDogfights(b);
+    b.torps.forEach(tp => {
+      if (tp.expired && tp.count <= 0) return; // swept by fighters
+      if (tp.strike && !tp.expired) {
+        const target = Game.ship(tp.strike);
+        if (target && target.alive && !target.exited) Game.resolveTorpedoStrike(tp, target);
+        tp.expired = true;
+      } else if (tp.splashAst && !tp.expired) {
+        Rend.fx.boom(tp.x, tp.y, false);
+        Game.log('Torpedo salvo detonates in the asteroid shoal', '#5c7089');
+        tp.expired = true;
+      } else if (tp.expired) {
+        Rend.fx.ring(tp.x, tp.y, 26, 'rgba(120,180,220,.5)');
+        Game.log('Torpedo salvo runs dry and self-destructs', '#5c7089');
+      }
+    });
+    b.torps = b.torps.filter(tp => !tp.expired);
+    b.craft.forEach(c => {
+      if (c.expired) return;
+      if (c.strike && c.count > 0) {
+        Game.resolveBomberStrike(b, c);
+        c.expired = true;
+      } else if (c.fuel <= 0) {
+        c.expired = true;
+        Game.log((c.kind === 'bombers' ? 'Bomber wave' : 'Fighter screen') + ' runs dry and turns for home', '#5c7089');
+      }
+    });
+    b.craft = b.craft.filter(c => !c.expired && c.count > 0);
+
+    if (Game.checkEnd()) return;
+    b.phase = 'fire';
+    b.sel = null;
+    const first = Game.playerShips(b).find(s => s.weapons.some(w => w.reload === 0));
+    b.sel = first ? first.id : (Game.playerShips(b)[0] || {}).id || null;
+    b.armed = null;
+    Game.log('— TURN ' + U.padTurn(b.turn) + ' · FIRING —', '#ffb454');
+    if (window.UI) UI.refresh();
   },
 
   finishFiring() {
@@ -713,16 +982,14 @@ const Game = {
   endTurn() {
     const b = Game.b;
     if (b.phase !== 'resolve' || b.banner) return;
-    const repairTarget = (Game.mode === 'campaign' && Game.save.upgrades.crews) ? 4 : 5;
+    const crewUpg = Game.mode === 'campaign' && Game.save.upgrades.crews;
     Game.active(b).forEach(s => {
-      // fires burn
       if (s.fires > 0) {
         const burn = s.fires;
         s.hull -= burn;
         Game.log('Fires burn aboard ' + s.name + ' — ' + burn + ' hull', '#ff8a84');
         Rend.fx.floater(s.x, s.y - s.h / 2 - 14, '-' + burn + ' FIRE', '#ff8a84');
         if (s.hull <= 0) { Game.killShip(s); return; }
-        // contain
         let out = 0;
         for (let i = 0; i < s.fires; i++) if (U.rand(1, 6) >= 4) out++;
         if (out > 0) {
@@ -730,8 +997,8 @@ const Game = {
           Game.log(s.name + ' damage crews contain ' + out + ' fire' + (out > 1 ? 's' : ''), '#6fe0a8');
         }
       }
-      // repairs
-      const tgt = s.side === 'player' ? repairTarget : 5;
+      // repairs (veteran crews or ELITE rank: 4+)
+      const tgt = (s.side === 'player' && (crewUpg || s.rank >= 3)) ? 4 : 5;
       DATA.SYS.forEach(n => {
         if (s.sys[n] > 0 && U.rand(1, 6) >= tgt) {
           s.sys[n]--;
@@ -746,16 +1013,15 @@ const Game = {
         }
       }
       s.tookFire = false;
-      // reload
+      s.boarded = false;
       s.weapons.forEach(w => { if (w.reload > 0) w.reload--; w.target = null; });
-      // clear order
       s.order = null;
     });
 
     if (Game.checkEnd()) return;
     b.turn++;
     b.phase = 'move';
-    b.armed = null; b.hover = null; b.inspect = null;
+    b.armed = null; b.hover = null; b.inspect = null; b.boardMode = null;
     Game.log('— TURN ' + U.padTurn(b.turn) + ' · MOVEMENT —', '#4cd7ea');
     Game.autoSelect();
     Snd.click();
@@ -778,7 +1044,6 @@ const Game = {
     if (winMsg) {
       b.banner = { win: true, msg: winMsg };
       b.phase = 'over';
-      // rout survivors on vip kill
       Snd.victory();
       if (window.UI) UI.onBattleEnd(true);
       return true;
@@ -789,6 +1054,43 @@ const Game = {
   earnings() {
     const b = Game.b;
     return (b.banner && b.banner.win ? (b.mission.reward || 0) : 0) + Math.round(b.killPts * 0.5);
+  },
+
+  /* Apply XP / permadeath / prize results to the campaign fleet after a win.
+     Returns a report for the debrief screen. */
+  applyBattleResults() {
+    const b = Game.b;
+    const report = { gains: [], losses: [], prizes: [], salvage: 0 };
+    if (Game.mode !== 'campaign') return report;
+    const newFleet = [];
+    Game.save.fleet.forEach((f, i) => {
+      const ship = b.ships.find(s => s.fleetRef === i);
+      if (ship && !ship.alive) {
+        report.losses.push(f.name);
+        return; // permadeath — the Drift keeps what it takes
+      }
+      if (ship) {
+        const before = Game.rankOf(f.xp);
+        const gained = ship.xpEarned + 15;
+        f.xp += gained;
+        const after = Game.rankOf(f.xp);
+        report.gains.push({ name: f.name, xp: gained, kills: ship.kills, rankUp: after > before ? DATA.RANKS[after].name : null });
+      }
+      newFleet.push(f);
+    });
+    // uncaptured enemy hulks: scavenger teams strip them for a little requisition
+    Game.hulks(b).filter(h => !h.captured).forEach(h => { report.salvage += Math.round(h.pts * 0.2); });
+    // captured hulks become prize choices on the debrief screen
+    Game.hulks(b).filter(h => h.captured).forEach(h => {
+      report.prizes.push({ cls: h.cls, name: h.name, pts: h.pts });
+    });
+    if (!newFleet.length) {
+      newFleet.push({ cls: 'corvette', name: 'VSS KESTREL II', xp: 0, refit: false });
+      report.replacement = 'VSS KESTREL II';
+    }
+    Game.save.fleet = newFleet;
+    Game.save.req += report.salvage;
+    return report;
   },
 
   /* ================= per-frame tick (called from render loop) ================= */
@@ -827,7 +1129,6 @@ const AI = {
       const convoy = foes.find(f => f.role === 'convoy');
       if (convoy) return convoy;
     }
-    // prefer nearest, nudged toward wounded targets
     let best = null, bs = 1e9;
     foes.forEach(f => {
       const score = U.dist(s, f) * (0.6 + 0.4 * (f.hull / f.maxHull));
@@ -846,19 +1147,34 @@ const AI = {
     }
     if (!target) return { pt: { x: s.x, y: s.y }, face: s.angle };
     const dToT = U.angleTo(s, target);
-    const hasSide = s.weapons.some(w => w.arc === 'side' && w.type !== 'torp');
-    const mainRange = Math.max(...s.weapons.filter(w => w.type !== 'torp').map(w => w.range), 250);
+    const hasSide = s.weapons.some(w => w.arc === 'side' && w.type !== 'torp' && w.type !== 'bay');
+    const gunRanges = s.weapons.filter(w => w.type === 'lance' || w.type === 'battery').map(w => w.range);
+    const mainRange = Math.max(...(gunRanges.length ? gunRanges : [250]), 250);
+    const d = U.dist(s, target);
+    const rad = dToT * U.D2R;
 
+    if (s.role === 'carrier') {
+      // stand off beyond gun range and let the bombers work —
+      // but a carrier pinned against the map edge turns and fights
+      const cornered = (s.x < 180 || s.x > W - 180 || s.y < 180 || s.y > DATA.WORLD.h - 180) && d < 450;
+      const keep = cornered ? 300 : 720;
+      const pt = d < keep
+        ? { x: s.x - Math.cos(rad) * (keep - d), y: s.y - Math.sin(rad) * (keep - d) }
+        : { x: s.x, y: s.y };
+      let face = dToT;
+      if (hasSide) {
+        const a1 = dToT + 90, a2 = dToT - 90;
+        face = Math.abs(U.norm180(a1 - s.angle)) < Math.abs(U.norm180(a2 - s.angle)) ? a1 : a2;
+      }
+      return { pt, face };
+    }
     if (s.role === 'raider') {
-      // aim for a point behind the target's stern
-      const rad = target.angle * U.D2R;
-      const pt = { x: target.x - Math.cos(rad) * (target.r + 170), y: target.y - Math.sin(rad) * (target.r + 170) };
+      const trad = target.angle * U.D2R;
+      const pt = { x: target.x - Math.cos(trad) * (target.r + 170), y: target.y - Math.sin(trad) * (target.r + 170) };
       return { pt, face: U.angleTo({ x: pt.x, y: pt.y }, target) };
     }
     if (s.role === 'sniper') {
       const keep = mainRange * 0.75;
-      const d = U.dist(s, target);
-      const rad = dToT * U.D2R;
       const pt = d > keep + 40
         ? { x: target.x - Math.cos(rad) * keep, y: target.y - Math.sin(rad) * keep }
         : (d < keep - 60
@@ -871,10 +1187,8 @@ const AI = {
       }
       return { pt, face };
     }
-    // brawler / hunter: close to weapons range
-    const keep = Math.min(mainRange * 0.6, 240);
-    const d = U.dist(s, target);
-    const rad = dToT * U.D2R;
+    // brawler / hunter
+    const keep = Math.min(mainRange * 0.6, 260);
     const travel = Math.max(0, d - keep);
     const pt = { x: s.x + Math.cos(rad) * travel, y: s.y + Math.sin(rad) * travel };
     let face = dToT;
@@ -890,7 +1204,6 @@ const AI = {
     const find = id => orders.find(o => o.id === id) || orders[0];
     if (s.role === 'convoy') return find('heading');
     if (s.role === 'flee' && b.turn >= 3) return find('full');
-    // threatened by incoming torpedoes?
     const torpNear = b.torps.some(tp => tp.side !== s.side && U.dist(tp, s) < tp.speed * 1.4);
     if (torpNear && s.hull < s.maxHull * 0.6 && orders.some(o => o.id === 'brace') && Math.random() < 0.5) return find('brace');
     if (s.hull < s.maxHull * 0.35 && orders.some(o => o.id === 'evasive')) return find('evasive');
@@ -899,7 +1212,6 @@ const AI = {
       const turnNeeded = Math.abs(U.norm180(U.angleTo(s, want.pt) - s.angle));
       if (turnNeeded < 25) return find('full');
     }
-    if (d < 30 && s.role === 'sniper') return find('hold');
     if (d < 30) return find('hold');
     return find('heading');
   },
@@ -918,14 +1230,12 @@ const AI = {
     const course = s.angle + U.clamp(U.norm180(U.angleTo(s, want.pt) - s.angle), -o.maxTurn, o.maxTurn);
     let travel = U.clamp(dWant, o.minMove, o.range);
     const rad = course * U.D2R;
-    // avoid ending inside an asteroid: shorten travel if needed
     for (let t = travel; t >= 0; t -= 10) {
       const px = s.x + Math.cos(rad) * t, py = s.y + Math.sin(rad) * t;
       const inAst = b.terrain.some(a => a.type === 'ast' && Math.hypot(a.x - px, a.y - py) < a.r + 24);
       if (!inAst) { travel = t; break; }
       if (t < 10) travel = 0;
     }
-    if (travel < o.minMove) travel = Math.min(o.minMove, travel + 0); // accept short stop near rocks
     const nx = U.clamp(s.x + Math.cos(rad) * travel, 40, DATA.WORLD.w + (s.role === 'flee' || s.role === 'convoy' ? 200 : -40));
     const ny = U.clamp(s.y + Math.sin(rad) * travel, 40, DATA.WORLD.h - 40);
     const pos = { x: nx, y: ny };
@@ -947,13 +1257,16 @@ const AI = {
       foes.forEach(f => {
         const sol = Game.solution(s, w, f);
         if (!sol.ok) return;
-        let score = w.type === 'torp' ? 60 : sol.exp * 12;
+        let score;
+        if (w.type === 'torp') score = 60;
+        else if (w.type === 'bay') score = 70 - f.turrets * 5;
+        else score = sol.exp * 12;
         if (s.role === 'hunter' && f.role === 'convoy' && foes.some(x => x.role === 'convoy')) score *= 3;
         if (f.vip) score += 5;
         if (f.hull < f.maxHull * 0.4) score += 15;
         if (score > bestScore) { bestScore = score; best = f; }
       });
-      if (w.type === 'torp' && best && U.dist(s, best) < 170) best = null; // don't waste fish point-blank
+      if (w.type === 'torp' && best && U.dist(s, best) < 170) best = null;
       if (best) out.push({ shooterId: s.id, wIdx: i, targetId: best.id });
     });
     return out;

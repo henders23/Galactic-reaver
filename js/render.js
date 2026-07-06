@@ -5,20 +5,70 @@ const Rend = {
   cv: null, ctx: null, RS: 1,
   stars: [], fxList: [], shakeMag: 0,
   running: false,
+  // camera: cx/cy are the world point at the viewport centre
+  cam: { cx: DATA.WORLD.w / 2, cy: DATA.WORLD.h / 2, z: 0.5, minZ: 0.3, maxZ: 1.8 },
+  vw: 800, vh: 600, // viewport CSS size
 
   HULL_POLY: [[0, .35], [.55, .20], [.78, 0], [1, .42], [1, .58], [.78, 1], [.55, .80], [0, .65]],
 
   init(canvas) {
     Rend.cv = canvas;
     Rend.RS = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = DATA.WORLD.w * Rend.RS;
-    canvas.height = DATA.WORLD.h * Rend.RS;
     Rend.ctx = canvas.getContext('2d');
+    Rend.syncSize();
+    Rend.fitCamera();
     Rend.makeStars();
     if (!Rend.running) {
       Rend.running = true;
       requestAnimationFrame(Rend.loop);
     }
+  },
+
+  syncSize() {
+    const r = Rend.cv.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return;
+    Rend.vw = r.width; Rend.vh = r.height;
+    const dw = Math.round(r.width * Rend.RS), dh = Math.round(r.height * Rend.RS);
+    if (Rend.cv.width !== dw || Rend.cv.height !== dh) {
+      Rend.cv.width = dw; Rend.cv.height = dh;
+    }
+  },
+
+  fitZoom() { return Math.min(Rend.vw / DATA.WORLD.w, Rend.vh / DATA.WORLD.h) * 0.98; },
+
+  fitCamera() {
+    Rend.cam.cx = DATA.WORLD.w / 2;
+    Rend.cam.cy = DATA.WORLD.h / 2;
+    const fz = Rend.fitZoom();
+    Rend.cam.minZ = fz * 0.9;
+    Rend.cam.z = fz;
+    Rend.clampCam();
+  },
+
+  clampCam() {
+    const c = Rend.cam;
+    c.z = U.clamp(c.z, c.minZ, c.maxZ);
+    const hw = Rend.vw / 2 / c.z, hh = Rend.vh / 2 / c.z;
+    const mx = 120 / c.z, my = 120 / c.z; // slack beyond the world edge
+    if (hw * 2 >= DATA.WORLD.w + mx * 2) c.cx = DATA.WORLD.w / 2;
+    else c.cx = U.clamp(c.cx, hw - mx, DATA.WORLD.w - hw + mx);
+    if (hh * 2 >= DATA.WORLD.h + my * 2) c.cy = DATA.WORLD.h / 2;
+    else c.cy = U.clamp(c.cy, hh - my, DATA.WORLD.h - hh + my);
+  },
+
+  zoomAt(clientX, clientY, factor) {
+    const before = Rend.toWorld({ clientX, clientY });
+    Rend.cam.z = U.clamp(Rend.cam.z * factor, Rend.cam.minZ, Rend.cam.maxZ);
+    const after = Rend.toWorld({ clientX, clientY });
+    Rend.cam.cx += before.x - after.x;
+    Rend.cam.cy += before.y - after.y;
+    Rend.clampCam();
+  },
+
+  pan(dxCss, dyCss) {
+    Rend.cam.cx += dxCss / Rend.cam.z;
+    Rend.cam.cy += dyCss / Rend.cam.z;
+    Rend.clampCam();
   },
 
   makeStars() {
@@ -37,18 +87,25 @@ const Rend = {
     Rend.fxList = [];
     Rend.shakeMag = 0;
     Rend.makeStars();
+    Rend.syncSize();
+    Rend.fitCamera();
   },
 
   toWorld(e) {
     const r = Rend.cv.getBoundingClientRect();
+    const c = Rend.cam;
     return {
-      x: (e.clientX - r.left) * (DATA.WORLD.w / r.width),
-      y: (e.clientY - r.top) * (DATA.WORLD.h / r.height)
+      x: (e.clientX - r.left - r.width / 2) / c.z + c.cx,
+      y: (e.clientY - r.top - r.height / 2) / c.z + c.cy
     };
   },
   toScreen(x, y) {
     const r = Rend.cv.getBoundingClientRect();
-    return { x: r.left + x * (r.width / DATA.WORLD.w), y: r.top + y * (r.height / DATA.WORLD.h) };
+    const c = Rend.cam;
+    return {
+      x: r.left + r.width / 2 + (x - c.cx) * c.z,
+      y: r.top + r.height / 2 + (y - c.cy) * c.z
+    };
   },
 
   shake(mag) { Rend.shakeMag = Math.max(Rend.shakeMag, mag); },
@@ -132,21 +189,44 @@ const Rend = {
     if (window.Game) Game.tick(now);
     const ctx = Rend.ctx;
     if (!ctx) return;
+    Rend.syncSize();
     const W = DATA.WORLD.w, H = DATA.WORLD.h;
-    ctx.setTransform(Rend.RS, 0, 0, Rend.RS, 0, 0);
+    const cam = Rend.cam;
 
-    // shake
+    // screen-space backdrop
+    ctx.setTransform(Rend.RS, 0, 0, Rend.RS, 0, 0);
+    ctx.fillStyle = '#05080d';
+    ctx.fillRect(0, 0, Rend.vw, Rend.vh);
+
+    // shake (screen space)
+    let shx = 0, shy = 0;
     if (Rend.shakeMag > 0.3) {
-      ctx.translate(U.frand(-Rend.shakeMag, Rend.shakeMag), U.frand(-Rend.shakeMag, Rend.shakeMag));
+      shx = U.frand(-Rend.shakeMag, Rend.shakeMag);
+      shy = U.frand(-Rend.shakeMag, Rend.shakeMag);
       Rend.shakeMag *= 0.88;
     } else Rend.shakeMag = 0;
+
+    // world transform: centre camera, apply zoom
+    const z = cam.z;
+    ctx.setTransform(
+      Rend.RS * z, 0, 0, Rend.RS * z,
+      Rend.RS * (Rend.vw / 2 - cam.cx * z + shx),
+      Rend.RS * (Rend.vh / 2 - cam.cy * z + shy)
+    );
+    Rend.labelScale = U.clamp(1 / z, 1, 2.2);
 
     // space
     const g = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W * 0.7);
     g.addColorStop(0, '#0d1420');
     g.addColorStop(1, '#070b12');
     ctx.fillStyle = g;
-    ctx.fillRect(-30, -30, W + 60, H + 60);
+    ctx.fillRect(-60, -60, W + 120, H + 120);
+    // world boundary
+    ctx.strokeStyle = 'rgba(76,215,234,.14)';
+    ctx.setLineDash([10, 14]);
+    ctx.lineWidth = 1.5 / z;
+    ctx.strokeRect(0, 0, W, H);
+    ctx.setLineDash([]);
 
     // stars
     Rend.stars.forEach(st => {
@@ -165,12 +245,11 @@ const Rend = {
     Rend.drawTerrain(ctx, b, now);
     Rend.drawPlotting(ctx, b, now);
     Rend.drawFireArcs(ctx, b, now);
+    b.ships.forEach(s => { if (s.hulked) Rend.drawHulk(ctx, s, b, now); });
     Rend.drawTorps(ctx, b, now);
+    Rend.drawCraft(ctx, b, now);
     b.ships.forEach(s => { if (s.alive && !s.exited) Rend.drawShip(ctx, s, b, now); });
     Rend.drawFx(ctx, now);
-
-    // vignette
-    ctx.fillStyle = 'rgba(0,0,0,0)';
   },
 
   drawIdle(ctx, now) {
@@ -215,7 +294,7 @@ const Rend = {
         ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, U.TAU); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = 'rgba(170,140,220,.5)';
-        ctx.font = '600 10px "IBM Plex Mono", monospace';
+        ctx.font = '600 ' + (10 * (Rend.labelScale || 1)) + 'px "IBM Plex Mono", monospace';
         ctx.textAlign = 'center';
         ctx.fillText('NEBULA · −ACC INSIDE', t.x, t.y - t.r - 8);
       }
@@ -243,7 +322,7 @@ const Rend = {
           ctx.restore();
         });
         ctx.fillStyle = 'rgba(180,170,150,.5)';
-        ctx.font = '600 10px "IBM Plex Mono", monospace';
+        ctx.font = '600 ' + (10 * (Rend.labelScale || 1)) + 'px "IBM Plex Mono", monospace';
         ctx.textAlign = 'center';
         ctx.fillText('ASTEROIDS · BLOCKS FIRE', t.x, t.y - t.r - 8);
       }
@@ -426,10 +505,94 @@ const Rend = {
         ctx.fillRect(-9, oy - 1.2, 4, 2.4);
       }
       ctx.restore();
+      const tls = Rend.labelScale || 1;
       ctx.fillStyle = hostile ? 'rgba(255,138,92,.85)' : 'rgba(255,212,101,.85)';
-      ctx.font = '600 9px "IBM Plex Mono", monospace';
+      ctx.font = '600 ' + (9 * tls) + 'px "IBM Plex Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText((hostile ? '⚠ ' : '') + 'TORPEDOES ×' + tp.count, x, y - 16);
+      ctx.fillText((hostile ? '⚠ ' : '') + 'TORPEDOES ×' + tp.count, x, y - 16 * tls);
+    });
+  },
+
+  drawHulk(ctx, s, b, now) {
+    const ls = Rend.labelScale || 1;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.angle * U.D2R);
+    Rend.tracePoly(ctx, s.w, s.h);
+    ctx.fillStyle = '#181a1f';
+    ctx.strokeStyle = s.captured ? 'rgba(255,212,101,.75)' : 'rgba(120,120,130,.5)';
+    ctx.lineWidth = 1.2;
+    ctx.fill(); ctx.stroke();
+    // scorch marks + guttering fires
+    ctx.strokeStyle = 'rgba(60,60,68,.9)';
+    ctx.beginPath();
+    ctx.moveTo(-s.w * 0.3, -s.h * 0.15); ctx.lineTo(s.w * 0.1, s.h * 0.2);
+    ctx.moveTo(s.w * 0.05, -s.h * 0.25); ctx.lineTo(s.w * 0.3, 0);
+    ctx.stroke();
+    for (let i = 0; i < 2; i++) {
+      ctx.fillStyle = 'rgba(255,' + Math.floor(U.frand(90, 150)) + ',50,' + U.frand(0.08, 0.3) + ')';
+      ctx.beginPath();
+      ctx.arc(U.frand(-s.w * 0.3, s.w * 0.3), U.frand(-s.h * 0.2, s.h * 0.2), U.frand(1.5, 4), 0, U.TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    // boarding-range hint while a boarding party is picking a target
+    if (b.boardMode && !s.captured) {
+      const boarder = Game.ship(b.boardMode);
+      if (boarder && U.dist(boarder, s) <= DATA.BOARD_RANGE) {
+        ctx.strokeStyle = 'rgba(255,212,101,.8)';
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r + 10, 0, U.TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    ctx.font = '600 ' + (9 * ls) + 'px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = s.captured ? '#ffd465' : '#7a828e';
+    ctx.fillText(s.captured ? '⚑ PRIZE — ' + s.name.replace('DKV ', '') : 'HULK — ' + s.name.replace('DKV ', '') + ' (boardable)', s.x, s.y + s.h / 2 + 16 * ls);
+  },
+
+  drawCraft(ctx, b, now) {
+    const ls = Rend.labelScale || 1;
+    b.craft.forEach(c => {
+      let x = c.x, y = c.y;
+      if (b.phase === 'anim' && c.from && c.to && b.anim) {
+        const t = U.easeInOut(U.clamp((now - b.anim.start) / b.anim.dur, 0, 1));
+        x = U.lerp(c.from.x, c.to.x, t);
+        y = U.lerp(c.from.y, c.to.y, t);
+      }
+      const hostile = c.side === 'enemy';
+      const bombers = c.kind === 'bombers';
+      const col = bombers ? (hostile ? '#ff8a5c' : '#ffd465') : '#7ce8f7';
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(c.angle * U.D2R);
+      for (let i = 0; i < c.count; i++) {
+        const oy = (i - (c.count - 1) / 2) * 10;
+        const wob = Math.sin(now / 160 + i * 2.1) * 2;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        if (bombers) {
+          ctx.moveTo(7, oy + wob);
+          ctx.lineTo(-4, oy + wob - 4);
+          ctx.lineTo(-1.5, oy + wob);
+          ctx.lineTo(-4, oy + wob + 4);
+        } else {
+          ctx.moveTo(6, oy + wob);
+          ctx.lineTo(-4, oy + wob - 2.6);
+          ctx.lineTo(-4, oy + wob + 2.6);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.85;
+      ctx.font = '600 ' + (9 * ls) + 'px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText((hostile && bombers ? '⚠ ' : '') + (bombers ? 'BOMBERS' : 'FIGHTERS') + ' ×' + c.count, x, y - 16 * ls);
+      ctx.globalAlpha = 1;
     });
   },
 
@@ -553,20 +716,34 @@ const Rend = {
     }
     ctx.restore();
 
-    // label
+    // boarding-mode target highlight
+    if (b.boardMode && s.side === 'enemy') {
+      const boarder = Game.ship(b.boardMode);
+      if (boarder && U.dist(boarder, s) <= DATA.BOARD_RANGE) {
+        ctx.strokeStyle = 'rgba(255,212,101,.85)';
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, s.r + 12, 0, U.TAU); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // label (zoom-compensated so it stays readable when zoomed out)
+    const ls = Rend.labelScale || 1;
+    const chev = DATA.RANKS[s.rank] ? DATA.RANKS[s.rank].chev : '';
     const nm = s.name.replace('VSS ', '').replace('DKV ', '');
-    ctx.font = '600 10px "IBM Plex Mono", monospace';
+    ctx.font = '600 ' + (10 * ls) + 'px "IBM Plex Mono", monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = ally ? (s.side === 'ally' ? '#8fd8a8' : '#4cd7ea') : '#ff6159';
-    const ly = pos.y + s.h / 2 + 18;
-    ctx.fillText(nm + (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
+    const ly = pos.y + s.h / 2 + 18 * ls;
+    ctx.fillText((chev ? chev + ' ' : '') + nm + (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
     // hull bar
     const bw = Math.max(44, s.w * 0.6);
     ctx.fillStyle = 'rgba(20,30,45,.8)';
-    ctx.fillRect(pos.x - bw / 2, ly + 4, bw, 3);
+    ctx.fillRect(pos.x - bw / 2, ly + 4 * ls, bw, 3 * ls);
     const hp = s.hull / s.maxHull;
     ctx.fillStyle = hp > 0.55 ? (ally ? '#4cd7ea' : '#ff6159') : (hp > 0.25 ? '#ffb454' : '#ff6159');
-    ctx.fillRect(pos.x - bw / 2, ly + 4, bw * hp, 3);
+    ctx.fillRect(pos.x - bw / 2, ly + 4 * ls, bw * hp, 3 * ls);
   },
 
   drawFx(ctx, now) {
