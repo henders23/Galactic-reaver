@@ -427,6 +427,14 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 /* debrief: wider-war moves line */
 .warmoves { font: 500 10px 'IBM Plex Mono', monospace; color: #9fbdd0; letter-spacing: 0; margin-top: 6px; }
 
+/* endgame — the Throne Gate choice */
+.gatechoices { display: flex; flex-direction: column; gap: 12px; max-width: 620px; margin: 8px auto 0; }
+.menu-btn.gate { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 14px 18px; }
+.menu-btn.gate b { font: 700 15px Rajdhani, sans-serif; letter-spacing: 2px; color: #ffd465; }
+.menu-btn.gate .btn-note { font: 400 10.5px 'IBM Plex Mono', monospace; color: #9fbdd0; letter-spacing: 0; opacity: .9; }
+.menu-btn.gate:hover { border-color: #ffd465; box-shadow: 0 0 16px rgba(255,212,101,.18); }
+.storybody p { margin-bottom: 14px; }
+
 /* ---------- system / planet map ---------- */
 .sys-head { margin-bottom: 14px; }
 .sys-cols { display: flex; gap: 26px; align-items: flex-start; }

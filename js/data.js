@@ -519,8 +519,90 @@ DATA.SYSTEM_STAGES = ['INTEL GATHERING', 'ESTABLISH FOOTHOLD', 'ELIMINATE THREAT
                   planet: { name: 'Verge Waypoint', type: 'Barren' }, system: { name: 'THE VERGE' } }
      }
 
-   `trigger` receives the save and may call Game.* helpers. */
-DATA.STORY = [];
+   `trigger` receives the save and may call Game.* helpers.
+   Types: 'op' (launches a battle) · 'interstitial' (narrative screen, no battle). */
+DATA.STORY = [
+  {
+    id: 'sc_butcher', chapter: 1, act: 'I', type: 'op', title: "THE BUTCHER'S TRAIL",
+    brief: 'A lead on the DREADMAW — the ship that broke Meridian.',
+    trigger: () => Game.terranSystems().length > 8,
+    mission: {
+      factionId: 'crimson', archetypeId: 'assault', tierId: 'medium',
+      planet: { name: 'Kessel Waystation', type: 'Barren' }, system: { name: 'THE KESSEL DRIFT' },
+      name: "THE BUTCHER'S TRAIL",
+      briefing: [
+        'A Crimson raiding pack is stripping a relay convoy in the Drift — and a prize you took last week carried a name in its logs you will never forget: SKARR.',
+        'Voss: "Warlord Skarr. The Butcher of Meridian. He flies the DREADMAW — the same ship that put your fleet in the ground. If he is in the Verge, then so is our reckoning. Take these raiders apart and make one of them talk."',
+        'OBJECTIVE — Destroy the Crimson raiding pack.'
+      ]
+    }
+  },
+  {
+    id: 'sc_meridian', chapter: 1, act: 'I', type: 'interstitial', title: 'GHOSTS OF MERIDIAN',
+    brief: 'Voss wants a word.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => Game.save.story.done.includes('sc_butcher') && Game.terranSystems().length > 9,
+    body: [
+      'Voss finds you on the observation deck, two glasses and a bottle of something that predates the war.',
+      '"You know what they call you back at fleet, Captain? The Ghost of Meridian. The one who ran." He does not look at you. "I call you the officer who saved eleven thousand civilians while I got my fleet killed holding a line that was already broken."',
+      '"Meridian was mine. Not yours. You did the only thing worth doing that day." He finally turns. "So stop flying like a captain trying to die for it. The Verge does not need another ghost. It needs the REAVER."'
+    ]
+  },
+  {
+    id: 'sc_dynasty', chapter: 2, act: 'II', type: 'op', title: 'THE OLD EMPIRE',
+    brief: "The Za'Argon have noticed you.",
+    trigger: () => Game.save.story.done.includes('sc_meridian') &&
+      DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 2,
+    mission: {
+      factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
+      planet: { name: 'the Gate Approaches', type: 'Ice' }, system: { name: 'THE KESSEL DRIFT' },
+      name: 'THE OLD EMPIRE',
+      briefing: [
+        "You have pushed too close to something the Za'Argon call sacred. A Dynasty battle-line translates in-system, running silent, lances already glowing.",
+        'Exarch Vorun (all channels): "Little ghost of a dying empire. You stand upon the threshold of the First Emperor. Turn back — or be scattered like the ash of Meridian."',
+        'Voss: "Ignore the sermon. Cross their bows and break their line before those lances warm up."',
+        'OBJECTIVE — Break the Za’Argon battle-line.'
+      ]
+    }
+  },
+  {
+    id: 'sc_gate', chapter: 2, act: 'II', type: 'interstitial', title: 'THE THRONE GATE',
+    brief: 'What the Dynasty is dying for.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => Game.save.story.done.includes('sc_dynasty') &&
+      DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 3,
+    body: [
+      "Deep in a captured Za'Argon vault, your survey teams find it on the oldest star-charts: a structure at the very heart of the Kessel Drift the Dynasty calls the THRONE GATE — a jump-gate older than the Alliance, older than the Dynasty itself, dormant, and bleeding a slow and colourless light.",
+      'Voss goes quiet when you bring it to him. Too quiet.',
+      '"Command already knows, Captain. A working long-range gate could stitch the whole Verge back together — or be the largest gun anyone has ever pointed at anyone." A long pause. "They want it intact. I am telling you that now so you hear it from me, and not from them, when the time comes."'
+    ]
+  },
+  {
+    id: 'sc_swarm_stirs', chapter: 2, act: 'II', type: 'interstitial', title: 'THE SWARM STIRS',
+    brief: 'Something in the south is growing.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => Game.save.story.done.includes('sc_gate') &&
+      (Game.factionStrength('hive') >= 11 || Game.terranSystems().length >= 13),
+    body: [
+      'The pickets in the south keep going dark with the same last words: contacts, small, fast, everywhere.',
+      'Voss overlays the sector map. Where there was a smear of purple at the edge of the Drift, there is now a bruise spreading inward — the Hive, swallowing system after system while the rest of you fight over the middle.',
+      '"It is the Gate. That light we found — the swarm is drinking it, and it is waking up hungry." He exhales. "We are running out of war to fight before there is only one enemy left. And it will not be the pirates."'
+    ]
+  },
+  {
+    id: 'sc_breakout', chapter: 3, act: 'III', type: 'op', title: 'THE SWARM BREAKS',
+    brief: 'The Hive is coming for everyone.',
+    trigger: () => Game.save.story.done.includes('sc_swarm_stirs') &&
+      (DATA.enemyCapitals().filter(c => Game.systemOwner(c) === 'terran').length >= 2 || Game.terranSystems().length >= 15),
+    mission: {
+      factionId: 'hive', archetypeId: 'defense', tierId: 'hard',
+      planet: { name: 'Kessel Station', type: 'Ocean' }, system: { name: 'THE KESSEL DRIFT' },
+      name: 'THE SWARM BREAKS',
+      briefing: [
+        'It is happening. The thing in the Drift is awake, and the Hive is pouring out of the south in numbers the pickets cannot count. Kessel Station is directly in their path.',
+        'Voss: "Whatever the Throne Gate is, it is feeding them — and they are done waiting. Hold the station, Captain. If Kessel falls, the swarm has the whole Drift and everyone still fighting over it."',
+        'OBJECTIVE — Hold the line: keep the station alive and break the swarm.'
+      ]
+    }
+  }
+];
 
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {

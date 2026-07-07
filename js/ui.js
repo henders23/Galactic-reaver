@@ -692,7 +692,8 @@ const UI = {
         U.esc(e.name) + ' <span class="wfrom">from ' + Fr.short + '</span></div>';
     }).join('') || '<div class="wev empty">The front is quiet… for now.</div>';
     const beat = Game.storyBeatAvailable();
-    const storyChip = beat ? '<button class="storychip" id="mnStory">◆ PRIORITY OPERATION — ' + U.esc(beat.title) + '</button>' : '';
+    const storyChip = beat ? '<button class="storychip" id="mnStory">◆ ' +
+      (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) + '</button>' : '';
     UI.screen(
       '<div class="galaxy-head"><div class="brieftitle">GALACTIC SECTOR MAP</div>' +
       '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div>' +
@@ -716,7 +717,9 @@ const UI = {
     g.viewCounts = Object.assign({}, inf);
     Game.persist();
     if (beat) document.getElementById('mnStory').addEventListener('click', () => {
-      Snd.init(); Snd.click(); UI.closeScreen(); Game.startStoryMission(beat); UI.rebuildLog();
+      Snd.init(); Snd.click();
+      if (beat.type === 'interstitial') { UI.showStoryBeat(beat); }
+      else { UI.closeScreen(); Game.startStoryMission(beat); UI.rebuildLog(); }
     });
     const infoEl = document.getElementById('ginfo');
     const renderInfo = (sid) => {
@@ -824,7 +827,7 @@ const UI = {
     if (wc && wc.story) { UI.afterStoryMission(win, wc); return; }
     const res = Game.applyWarResult(win);
     if (win) {
-      if (res.status === 'win') { Game.save.done = true; Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignVictory(); return; }
+      if (res.status === 'win') { Game.persist(); Game.warContext = null; Game.b = null; UI.showEndgame(); return; }
       if (res.status === 'lose') { Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignDefeat(); return; }
       if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
         lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
@@ -849,6 +852,40 @@ const UI = {
     } else {
       UI.showWarLoss(wc);
     }
+  },
+
+  /* narrative interstitial (no battle) — advances the chapter */
+  showStoryBeat(beat) {
+    UI.screen(
+      '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
+      (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
+      '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
+      '<button class="menu-btn primary" id="mnBeatGo">CONTINUE ▸</button>',
+      { bg: beat.bg || 'starfield' }
+    );
+    document.getElementById('mnBeatGo').addEventListener('click', () => { Snd.click(); Game.completeStoryBeat(beat.id); UI.showGalaxy(); });
+  },
+
+  /* the climax: what to do with the Throne Gate once the war is won */
+  showEndgame() {
+    UI.screen(
+      '<div class="brieftitle" style="color:#ffd465">THE THRONE GATE</div>' +
+      '<div class="briefsub">THE LAST DECISION OF THE KESSEL DRIFT</div>' +
+      '<div class="briefbody"><p>The enemy capitals have fallen. The Verge is yours — and so, at last, is the Throne Gate, humming at the heart of the Drift, older than every flag that ever flew here.</p>' +
+      '<p>Voss: "Command wants it intact, Captain. The Za\'Argon wanted it worshipped. The swarm wants it fed. But you are the one standing over it with the guns — so it is your call. I will back whatever you choose."</p></div>' +
+      '<div class="gatechoices">' +
+      '<button class="menu-btn gate" data-end="sever"><b>SEVER THE GATE</b><span class="btn-note">Destroy it. Deny everyone — and starve the Hive of what wakes it.</span></button>' +
+      '<button class="menu-btn gate" data-end="claim"><b>CLAIM THE GATE</b><span class="btn-note">Hand it to the Alliance. Reconnect the Verge — but the swarm will always circle back.</span></button>' +
+      '<button class="menu-btn gate" data-end="overload"><b>TURN IT ON THE SWARM</b><span class="btn-note">Overload the Gate into Ul\'Vor. End the Hive — and the relic — in one impossible blaze.</span></button>' +
+      '</div>',
+      { bg: 'victory' }
+    );
+    UI.el.screenInner.querySelectorAll('[data-end]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        Snd.select(); Game.save.ending = btn.dataset.end; Game.save.done = true; Game.persist(); UI.showCampaignVictory();
+      });
+    });
+    Game.b = null;
   },
 
   showCampaignDefeat() {
@@ -1151,11 +1188,33 @@ const UI = {
   },
 
   showCampaignVictory() {
+    const endings = {
+      sever: {
+        title: 'THE GATE <span>SEVERED</span>',
+        body: 'Your lances open the Throne Gate like a wound, and its slow cold light gutters out for the last time. The swarm, starved of whatever woke it, goes quiet in the dark. The Verge is poorer, still cut off, still hard — but it is yours, and it is quiet.',
+        voss: 'Voss: "Command will scream about the asset we just vaporised. Let them. You made the Verge unkillable instead of useful. I can live with that. Good call, Captain."'
+      },
+      claim: {
+        title: 'THE GATE <span>CLAIMED</span>',
+        body: 'Alliance engineers swarm the Throne Gate, and for the first time in a thousand years it answers a hand that is not Za\'Argon. The Verge is stitched back to the worlds behind it — supply, reinforcement, hope. But the Gate still bleeds its light, and somewhere in the deep the swarm is already turning back toward it.',
+        voss: 'Voss: "We won the war and kept the biggest gun in the sector. Command is delighted." A pause. "Keep one eye south, Captain. We are not done paying for this one."'
+      },
+      overload: {
+        title: 'THE SWARM <span>BURNED</span>',
+        body: 'You drive every reactor you have into the Throne Gate and turn its ancient light on Ul\'Vor Broodworld. The Hive Heart dies screaming in a blaze that outshines the core of the galaxy — and the Gate dies with it, a relic and a horror ended in the same impossible instant. When the light fades, the Drift is clean.',
+        voss: 'Voss: "That was the most expensive shot in the history of the Verge, and the finest. Meridian is answered, Captain. All of it. Log it — and rest."'
+      }
+    };
+    const e = endings[Game.save && Game.save.ending] || {
+      title: 'DRIFT <span>SECURED</span>',
+      body: 'The enemy capitals have fallen and the Kessel Drift flies Terran colours from edge to edge. Alliance traffic moves under its own lights again.',
+      voss: 'Voss: "They will be back — they always come back. But not this year, and not through you. Good gunnery, Captain."'
+    };
     UI.screen(
-      '<div class="title-big" style="font-size:44px">DRIFT <span>SECURED</span></div>' +
-      '<div class="title-sub">CAMPAIGN COMPLETE</div>' +
-      '<div class="briefbody"><p>The DREADMAW is gone, and with her the Dominion\'s claim on the Kessel Drift. Terran Alliance traffic moves under its own lights again.</p>' +
-      '<p>Voss: "They\'ll be back — they always come back. But not this year, and not through you. Good gunnery, Captain. Log it and move on."</p>' +
+      '<div class="title-big" style="font-size:44px">' + e.title + '</div>' +
+      '<div class="title-sub">CAMPAIGN COMPLETE · THE GHOST OF MERIDIAN</div>' +
+      '<div class="briefbody"><p>' + e.body + '</p>' +
+      '<p>' + e.voss + '</p>' +
       '<p>Fleet honours: ' + Game.save.fleet.map(f => f.name + ' (' + DATA.RANKS[Game.rankOf(f.xp)].name + ', ' + f.xp + ' XP)').join(' · ') + '</p></div>' +
       '<button class="menu-btn primary" id="mnAgain">NEW CAMPAIGN</button>' +
       '<button class="menu-btn" id="mnSk2">SKIRMISH</button>',

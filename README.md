@@ -76,9 +76,15 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   the right of the command deck: toggle **ALLIES / HOSTILES**, see each ship drawn
   as its sprite outline, and click any contact to inspect its weapons, systems and
   battle damage.
+- **A campaign with a story** — you play **Captain Cael Riven, "the Ghost of
+  Meridian"**, flying the corvette the game is named for: the **TAS REAVER**. The
+  plot unfolds as **PRIORITY OPERATIONS** on the galaxy map — a mix of narrative
+  interstitials and story battles across three acts (the pirates, the Za'Argon
+  Dynasty, and the Hive that the Throne Gate is waking), ending in a three-way
+  choice over the relic with branching epilogues. See `docs/STORY.md`.
 - **Onboarding & briefing room** — a new campaign opens on **SELECT DIFFICULTY**
-  and then a **commander's dossier** that introduces the Terran Alliance, the
-  Dominion and Admiral Kade Voss before you take command.
+  and then a **commander's dossier** that introduces the Terran Alliance, its
+  enemies and Admiral Kade Voss before you take command.
 - **Presentation** — canvas renderer with starfield, engine wakes, lance beams,
   per-die tracer volleys, shield ripples, explosions, screen shake; fully
   procedural WebAudio combat sound, plus a streamed **menu music track**

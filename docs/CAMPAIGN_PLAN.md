@@ -110,5 +110,18 @@ each faction's `flagship` is its capital).
   **PRIORITY OPERATION** chip, and full launch → complete → advance-chapter
   plumbing (`startStoryMission` / `afterStoryMission`). Drop beats into `DATA.STORY`
   to add plot — the actual narrative is authored later.
-- **P4 — Narrative polish**: author the story beats, recurring nemeses (the
-  flee-VIP escape hook), template briefings, faction voice, intel dossiers.
+- **P4 — Story (v1)** ✅ *(done)*
+  The narrative is authored and wired (see `docs/STORY.md` for the full bible).
+  Player canon: **Captain Cael Riven, "the Ghost of Meridian"**, flying the
+  corvette **TAS REAVER** (the flagship the game is named for). Six `DATA.STORY`
+  beats deliver the arc as **PRIORITY OPERATIONS** on the galaxy, in strict
+  sequence: `sc_butcher` (op, Act I) → `sc_meridian` (interstitial) → `sc_dynasty`
+  (op, Act II) → `sc_gate` (interstitial) → `sc_swarm_stirs` (interstitial) →
+  `sc_breakout` (op, Act III), layered on the six authored anchors. New engine
+  bits: an **interstitial** beat type (narrative screen, `UI.showStoryBeat`),
+  story-op briefing/name overrides in `generateMission`, and the **Throne Gate
+  endgame** (`UI.showEndgame`) — a three-way climax choice (sever / claim /
+  overload) with distinct victory epilogues keyed to `save.ending`.
+- **Later**: recurring-nemesis mechanics (bind Skarr to the flee-VIP escape hook
+  so he literally gets away and returns), portraits for the interstitials, and
+  more beats per act if we want a longer campaign.

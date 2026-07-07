@@ -437,6 +437,52 @@ console.log('living war');
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
 
+/* ================= story beats (P4) ================= */
+console.log('story beats');
+{
+  Game.mode = 'war';
+  // every authored beat is well-formed
+  let wellFormed = true;
+  DATA.STORY.forEach(b => {
+    if (!b.id || !b.title || !b.type || typeof b.trigger !== 'function') wellFormed = false;
+    if (b.type === 'op' && !b.mission) wellFormed = false;
+    if (b.type === 'interstitial' && !(b.body && b.body.length)) wellFormed = false;
+  });
+  ok(wellFormed, 'all ' + DATA.STORY.length + ' story beats are well-formed');
+  ok(DATA.STORY.some(b => b.id === 'sc_butcher') && DATA.STORY.some(b => b.id === 'sc_breakout'),
+    'the authored spine is present');
+
+  // at campaign start, no beat has triggered yet
+  Game.save = Game.freshSave();
+  ok(!Game.storyBeatAvailable(), 'no story beat surfaces at the very start');
+
+  // taking the first system surfaces the Act I opener
+  Game.save.galaxy.owner['centauri'] = 'terran';
+  const first = Game.storyBeatAvailable();
+  ok(first && first.id === 'sc_butcher', 'taking a system surfaces THE BUTCHER\'S TRAIL');
+
+  // an op beat generates its mission with the authored name + briefing
+  const m = Game.generateMission(Object.assign({ story: true, seed: 1, playerFleetPts: 300 }, first.mission));
+  eq(m.name, "THE BUTCHER'S TRAIL", 'story op keeps its authored title');
+  ok(m.briefing.some(b => b.includes('SKARR')), 'story op keeps its authored briefing');
+  ok(m.enemies.every(e => DATA.FACTIONS.crimson.pool.includes(e.cls)), 'THE BUTCHER\'S TRAIL fields the Crimson Reach');
+
+  // beats fire strictly in order — Act II cannot jump ahead of Act I
+  Game.completeStoryBeat('sc_butcher');
+  ok(!Game.storyBeatAvailable(), 'no beat until Act I progresses further (one system held)');
+  Game.save.galaxy.owner['elytra'] = 'terran';   // a second system → terran count 10
+  const next = Game.storyBeatAvailable();
+  ok(next && next.id === 'sc_meridian', 'GHOSTS OF MERIDIAN follows, not the Act II beat');
+  eq(next.type, 'interstitial', 'the Meridian beat is a narrative interstitial');
+
+  // Act II gate: only after Meridian + two Za'Argon systems does THE OLD EMPIRE surface
+  Game.completeStoryBeat('sc_meridian');
+  const dyn = Game.storyBeatAvailable();
+  ok(dyn && dyn.id === 'sc_dynasty', 'THE OLD EMPIRE opens Act II after Meridian');
+
+  Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

@@ -13,7 +13,7 @@ plot; the `DATA.STORY` beats and authored missions are built from it.
 
 ## Logline
 
-A disgraced captain — the only officer to break out of the Meridian massacre — is
+**Captain Cael Riven** — the only officer to break out of the Meridian massacre — is
 exiled to the dying frontier of the **Verge** and handed a shoestring fleet. To hold
 the **Kessel Drift**, they must fight a four-way war for a chokepoint that hides an
 ancient relic — the **Throne Gate** — while a bio-swarm the Gate is waking threatens
@@ -38,21 +38,23 @@ Gate.
   - The **Crimson Reach** just want to sell it to the highest bidder, or deny it to
     everyone for leverage.
 
-## The player — Captain "REAVER"
+## The player — Captain Cael Riven, "the Ghost of Meridian"
 
-A **defined character** (body/gender left open for the player; history and reputation
-fixed):
+A **defined character** (body/gender left open for the player — Voss and the crew only
+ever address you as "Captain"; history and reputation fixed):
 
 - At **Meridian**, when the DREADMAW shattered the Alliance line, you disobeyed the
   order to hold and cut *through* the enemy escorts to cover the civilian evacuation.
-  Thousands lived. The fleet — and Admiral Voss's command — died anyway.
-- The enemy named you: **the Reaver** — the Alliance ghost who reaves through their
-  fleets and won't die. The Alliance couldn't decide if you were a hero or the coward
-  who ran while the fleet burned. They split the difference and **exiled you to the
-  Verge** with the ragtag **7th Expeditionary Fleet**. Your flagship: **TAS VANGUARD**.
+  Thousands lived. The fleet — and Admiral Voss's command — died anyway. You brought a
+  single ship out of the fire: the corvette **TAS REAVER**, now your flagship. The war
+  remembers her name, and so the game is titled for her.
+- The Alliance couldn't decide if you were a hero or the coward who ran while the fleet
+  burned. They split the difference and **exiled you to the Verge** with the ragtag
+  **7th Expeditionary Fleet** — the man they call **the Ghost of Meridian**, the officer
+  who shouldn't have lived.
 - Your arc: from disgraced exile to the Verge's last hope — and a reckoning with the
-  DREADMAW that broke Meridian. (Optional: let the player rename the captain; default
-  callsign "Reaver".)
+  DREADMAW that broke Meridian. (Name is canon but easy to change; no in-game rename UI
+  for now.)
 
 ## Admiral Kade Voss
 

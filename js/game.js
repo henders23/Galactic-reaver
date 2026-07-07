@@ -33,7 +33,7 @@ const Game = {
   freshSave() {
     const s = {
       req: 0, diff: 'normal',
-      fleet: [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }],
+      fleet: [{ cls: 'corvette', name: 'TAS REAVER', xp: 0, refit: false }],
       upgrades: {},
       galaxy: null,       // { owner, cleared, siege, turn } — built by galaxyInit
       done: false
@@ -166,7 +166,7 @@ const Game = {
     factionId = factionId && DATA.FACTIONS[factionId] && DATA.FACTIONS[factionId].side === 'enemy' ? factionId : 'crimson';
     const F = DATA.faction(factionId);
     const fleet = fleetSel.map((cls, i) => ({
-      cls, name: i === 0 ? 'TAS VANGUARD' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
+      cls, name: i === 0 ? 'TAS REAVER' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
       xp: 0, refit: false
     }));
     const ships = Game.fleetSpawn({ x: 340, y: 650 }, fleet);
@@ -332,12 +332,12 @@ const Game = {
 
     if (ctx.seed != null) U.clearSeed();
 
-    const rewardMul = ctx.finale ? 1.4 : 1;
+    const rewardMul = ctx.finale ? 1.4 : (ctx.story ? 1.3 : 1);
     return {
-      name: ctx.finale ? arch.name + ' — SYSTEM FINALE' : arch.name,
+      name: ctx.name || (ctx.finale ? arch.name + ' — SYSTEM FINALE' : arch.name),
       sub: system.name + ' · ' + planet.name.toUpperCase(),
       generated: true, faction: F.id, tier: tier.id, archetype: arch.id, finale: !!ctx.finale,
-      briefing, reward: Math.round(arch.reward * tier.budgetMul * rewardMul), bonus: null,
+      briefing: ctx.briefing || briefing, reward: Math.round(arch.reward * tier.budgetMul * rewardMul), bonus: null,
       terrain: DATA.PLANET_TYPES[planet.type] || arch.terrain || 'medium',
       playerSpawn: { x: 340, y: H / 2 }, allies, enemies,
       contact: contactName,
@@ -362,7 +362,7 @@ const Game = {
     Game.mode = 'war';
     Game.curTier = DATA.tier(ctx.tierId);
     const m = Game.generateMission(ctx);
-    const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }];
+    const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette', name: 'TAS REAVER', xp: 0, refit: false }];
     const ships = Game.fleetSpawn(m.playerSpawn, fleet);
     (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
     m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip, commander: e.commander })));
@@ -390,7 +390,8 @@ const Game = {
       save.galaxy.siegeBy = save.galaxy.siegeBy || {};
       save.galaxy.events = save.galaxy.events || [];
     }
-    if (!save.story) save.story = { chapter: 0, done: [] };
+    if (!save.story) save.story = { chapter: 0, done: [], flags: {} };
+    else if (!save.story.flags) save.story.flags = {};
   },
 
   systemOwner(sysId) { return Game.save && Game.save.galaxy ? Game.save.galaxy.owner[sysId] : DATA.system(sysId).owner; },
@@ -503,7 +504,7 @@ const Game = {
       Game.beginBattle(m, ships, m.terrain);
       return m;
     }
-    const ctx = Object.assign({ playerFleetPts: Game.playerFleetPts(), seed: Game.hashSeed('story_' + beat.id) }, beat.mission || {});
+    const ctx = Object.assign({ story: true, playerFleetPts: Game.playerFleetPts(), seed: Game.hashSeed('story_' + beat.id) }, beat.mission || {});
     return Game.startProceduralMission(ctx);
   },
 
@@ -521,6 +522,7 @@ const Game = {
       res.report = Game.applyBattleResults();
       const set = g.cleared[wc.sysId] || (g.cleared[wc.sysId] = []);
       if (!set.includes(wc.planetIdx)) set.push(wc.planetIdx);
+      if (wc.anchor) Game.save.story.flags['done_' + wc.anchor] = true;
       if (Game.isSystemTaken(wc.sysId)) {
         g.owner[wc.sysId] = 'terran';
         g.siege[wc.sysId] = 0;
@@ -1685,8 +1687,8 @@ const Game = {
       report.prizes.push({ cls: h.cls, name: h.name, pts: h.pts });
     });
     if (!newFleet.length) {
-      newFleet.push({ cls: 'corvette', name: 'TAS VANGUARD II', xp: 0, refit: false });
-      report.replacement = 'TAS VANGUARD II';
+      newFleet.push({ cls: 'corvette', name: 'TAS REAVER II', xp: 0, refit: false });
+      report.replacement = 'TAS REAVER II';
     }
     Game.save.fleet = newFleet;
     Game.save.req += report.salvage;
