@@ -776,7 +776,17 @@ const UI = {
     let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i) && !Game.isPlanetLocked(sysId, i));
     if (selIdx < 0) selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
     if (selIdx < 0) selIdx = 0;
-    let tierId = 'medium';
+    // difficulty is no longer chosen by the player — it is set by the system's
+    // standing (the red dash rating on the sector map), with the finale world
+    // one tier harder than the rest of its system.
+    const sysDiff = (DATA.SYSTEM_TYPES[sys.type] || {}).diff || 2;
+    const TIER_BY_DIFF = { 1: 'easy', 2: 'medium', 3: 'medium', 4: 'hard', 5: 'hard' };
+    const planetTier = (p) => {
+      let idx = DATA.MISSION_TIERS.findIndex(t => t.id === (TIER_BY_DIFF[sysDiff] || 'medium'));
+      if (idx < 0) idx = 1;
+      if (p.finale) idx = Math.min(idx + 1, DATA.MISSION_TIERS.length - 1);
+      return DATA.MISSION_TIERS[idx].id;
+    };
 
     // seeded orbital layout — radius, angle, size and portrait per planet
     const cx = 40, cy = 52;
@@ -842,9 +852,7 @@ const UI = {
         : DATA.archetype(p.archetype).obj;
       const commander = p.finale && p.commander ? p.commander : null;
       const th = threatOf(p);
-      const tierChips = DATA.MISSION_TIERS.map(t =>
-        '<div class="tierchip' + (tierId === t.id ? ' sel' : '') + '" data-tier="' + t.id + '" style="--tc:' + t.color + '">' +
-        '<h4>' + t.name + '</h4><div class="tr">' + t.rec + '</div></div>').join('');
+      const pt = DATA.tier(planetTier(p));
       const enemyPresence = th.c === 'crit' ? 'Heavy enemy presence' : th.c === 'high' ? 'High enemy presence'
         : th.c === 'mod' ? 'Moderate enemy presence' : 'Light enemy presence';
 
@@ -872,7 +880,8 @@ const UI = {
             : '<div class="mp-threat">THREAT <span class="th ' + th.c + '">● ' + th.t + '</span></div>' +
               '<div class="mp-elabel">ENEMY FLEET</div><div class="mp-enemy">⚑ ' + enemyPresence + '</div>' +
               (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
-                : '<div class="mp-elabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
+                : '<div class="mp-elabel">DIFFICULTY</div><div class="mp-diff" style="color:' + pt.color + '">● ' + pt.name +
+                  (p.finale ? ' · SYSTEM FINALE' : '') + '</div>')) +
         (cleared || locked ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
         '</div>' +
         '</div>',
@@ -880,13 +889,11 @@ const UI = {
       );
       UI.el.screenInner.querySelectorAll('[data-planet]').forEach(el =>
         el.addEventListener('click', () => { selIdx = Number(el.dataset.planet); Snd.click(); render(); }));
-      UI.el.screenInner.querySelectorAll('[data-tier]').forEach(el =>
-        el.addEventListener('click', () => { tierId = el.dataset.tier; Snd.click(); render(); }));
       const lb = document.getElementById('mnLaunchP');
       if (lb) lb.addEventListener('click', () => {
         Snd.init(); Snd.click();
         UI.closeScreen();
-        Game.startPlanetMission(sysId, selIdx, tierId);
+        Game.startPlanetMission(sysId, selIdx, planetTier(planets[selIdx]));
         UI.rebuildLog();
       });
       document.getElementById('mnBackG').addEventListener('click', () => UI.showGalaxy());

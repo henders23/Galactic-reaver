@@ -777,6 +777,10 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .mp-elabel { font: 700 9px Rajdhani, sans-serif; letter-spacing: 2px; color: #8ba0b8; margin-bottom: 8px; }
 .mp-enemy { font: 500 11px 'IBM Plex Mono', monospace; color: #d3b28a; padding: 10px 12px; margin-bottom: 16px;
   background: rgba(30,20,10,.4); border: 1px solid rgba(180,120,60,.25); border-radius: 8px; }
+/* read-only difficulty rating (set by the system, no longer player-selectable) */
+.mp-diff { font: 700 12px Rajdhani, sans-serif; letter-spacing: 2px; margin-bottom: 16px;
+  padding: 9px 12px; border-radius: 8px; background: rgba(12,18,28,.5);
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
 
 @media (max-width: 1100px) {
   #sysmap .misspanel { width: 280px; right: 14px; }
