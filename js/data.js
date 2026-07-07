@@ -501,6 +501,27 @@ DATA.COMMANDERS = {
 /* the mock-up's system-progression track — one stage per planet, then control */
 DATA.SYSTEM_STAGES = ['INTEL GATHERING', 'ESTABLISH FOOTHOLD', 'ELIMINATE THREATS', 'SECURE SYSTEM', 'SYSTEM CONTROL'];
 
+/* ---------------- story missions (framework — beats authored later) ----------------
+   Ordered plot beats that advance the narrative. The engine surfaces the first
+   available beat as a "PRIORITY OPERATION" on the galaxy; completing it advances
+   save.story.chapter. Kept EMPTY for now — drop beats in this shape to add plot:
+
+     {
+       id: 'sc_intro',                 // unique
+       chapter: 1,                     // advances save.story.chapter on completion
+       title: 'A FOOTHOLD IN THE VERGE',
+       brief: 'One-line hook shown on the galaxy.',
+       trigger: (save) => Game.terranSystems().length > 8,   // when it unlocks
+       // either an authored mission id …
+       anchor: 'm_first',
+       // … or a generated-mission context:
+       mission: { factionId: 'crimson', archetypeId: 'assault', tierId: 'medium',
+                  planet: { name: 'Verge Waypoint', type: 'Barren' }, system: { name: 'THE VERGE' } }
+     }
+
+   `trigger` receives the save and may call Game.* helpers. */
+DATA.STORY = [];
+
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {
   m_first: {

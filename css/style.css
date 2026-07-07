@@ -404,6 +404,28 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .infbar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
 .infbar i { display: block; height: 100%; border-radius: 3px; }
 .infpct { width: 30px; text-align: right; color: #cfe6f2; font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; }
+.trend { width: 12px; text-align: center; font-size: 8px; }
+.trend.up { color: #6fe0a8; }
+.trend.dn { color: #ff6159; }
+.trend.flat { color: #4a5a6c; }
+
+/* galaxy header — Voss commentary + priority operation */
+.voss-line { font: 400 11px 'IBM Plex Mono', monospace; color: #7ce8f7; margin-top: 8px; letter-spacing: .3px; }
+.storychip { display: inline-block; margin-top: 10px; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  font: 700 11px Rajdhani, sans-serif; letter-spacing: 1.5px; color: #ffd465; background: rgba(255,212,101,.08);
+  border: 1px solid rgba(255,212,101,.5); box-shadow: 0 0 16px rgba(255,212,101,.15); animation: gpulse 2s ease-in-out infinite; }
+.storychip:hover { background: rgba(255,212,101,.16); }
+
+/* galaxy war-report feed */
+.gwar { position: absolute; top: 14px; left: 14px; width: 232px; background: rgba(9,14,24,.82); border: 1px solid rgba(120,180,220,.22);
+  border-radius: 10px; padding: 11px 13px; z-index: 3; backdrop-filter: blur(4px); }
+.wev { font: 500 9px 'IBM Plex Mono', monospace; color: #b8d0e0; padding: 3px 0; line-height: 1.4; border-bottom: 1px solid rgba(120,180,220,.08); }
+.wev:last-child { border-bottom: 0; }
+.wev .wfrom { color: #6c7f96; }
+.wev.empty { color: #5c7089; border: 0; }
+
+/* debrief: wider-war moves line */
+.warmoves { font: 500 10px 'IBM Plex Mono', monospace; color: #9fbdd0; letter-spacing: 0; margin-top: 6px; }
 
 /* ---------- system / planet map ---------- */
 .sys-head { margin-bottom: 14px; }
