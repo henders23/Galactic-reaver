@@ -197,27 +197,56 @@ DATA.UPGRADES = [
 ];
 DATA.refitCost = (cls) => Math.round(DATA.CLASSES[cls].pts * 0.45 / 10) * 10;
 DATA.MAX_FLEET = 4;
-DATA.SHIP_NAMES = ['VSS TEMPEST', 'VSS RESOLUTE', 'VSS ARGUS', 'VSS ORION', 'VSS DAUNTLESS', 'VSS HARRIER', 'VSS VIGIL', 'VSS SOVEREIGN'];
-
-/* ---------------- ship livery (Starbase paint) ----------------
-   Players can daub blue or yellow markings onto parts of a hull to tell their
-   ships apart at a glance. Part geometry is in hull-fraction space shared by the
-   canvas renderer and the DOM silhouettes: x runs 0 (stern) → 1 (nose),
-   y runs 0 → 1 across the beam (0.5 = centreline). Each part is one or more
-   polygons so the paint appears in the same spot on the sprite and the outline. */
-DATA.LIVERY_PARTS = [
-  { id: 'nose', name: 'NOSE', polys: [[[0.80, 0.34], [1.0, 0.5], [0.80, 0.66]]] },
-  { id: 'spine', name: 'SPINE', polys: [[[0.18, 0.45], [0.74, 0.45], [0.74, 0.55], [0.18, 0.55]]] },
-  { id: 'flanks', name: 'FLANKS', polys: [
-    [[0.30, 0.10], [0.68, 0.10], [0.68, 0.23], [0.30, 0.23]],
-    [[0.30, 0.77], [0.68, 0.77], [0.68, 0.90], [0.30, 0.90]]
-  ] },
-  { id: 'engines', name: 'ENGINES', polys: [[[0.0, 0.34], [0.16, 0.34], [0.16, 0.66], [0.0, 0.66]]] }
-];
-DATA.LIVERY_COLORS = { blue: '#4cd7ea', yellow: '#ffd465' };
-/* click cycle for the paint UI */
-DATA.LIVERY_CYCLE = { none: 'blue', blue: 'yellow', yellow: 'none' };
-DATA.liveryPart = (id) => DATA.LIVERY_PARTS.find(p => p.id === id);
+/* ---------------- ship name pools (per faction) ----------------
+   Terran Alliance ships carry the TAS pennant and stern, disciplined names.
+   The Crimson Reach are pirates — evocative, unprefixed hull names. The
+   Za'Argon Dynasty names its ships like relics of empire. The Hive does not
+   name individual ships; Terran intelligence assigns behavioural codenames. */
+DATA.NAME_POOLS = {
+  terran: [
+    'TAS VANGUARD', 'TAS INVINCIBLE', 'TAS DEFENDER', 'TAS SENTINEL', 'TAS DAUNTLESS',
+    'TAS INTREPID', 'TAS INDOMITABLE', 'TAS VALIANT', 'TAS ENDEAVOUR', 'TAS CONQUEROR',
+    'TAS LEVIATHAN', 'TAS PERSEVERANCE', 'TAS GIBRALTAR', 'TAS IRON DUKE', 'TAS VICTORY',
+    'TAS HORIZON', 'TAS ATLAS', 'TAS ASCENDANT', 'TAS RELIANT', 'TAS PATHFINDER',
+    'TAS LONGBOW', 'TAS GUARDIAN', 'TAS SOVEREIGN', 'TAS THUNDERCHILD', 'TAS PHOENIX',
+    'TAS ODYSSEY', 'TAS MARATHON', 'TAS BASTION', 'TAS TRIUMPH', 'TAS EXCALIBUR',
+    'TAS CONSTITUTION', 'TAS FEARLESS', 'TAS INVICTUS', 'TAS CONCORD', 'TAS ECLIPSE',
+    'TAS FRONTIER', 'TAS POLARIS', 'TAS CENTURION', 'TAS LIBERTY', 'TAS PIONEER',
+    'TAS COURAGE', 'TAS ENTERPRISE', 'TAS ASCENSION', 'TAS UNITY'
+  ],
+  crimson: [
+    'BLOOD PRICE', 'BLACK WIDOW', 'HELLHOUND', 'WIDOWMAKER', 'RUST DEVIL', 'DEAD RECKONING',
+    'BLACK FORTUNE', "KING'S RANSOM", 'LAST LAUGH', 'BONE COLLECTOR', 'RED KNIFE', 'MARAUDER',
+    'CUTLASS', 'GRAVE DIGGER', "HANGMAN'S SMILE", 'IRON JACKAL', 'NIGHT REAVER', 'BLACK TIDE',
+    'FIREBRAND', 'BROKEN PROMISE', 'WRAITH', 'COLD STEEL', 'SCOURGE', "DEVIL'S DUE",
+    'CRIMSON WOLF', 'GHOST CUTLASS', "WIDOW'S KISS", 'BUTCHER BIRD', 'BLACK FANG', 'BLOOD MOON',
+    'SILENT PROFIT', 'HELLFIRE', 'ROGUE TIDE', 'RUST CROWN', 'DARK FORTUNE', 'NO QUARTER',
+    'GRIM HARVEST', 'OUTLAW', 'BLACK HORIZON', 'RAVAGER', 'VULTURE KING', 'IRON COFFIN',
+    'RED SIREN', 'MERCILESS', 'CORSAIR QUEEN', 'CUTTHROAT', 'BLOOD OATH', 'CRIMSON FURY',
+    "REAPER'S WAKE"
+  ],
+  zaargon: [
+    'VOICE OF ETERNITY', 'SPEAR OF THE FIRST EMPEROR', 'HAMMER OF JUDGEMENT', 'THRONE OF STARS',
+    "LIGHT OF ZA'ARGON", 'CROWN OF AGES', 'HERALD OF SILENCE', 'EYE OF DOMINION', 'SWORD OF HEAVEN',
+    'TEMPLE OF FIRE', 'ORACLE OF STONE', 'ETERNAL VIGIL', 'GOLDEN MANDATE', 'HAND OF FATE',
+    'CELESTIAL SPEAR', 'CROWN OF DAWN', 'LAST ORACLE', 'VOICE OF THE ANCESTORS', 'PILLAR OF TRUTH',
+    'ETERNAL THRONE', 'HERALD OF UNITY', 'BEACON OF EMPIRE', 'SHIELD OF KINGS', 'FIRST ASCENDANT',
+    'KEEPER OF ETERNITY', 'CROWN OF WORLDS', 'DIVINE EDICT', 'EYE OF HEAVEN', 'PILLAR OF ORDER',
+    'SACRED DOMINION', 'FLAME OF THE DYNASTY', 'STAR CATHEDRAL', 'IMPERIAL COVENANT',
+    'RADIANT THRONE', 'ETERNAL CROWN', 'CELESTIAL MANDATE', 'IMPERIAL ORACLE', 'SACRED ASCENDANT',
+    'FIRST LIGHT', 'THRONE ETERNAL', 'GOLDEN SPEAR', 'LAST DOMINION'
+  ],
+  /* Hive: behavioural codename + the translated Hive designation, shown together */
+  hive: [
+    { code: 'DEVOURER', desig: "Xha'rith" }, { code: 'BROODMOTHER', desig: "Ul'khess" },
+    { code: 'HARVESTER', desig: "Kha'veth" }, { code: 'SPINEBREAKER', desig: 'Graxith' },
+    { code: 'LEVIATHAN', desig: "Vor'kaan" }, { code: 'FLESH TIDE', desig: "Zha'thul" },
+    { code: 'MAW', desig: "Kz'rakk" }, { code: 'BROOD CARRIER', desig: "Xhul'ra" },
+    { code: 'SEEDER', desig: "Vesh'karr" }, { code: 'HIVE HEART', desig: 'Xorrath' }
+  ]
+};
+/* commissioned Terran ships draw from the Terran pool */
+DATA.SHIP_NAMES = DATA.NAME_POOLS.terran;
 
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {
@@ -252,7 +281,7 @@ DATA.MISSION_DEFS = {
       check: (b) => { const f = b.ships.find(s => s.role === 'convoy'); return !!(f && f.alive && f.hull === f.maxHull); } },
     terrain: 'light',
     playerSpawn: { x: 430, y: 800 },
-    allies: [{ cls: 'freighter', name: 'VSS PELICAN', role: 'convoy', x: 220, y: 600, angle: 0 }],
+    allies: [{ cls: 'freighter', name: 'TAS PELICAN', role: 'convoy', x: 220, y: 600, angle: 0 }],
     enemies: [
       { cls: 'jackal', name: 'DKV JACKAL', role: 'hunter', x: 1690, y: 260, angle: 170 },
       { cls: 'jackal', name: 'DKV HYENA', role: 'hunter', x: 1780, y: 900, angle: 180 },

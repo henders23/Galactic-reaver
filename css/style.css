@@ -362,21 +362,6 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .storecard button:disabled { opacity: .35; cursor: default; }
 .storecard.owned { border-color: rgba(111, 224, 168, .4); }
 .storecard.owned h4 { color: #6fe0a8; }
-/* Starbase ship paint (livery) */
-.paintbox { margin: 4px 0 12px; padding: 10px; border-radius: 10px; background: rgba(9, 14, 26, .5); border: 1px solid rgba(110, 160, 255, .16); }
-.painthead { font: 500 8.5px 'IBM Plex Mono', monospace; color: #6c7f96; letter-spacing: .5px; margin-bottom: 6px; line-height: 1.4; }
-.paintprev { display: flex; align-items: center; justify-content: center; height: 62px; margin-bottom: 8px; }
-.paintprev .silo { filter: drop-shadow(0 0 8px rgba(111, 216, 255, .2)); }
-.paintrow { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.paintbtn {
-  padding: 6px 4px; border-radius: 6px; cursor: pointer;
-  font: 700 9px Rajdhani, sans-serif; letter-spacing: 1px;
-  background: rgba(13, 20, 31, .8); border: 1px solid rgba(120, 180, 220, .22); color: #7ba0b8;
-}
-.paintbtn:hover { border-color: rgba(111, 216, 255, .5); }
-.paintbtn.paint-blue { border-color: #4cd7ea; color: #04070d; background: #4cd7ea; box-shadow: 0 0 10px rgba(76, 215, 234, .35); }
-.paintbtn.paint-yellow { border-color: #ffd465; color: #221a04; background: #ffd465; box-shadow: 0 0 10px rgba(255, 212, 101, .35); }
-
 .reqbig {
   display: inline-block; font: 700 24px 'IBM Plex Mono', monospace; color: #ffd465; margin-bottom: 22px;
   padding: 12px 26px; border-radius: 12px; letter-spacing: 1px;

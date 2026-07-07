@@ -28,7 +28,7 @@ const Game = {
   freshSave() {
     return {
       node: null, completed: [], req: 0, diff: 'normal',
-      fleet: [{ cls: 'corvette', name: 'VSS KESTREL', xp: 0, refit: false, livery: {} }],
+      fleet: [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }],
       upgrades: {},
       done: false
     };
@@ -88,7 +88,6 @@ const Game = {
       xp: opts.xp || 0, rank, kills: 0, xpEarned: 0,
       fleetRef: (opts.fleetRef !== undefined) ? opts.fleetRef : null,
       refit: !!opts.refit,
-      livery: opts.livery || null,
       vip: !!opts.vip
     };
     // weapon refit: +1 die on all direct-fire weapons
@@ -132,7 +131,7 @@ const Game = {
     return fleet.map((f, i) => {
       const y = spawn.y + (i - (fleet.length - 1) / 2) * 150;
       return Game.mkShip(f.cls, f.name, 'player', 'player', spawn.x, y, -15 + i * 8,
-        { xp: f.xp, refit: f.refit, fleetRef: i, livery: f.livery });
+        { xp: f.xp, refit: f.refit, fleetRef: i });
     });
   },
 
@@ -154,7 +153,7 @@ const Game = {
     Game.mode = 'skirmish';
     Game.skirmishDiff = diffId || 'normal';
     const fleet = fleetSel.map((cls, i) => ({
-      cls, name: i === 0 ? 'VSS KESTREL' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
+      cls, name: i === 0 ? 'TAS VANGUARD' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
       xp: 0, refit: false
     }));
     const ships = Game.fleetSpawn({ x: 340, y: 650 }, fleet);
@@ -630,7 +629,7 @@ const Game = {
         tp.count -= shot;
         Rend.fx.spark(tp.to.x, tp.to.y, '#9fe8ff', 12);
         Snd.cannon();
-        Game.log((f.side === 'player' ? 'VSS' : 'DKV') + ' fighter screen sweeps the torpedo salvo — ' + shot + ' torpedo' + (shot === 1 ? '' : 'es') + ' destroyed', '#7ce8f7');
+        Game.log((f.side === 'player' ? 'TAS' : 'DKV') + ' fighter screen sweeps the torpedo salvo — ' + shot + ' torpedo' + (shot === 1 ? '' : 'es') + ' destroyed', '#7ce8f7');
         if (tp.count <= 0) { tp.expired = true; tp.strike = null; }
       } else {
         const bo = b.craft.find(c => c.id === iv.id);
@@ -1230,8 +1229,8 @@ const Game = {
       report.prizes.push({ cls: h.cls, name: h.name, pts: h.pts });
     });
     if (!newFleet.length) {
-      newFleet.push({ cls: 'corvette', name: 'VSS KESTREL II', xp: 0, refit: false, livery: {} });
-      report.replacement = 'VSS KESTREL II';
+      newFleet.push({ cls: 'corvette', name: 'TAS VANGUARD II', xp: 0, refit: false });
+      report.replacement = 'TAS VANGUARD II';
     }
     Game.save.fleet = newFleet;
     Game.save.req += report.salvage;

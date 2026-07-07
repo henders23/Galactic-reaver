@@ -128,25 +128,14 @@ const UI = {
   /* ================= order-of-battle overlay (right panel) =================
      A filterable roster of every hull on the field, drawn as sprite outlines.
      Toggle ALLIES / HOSTILES; click a ship to inspect its weapons and damage. */
-  shipSilhouette(shape, w, h, side, livery, px) {
+  shipSilhouette(shape, w, h, side, px) {
     const pts = (Rend && Rend.SHAPES[shape]) || Rend.SHAPES.blade;
     const W = px, H = Math.round(px * 0.5);
     const map = (p) => (p[0] * (W - 4) + 2).toFixed(1) + ',' + (p[1] * (H - 4) + 2).toFixed(1);
     const stroke = side === 'enemy' ? '#ff6159' : (side === 'ally' ? '#8fd8a8' : '#4cd7ea');
     const fill = side === 'enemy' ? 'rgba(255,97,89,.10)' : (side === 'ally' ? 'rgba(143,216,168,.10)' : 'rgba(76,215,234,.12)');
-    let marks = '';
-    if (livery) {
-      DATA.LIVERY_PARTS.forEach(part => {
-        const col = DATA.LIVERY_COLORS[livery[part.id]];
-        if (!col) return;
-        part.polys.forEach(poly => {
-          marks += '<polygon points="' + poly.map(map).join(' ') + '" fill="' + col + '" opacity="0.9"/>';
-        });
-      });
-    }
     return '<svg class="silo" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" preserveAspectRatio="xMidYMid meet">' +
-      '<polygon points="' + pts.map(map).join(' ') + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" stroke-linejoin="round"/>' +
-      marks + '</svg>';
+      '<polygon points="' + pts.map(map).join(' ') + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" stroke-linejoin="round"/></svg>';
   },
 
   renderOOB(b) {
@@ -181,7 +170,7 @@ const UI = {
           (s.fires > 0 ? ' · FIRE×' + s.fires : '') + (sysHit ? ' · ' + sysHit + ' SYS' : '');
         const sel = b.inspect === s.id ? ' sel' : '';
         html += '<div class="oobcard' + sel + (s.hulked ? ' hulk' : '') + '" data-ship="' + s.id + '">' +
-          '<div class="oobsilo">' + UI.shipSilhouette(s.shape, s.w, s.h, s.side, s.livery, 62) + '</div>' +
+          '<div class="oobsilo">' + UI.shipSilhouette(s.shape, s.w, s.h, s.side, 62) + '</div>' +
           '<div class="oobbody">' +
           '<div class="oobnm">' + U.esc(s.name) + flag + '</div>' +
           '<div class="oobcls">' + U.esc(s.short) + '</div>' +
@@ -255,7 +244,7 @@ const UI = {
     const s = Game.ship(b.sel);
 
     if (b.phase === 'move') {
-      host.appendChild(U.el('div', 'paneltitle', s ? 'HELM ORDERS — ' + U.esc(s.name.replace('VSS ', '')) : 'HELM ORDERS'));
+      host.appendChild(U.el('div', 'paneltitle', s ? 'HELM ORDERS — ' + U.esc(s.name.replace('TAS ', '')) : 'HELM ORDERS'));
       if (!s) {
         host.appendChild(U.el('div', '', '<div style="font:400 10px \'IBM Plex Mono\',monospace;color:#5c7089;line-height:1.6">Select a ship from the fleet roster (or press 1–4).</div>'));
         return;
@@ -267,7 +256,7 @@ const UI = {
         host.appendChild(card);
       });
     } else if (b.phase === 'fire' || b.phase === 'firing' || b.phase === 'firewait') {
-      host.appendChild(U.el('div', 'paneltitle', s ? 'WEAPONS — ' + U.esc(s.name.replace('VSS ', '')) : 'WEAPONS'));
+      host.appendChild(U.el('div', 'paneltitle', s ? 'WEAPONS — ' + U.esc(s.name.replace('TAS ', '')) : 'WEAPONS'));
       if (!s) {
         host.appendChild(U.el('div', '', '<div style="font:400 10px \'IBM Plex Mono\',monospace;color:#5c7089;line-height:1.6">Select a ship to direct its batteries.</div>'));
         return;
@@ -285,7 +274,7 @@ const UI = {
         else if (w.target) {
           const t = Game.ship(w.target);
           const sol = (t && !isFighters) ? Game.solution(s, w, t) : null;
-          ds = '→ ' + (t ? t.name.replace('DKV ', '').replace('VSS ', '') : '?') +
+          ds = '→ ' + (t ? t.name.replace('DKV ', '').replace('TAS ', '') : '?') +
             (sol && sol.ok && sol.dice ? ' · ' + sol.dice + 'd6 on ' + sol.need + '+' : '') + ' · click to clear';
           dsCls = 'hot';
         }
@@ -357,7 +346,7 @@ const UI = {
     if (b.phase === 'move') {
       const s = Game.ship(b.sel);
       if (!s) h = Game.allPlotted() ? 'ALL SHIPS PLOTTED — PRESS ENGAGE (SPACE)' : 'SELECT A SHIP TO PLOT ITS MOVE';
-      else if (b.plotStep === 'order') h = '① ' + s.name.replace('VSS ', '') + ' — SELECT A HELM ORDER · right-click to cancel';
+      else if (b.plotStep === 'order') h = '① ' + s.name.replace('TAS ', '') + ' — SELECT A HELM ORDER · right-click to cancel';
       else if (b.plotStep === 'dest') h = '② CLICK DESTINATION — cone shows max turn ±' + b.curOrder.maxTurn + '°';
       else if (b.plotStep === 'angle') h = '③ MOVE MOUSE TO SET FACING · CLICK TO LOCK';
     }
@@ -618,7 +607,7 @@ const UI = {
       '<div class="brieftitle">THE KESSEL DRIFT</div>' +
       '<div class="briefsub">7TH EXPEDITIONARY FLEET · COMMANDER\'S DOSSIER</div>' +
       '<div class="briefbody">' +
-      '<p><b>You</b> are a newly-posted captain of the <b>Terran Alliance</b>, sent to the Verge — the ragged frontier where Alliance space frays into the dark. Your command carries the <b>VSS</b> pennant, and a fleet that is yours to grow, keep alive, and bury. Ships lost out here do not come back; neither do their crews.</p>' +
+      '<p><b>You</b> are a newly-posted captain of the <b>Terran Alliance</b>, sent to the Verge — the ragged frontier where Alliance space frays into the dark. Your command carries the <b>TAS</b> pennant, and a fleet that is yours to grow, keep alive, and bury. Ships lost out here do not come back; neither do their crews.</p>' +
       '<p>The <b>Kessel Drift</b> is the choke point of the whole Verge — a slow river of derelicts, ice and ore that every convoy must thread. Hold it and the Alliance breathes. Lose it and a dozen worlds go dark.</p>' +
       '<p>Against you stands the <b>Dominion</b> — the crimson fleets that broke the Alliance line at Meridian and now claim the Drift as their own. Their ships fly the <b>DKV</b> transponder: fast jackal escorts, ravager raiders, carriers that bleed you white with bomber waves, and at the far end of the sector their flagship, the heavy cruiser <b>DREADMAW</b>. Break her and the whole Dominion line breaks with her.</p>' +
       '<p>Caught between them are the <b>haulers of the Verge</b> — unarmed freighters and couriers who fly for whoever keeps the lane open. Protect them and they fly for you.</p>' +
@@ -683,7 +672,7 @@ const UI = {
       '</div>' +
       '<div class="sector-foot">' +
       '<div class="reqpill"><span class="req">⬡ ' + sv.req + ' REQ</span><span class="sep">|</span>' +
-      '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('VSS ', ''))).join(' · ') + '</span></div>' +
+      '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('TAS ', ''))).join(' · ') + '</span></div>' +
       '<div class="btnrow">' +
       '<button class="menu-btn slim" id="mnFleetMgmt">FLEET & REQUISITION</button>' +
       '<button class="menu-btn slim" id="mnTitleSec">BACK TO MENU</button>' +
@@ -782,20 +771,11 @@ const UI = {
       const rank = DATA.RANKS[Game.rankOf(f.xp)];
       const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
       const cost = DATA.refitCost(f.cls);
-      const lv = f.livery || {};
-      const paintBlock = '<div class="paintbox">' +
-        '<div class="painthead">LIVERY · daub blue &amp; yellow bits to tell hulls apart</div>' +
-        '<div class="paintprev" data-prev="' + i + '">' + UI.shipSilhouette(c.shape, c.w, c.h, 'player', lv, 118) + '</div>' +
-        '<div class="paintrow">' + DATA.LIVERY_PARTS.map(part => {
-          const cur = lv[part.id] || 'none';
-          return '<button class="paintbtn paint-' + cur + '" data-paint="' + i + '" data-part="' + part.id + '">' + part.name + '</button>';
-        }).join('') + '</div></div>';
       return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 70) + '</div>' +
         '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
         (f.refit ? '<br>✓ GUNNERY REFIT (+1 die, all guns)' : '') + '</div>' +
-        paintBlock +
         (f.refit ? '<button disabled>REFITTED ✓</button>'
           : '<button data-refit="' + i + '" ' + (sv.req < cost ? 'disabled' : '') + '>GUNNERY REFIT +1 DIE — ' + cost + ' REQ</button>') +
         '</div>';
@@ -845,7 +825,7 @@ const UI = {
       btn.addEventListener('click', () => {
         if (sv.fleet.length >= DATA.MAX_FLEET) return;
         const p = report.prizes.splice(Number(btn.dataset.comm), 1)[0];
-        sv.fleet.push({ cls: p.cls, name: p.name.replace('DKV ', 'VSS ') + ' ⚑', xp: 0, refit: false, livery: {} });
+        sv.fleet.push({ cls: p.cls, name: 'TAS ' + p.name.replace('DKV ', '') + ' ⚑', xp: 0, refit: false });
         Snd.repair();
         rerender();
       });
@@ -867,8 +847,8 @@ const UI = {
         if (sv.req < st.cost || sv.fleet.length >= DATA.MAX_FLEET) return;
         sv.req -= st.cost;
         const used = sv.fleet.map(f => f.name);
-        const name = DATA.SHIP_NAMES.find(n => !used.includes(n)) || ('VSS ESCORT ' + (sv.fleet.length + 1));
-        sv.fleet.push({ cls: st.cls, name, xp: 0, refit: false, livery: {} });
+        const name = DATA.SHIP_NAMES.find(n => !used.includes(n)) || ('TAS ESCORT ' + (sv.fleet.length + 1));
+        sv.fleet.push({ cls: st.cls, name, xp: 0, refit: false });
         Snd.repair();
         rerender();
       });
@@ -881,24 +861,6 @@ const UI = {
         sv.upgrades[u.id] = true;
         Snd.repair();
         rerender();
-      });
-    });
-    UI.el.screenInner.querySelectorAll('[data-paint]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const i = Number(btn.dataset.paint);
-        const f = sv.fleet[i];
-        if (!f.livery) f.livery = {};
-        const cur = f.livery[btn.dataset.part] || 'none';
-        const next = DATA.LIVERY_CYCLE[cur];
-        if (next === 'none') delete f.livery[btn.dataset.part];
-        else f.livery[btn.dataset.part] = next;
-        Game.persist();
-        Snd.click();
-        // update this card in place (no full re-render → no scroll jump)
-        btn.className = 'paintbtn paint-' + next;
-        const c = DATA.CLASSES[f.cls];
-        const prev = UI.el.screenInner.querySelector('.paintprev[data-prev="' + i + '"]');
-        if (prev) prev.innerHTML = UI.shipSilhouette(c.shape, c.w, c.h, 'player', f.livery, 118);
       });
     });
     document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showSector(); });
