@@ -97,7 +97,8 @@ const Game = {
       xp: opts.xp || 0, rank, kills: 0, xpEarned: 0,
       fleetRef: (opts.fleetRef !== undefined) ? opts.fleetRef : null,
       refit: !!opts.refit,
-      vip: !!opts.vip
+      vip: !!opts.vip,
+      commander: opts.commander || null
     };
     // weapon refit: +1 die on all direct-fire weapons
     if (s.refit) s.weapons.forEach(w => { if (w.type === 'lance' || w.type === 'battery') w.dice += 1; });
@@ -309,18 +310,34 @@ const Game = {
     }
 
     const contactName = enemies.find(e => e.vip) ? enemies.find(e => e.vip).name : (enemies[0] ? enemies[0].name : F.short);
+    // boss finale: name the flagship's commander, if the faction has any
+    let bossLine = null;
+    if (wantFlagship && ctx.commander) {
+      const boss = enemies.find(e => e.vip);
+      if (boss) {
+        boss.commander = ctx.commander;
+        bossLine = ctx.commander + ' commands the defense from the ' + DATA.CLASSES[boss.cls].short +
+          ' ' + boss.name + '. Break their flagship and this system\'s command with it.';
+      }
+    } else if (wantFlagship && ctx.finale) {
+      const boss = enemies.find(e => e.vip);
+      if (boss) bossLine = 'The ' + F.adj + ' flagship ' + boss.name + ' anchors the last defense of ' + system.name + '.';
+    }
     const briefing = [
       F.adj + ' forces contest ' + planet.name + ' in the ' + system.name + ' system. ' + F.blurb,
-      'Voss: "' + Game.briefLine(arch, F) + '"',
-      'OBJECTIVE — ' + arch.obj
+      'Voss: "' + Game.briefLine(arch, F) + '"'
     ];
+    if (bossLine) briefing.push(bossLine);
+    briefing.push('OBJECTIVE — ' + arch.obj);
 
     if (ctx.seed != null) U.clearSeed();
 
+    const rewardMul = ctx.finale ? 1.4 : 1;
     return {
-      name: arch.name, sub: system.name + ' · ' + planet.name.toUpperCase(),
-      generated: true, faction: F.id, tier: tier.id, archetype: arch.id,
-      briefing, reward: Math.round(arch.reward * tier.budgetMul), bonus: null,
+      name: ctx.finale ? arch.name + ' — SYSTEM FINALE' : arch.name,
+      sub: system.name + ' · ' + planet.name.toUpperCase(),
+      generated: true, faction: F.id, tier: tier.id, archetype: arch.id, finale: !!ctx.finale,
+      briefing, reward: Math.round(arch.reward * tier.budgetMul * rewardMul), bonus: null,
       terrain: DATA.PLANET_TYPES[planet.type] || arch.terrain || 'medium',
       playerSpawn: { x: 340, y: H / 2 }, allies, enemies,
       contact: contactName,
@@ -348,7 +365,7 @@ const Game = {
     const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }];
     const ships = Game.fleetSpawn(m.playerSpawn, fleet);
     (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
-    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip })));
+    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip, commander: e.commander })));
     Game.beginBattle(m, ships, m.terrain);
     return m;
   },
@@ -380,7 +397,16 @@ const Game = {
     return sys.links.some(l => Game.systemOwner(l) === 'terran');
   },
 
-  /* deterministic 4-planet layout for a system (names, types, archetype, anchors) */
+  /* the enemy commander who defends a system's finale (null for the Hive) */
+  systemCommander(sysId) {
+    const pool = DATA.COMMANDERS[Game.systemOwner(sysId)];
+    return (pool && pool.length) ? pool[Game.hashSeed('cmd_' + sysId) % pool.length] : null;
+  },
+
+  /* deterministic 4-planet layout for a system (names, types, archetype, anchors).
+     Exactly one planet is the boss FINALE — an authored boss anchor if the system
+     has one, else a generated decapitation vs the faction flagship, led by a named
+     commander. The finale is fought last (see isPlanetLocked). */
   systemPlanets(sysId) {
     const sys = DATA.system(sysId);
     let s = Game.hashSeed(sysId) || 1;
@@ -397,7 +423,24 @@ const Game = {
         anchor: (anchorId && DATA.MISSION_DEFS[anchorId]) ? anchorId : null
       });
     }
+    // designate the finale: an authored boss anchor, else the last free planet
+    let finaleIdx = out.findIndex(p => p.anchor && DATA.BOSS_ANCHORS.includes(p.anchor));
+    if (finaleIdx < 0) {
+      finaleIdx = out[3].anchor ? out.findIndex(p => !p.anchor) : 3;
+      if (finaleIdx < 0) finaleIdx = 3;
+      out[finaleIdx].archetype = 'decap';
+      out[finaleIdx].generatedBoss = true;
+      out[finaleIdx].commander = Game.systemCommander(sysId);
+    }
+    out[finaleIdx].finale = true;
     return out;
+  },
+
+  /* the finale is locked until every other planet in the system is secured */
+  isPlanetLocked(sysId, idx) {
+    const planets = Game.systemPlanets(sysId);
+    if (!planets[idx].finale) return false;
+    return planets.some((q, i) => i !== idx && !Game.isPlanetCleared(sysId, i));
   },
 
   clearedPlanets(sysId) { return (Game.save.galaxy.cleared[sysId] || []); },
@@ -434,7 +477,8 @@ const Game = {
     return Game.startProceduralMission({
       factionId: sys.owner, archetypeId: planet.archetype, tierId,
       planet: { name: planet.name, type: planet.type }, system: { name: sys.name },
-      seed: Game.hashSeed(sysId + '_' + planetIdx + '_' + tierId), playerFleetPts: Game.playerFleetPts()
+      seed: Game.hashSeed(sysId + '_' + planetIdx + '_' + tierId), playerFleetPts: Game.playerFleetPts(),
+      commander: planet.commander || null, finale: !!planet.finale
     });
   },
 
@@ -443,7 +487,9 @@ const Game = {
     const wc = Game.warContext;
     const g = Game.save.galaxy;
     const sys = DATA.system(wc.sysId);
-    const res = { win, sysId: wc.sysId, sysName: sys.name, taken: false, lost: [], earned: 0, report: null, status: null };
+    const defender = Game.systemOwner(wc.sysId);   // faction that held it before this fight
+    const res = { win, sysId: wc.sysId, sysName: sys.name, sysType: sys.type, faction: defender,
+      taken: false, capital: false, lost: [], earned: 0, report: null, status: null };
     if (win) {
       res.earned = Game.earnings();
       Game.save.req += res.earned;
@@ -454,6 +500,7 @@ const Game = {
         g.owner[wc.sysId] = 'terran';
         g.siege[wc.sysId] = 0;
         res.taken = true;
+        res.capital = sys.type === 'capital';
       }
       g.turn = (g.turn || 0) + 1;
       res.lost = Game.enemyPressure();

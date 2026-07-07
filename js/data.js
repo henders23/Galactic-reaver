@@ -485,6 +485,21 @@ DATA.ANCHORS = {
   'dreadfall:0': 'm_dreadmaw',
   'ulvor:0': 'm_hive'
 };
+/* Authored anchors that ARE a system's boss finale (must be fought last). */
+DATA.BOSS_ANCHORS = ['m_dreadmaw', 'm_hive'];
+
+/* Every system ends in a boss finale — a capital-ship command battle. Where there
+   is no authored boss, one is generated against the owning faction's flagship,
+   led by a named commander. The Hive has no commanders; its flagship IS the mind. */
+DATA.COMMANDERS = {
+  crimson: ['CAPTAIN RAX VAYNE', 'WARLORD SKARR', 'RED JANNAH', 'CAPTAIN MORCANT', 'THE BONE BARON',
+    'SAWTOOTH KELL', 'CAPTAIN VOSK', 'DREAD IMOGEN', 'GUTTER-PRINCE HALE', 'CAPTAIN SEVROS'],
+  zaargon: ['EXARCH VORUN', 'HIGH PRAETOR KAAL', 'ARCHON SELVANE', 'GRAND VIZIER TESH', 'LORD-REGENT AZMUN',
+    'EXARCH DELLWYN', 'PRAETOR IXANDER', 'ARCHON VELL', 'HIEROPHANT SUUN', 'CELESTIANT MORO']
+};
+
+/* the mock-up's system-progression track — one stage per planet, then control */
+DATA.SYSTEM_STAGES = ['INTEL GATHERING', 'ESTABLISH FOOTHOLD', 'ELIMINATE THREATS', 'SECURE SYSTEM', 'SYSTEM CONTROL'];
 
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {

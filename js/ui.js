@@ -410,6 +410,7 @@ const UI = {
       (s.hulked ? ' · DRIFTING HULK' : (enemy ? ' · HOSTILE' : (s.side === 'ally' ? ' · PROTECTED' : ' · YOUR SHIP'))) +
       (s.routing ? ' · ⚑ DISENGAGING' : '') +
       (s.vip ? ' · ◆ PRIORITY TARGET' : '') + '</div>';
+    if (s.commander) html += '<div class="row"><span>◆ ENEMY COMMANDER</span><span class="ok" style="color:#ffd465">' + U.esc(s.commander) + '</span></div>';
     if (s.side === 'player' && rank.name !== 'GREEN') {
       html += '<div class="row"><span>' + rank.chev + ' ' + rank.name + ' CREW</span><span class="ok">' + rank.desc + '</span></div>';
     }
@@ -721,40 +722,60 @@ const UI = {
   showSystem(sysId) {
     const sys = DATA.system(sysId), owner = Game.systemOwner(sysId), F = DATA.faction(owner);
     const planets = Game.systemPlanets(sysId);
-    let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
+    // default selection: first available (cleared-and-locked planets skipped)
+    let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i) && !Game.isPlanetLocked(sysId, i));
+    if (selIdx < 0) selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
     if (selIdx < 0) selIdx = 0;
     let tierId = 'medium';
+    const stageTrack = () => {
+      const prog = Game.systemProgress(sysId);
+      return '<div class="progtrack">' + DATA.SYSTEM_STAGES.map((st, i) => {
+        const done = i < 4 ? prog >= i + 1 : Game.isSystemTaken(sysId);
+        const active = (i < 4 && prog === i) || (i === 4 && prog >= 4 && !Game.isSystemTaken(sysId));
+        return '<div class="stage' + (done ? ' done' : '') + (active ? ' active' : '') + '">' +
+          '<div class="stnode">' + (done ? '✓' : (i + 1)) + '</div><div class="stlbl">' + st + '</div></div>';
+      }).join('<div class="stsep"></div>') + '</div>';
+    };
     const render = () => {
       const quads = planets.map((p, i) => {
         const cleared = Game.isPlanetCleared(sysId, i);
+        const locked = Game.isPlanetLocked(sysId, i);
         const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
-        return '<div class="planet' + (selIdx === i ? ' sel' : '') + (cleared ? ' done' : '') + '" data-planet="' + i + '">' +
-          '<div class="pl-n">' + (i + 1) + '. ' + U.esc(p.name) + '</div>' +
-          '<div class="pl-t">' + p.type.toUpperCase() + ' PLANET' + (p.anchor ? ' · ◆ SET-PIECE' : '') + '</div>' +
-          '<div class="pl-m">' + (cleared ? '<span class="ok">✓ SECURED</span>' : U.esc(mname)) + '</div></div>';
+        const tag = p.finale ? ' · ★ FINALE' : (p.anchor ? ' · ◆ SET-PIECE' : '');
+        return '<div class="planet' + (selIdx === i ? ' sel' : '') + (cleared ? ' done' : '') +
+          (locked ? ' locked' : '') + (p.finale ? ' finale' : '') + '" data-planet="' + i + '">' +
+          '<div class="pl-n">' + (locked ? '🔒 ' : '') + (i + 1) + '. ' + U.esc(p.name) + '</div>' +
+          '<div class="pl-t">' + p.type.toUpperCase() + ' PLANET' + tag + '</div>' +
+          '<div class="pl-m">' + (cleared ? '<span class="ok">✓ SECURED</span>' : (locked ? '<span class="lk">SECURE THE SYSTEM FIRST</span>' : U.esc(mname))) + '</div></div>';
       }).join('');
       const p = planets[selIdx];
       const cleared = Game.isPlanetCleared(sysId, selIdx);
+      const locked = Game.isPlanetLocked(sysId, selIdx);
       const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
       const obj = p.anchor
         ? (DATA.MISSION_DEFS[p.anchor].briefing.find(x => x.startsWith('OBJECTIVE')) || '').replace('OBJECTIVE — ', '')
         : DATA.archetype(p.archetype).obj;
+      const commander = p.finale && p.commander ? p.commander : null;
       const tierChips = DATA.MISSION_TIERS.map(t =>
         '<div class="tierchip' + (tierId === t.id ? ' sel' : '') + '" data-tier="' + t.id + '" style="--tc:' + t.color + '">' +
         '<h4>' + t.name + '</h4><div class="tr">' + t.rec + '</div></div>').join('');
       const prog = Game.systemProgress(sysId);
       UI.screen(
         '<div class="sys-head"><div class="brieftitle" style="color:' + F.color + '">' + sys.name + '</div>' +
-        '<div class="briefsub">' + F.name + ' SPACE · ' + DATA.SYSTEM_TYPES[sys.type].name + ' · ' + prog + '/4 PLANETS SECURED</div></div>' +
+        '<div class="briefsub">' + F.name + ' SPACE · ' + DATA.SYSTEM_TYPES[sys.type].name + ' · ' + prog + '/4 PLANETS SECURED</div>' +
+        '<div class="sys-intel">' + U.esc(F.blurb) + '</div></div>' +
+        stageTrack() +
         '<div class="sys-cols"><div class="planetgrid">' + quads + '</div>' +
         '<div class="misspanel">' +
-        '<div class="mp-title">' + (p.anchor ? '◆ ' : '') + U.esc(mname) + '</div>' +
+        '<div class="mp-title">' + (p.finale ? '★ ' : (p.anchor ? '◆ ' : '')) + U.esc(mname) + '</div>' +
         '<div class="mp-sub">' + U.esc(p.name) + ' · ' + p.type.toUpperCase() + ' PLANET</div>' +
+        (commander ? '<div class="mp-cmd">◆ ENEMY COMMANDER — ' + U.esc(commander) + '</div>' : '') +
         '<div class="mp-obj">' + U.esc(obj) + '</div>' +
-        (cleared ? '<div class="mp-done">✓ THIS PLANET IS SECURED</div>'
-          : (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
-            : '<div class="mp-tierlabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
-        (cleared ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
+        (locked ? '<div class="mp-lock">🔒 The system\'s capital is dug in. Secure the other worlds before you strike here.</div>'
+          : cleared ? '<div class="mp-done">✓ THIS PLANET IS SECURED</div>'
+            : (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
+              : '<div class="mp-tierlabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
+        (cleared || locked ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
         '</div></div>' +
         '<div class="btnrow left"><button class="menu-btn slim" id="mnBackG">◂ SECTOR MAP</button></div>',
         { bg: 'starfield', wide: true, left: true }
@@ -781,7 +802,8 @@ const UI = {
     const res = Game.applyWarResult(win);
     if (win) {
       if (res.status === 'win') { Game.save.done = true; Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignVictory(); return; }
-      if (res.report) res.report.war = { taken: res.taken, lost: res.lost, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
+      if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
+        lost: res.lost, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
       Game.warContext = null;
       UI.showDebrief(res.report, res.earned);
       return;
@@ -980,9 +1002,13 @@ const UI = {
         (owned ? 'INSTALLED ✓' : 'INSTALL — ' + u.cost + ' REQ') + '</button></div>';
     }).join('');
     const w = report && report.war;
+    const capitalBeat = w && w.taken && w.capital
+      ? '<div class="warbeat">Voss: "' + DATA.faction(w.faction).short + ' capital taken. That\'s a throne off the board, Captain — they\'ll remember ' + U.esc(w.sysName) + '."</div>'
+      : '';
     const warBanner = w ? '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
       (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
         : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/4 taken') +
+      capitalBeat +
       (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
         w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
       '</div>' : '';

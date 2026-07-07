@@ -340,6 +340,49 @@ console.log('galaxy & war');
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
 
+/* ================= boss finales & gating (P2) ================= */
+console.log('finales & gating');
+{
+  Game.mode = 'war';
+  Game.save = Game.freshSave();
+  Game.galaxyInit(Game.save);
+
+  // authored boss anchors are the finale
+  const dread = Game.systemPlanets('dreadfall');
+  eq(dread.filter(p => p.finale).length, 1, 'a system has exactly one finale');
+  ok(dread[0].finale, 'Dreadfall finale is the DREADMAW anchor (planet 1)');
+  ok(Game.systemPlanets('ulvor')[0].finale, "Ul'Vor finale is THE HIVE anchor");
+
+  // a generated boss finale for a system with no boss anchor
+  const cen = Game.systemPlanets('centauri');
+  const fin = cen.find(p => p.finale);
+  ok(fin && fin.generatedBoss, "Centauri (no boss anchor) gets a generated boss finale");
+  eq(fin.archetype, 'decap', 'a generated finale is a decapitation');
+  ok(!!fin.commander, "the Za'Argon finale names a commander");
+  ok(DATA.COMMANDERS.zaargon.includes(fin.commander), 'commander comes from the faction pool');
+
+  // the finale is locked until the other planets are cleared
+  const fi = cen.findIndex(p => p.finale);
+  ok(Game.isPlanetLocked('centauri', fi), 'finale starts locked');
+  const others = [0, 1, 2, 3].filter(i => i !== fi);
+  Game.save.galaxy.cleared['centauri'] = others.slice(0, 2);
+  ok(Game.isPlanetLocked('centauri', fi), 'finale still locked with planets remaining');
+  Game.save.galaxy.cleared['centauri'] = others;
+  ok(!Game.isPlanetLocked('centauri', fi), 'finale unlocks once the other worlds are secured');
+  ok(!Game.isPlanetLocked('centauri', others[0]), 'non-finale planets are never locked');
+
+  // the generated finale mission actually fields the flagship + commander
+  const m = Game.generateMission({ factionId: 'zaargon', archetypeId: 'decap', tierId: 'hard',
+    planet: { name: 'Centauri Gate V', type: 'Ice' }, system: { name: 'CENTAURI GATE' },
+    seed: 77, playerFleetPts: 400, commander: 'EXARCH VORUN', finale: true });
+  ok(m.finale, 'generated finale is flagged');
+  ok(/SYSTEM FINALE/.test(m.name), 'finale mission is labelled');
+  const boss = m.enemies.find(e => e.vip);
+  ok(boss && boss.commander === 'EXARCH VORUN', 'the boss ship carries the commander');
+  ok(m.briefing.some(b => b.includes('EXARCH VORUN')), 'the briefing names the commander');
+  Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
