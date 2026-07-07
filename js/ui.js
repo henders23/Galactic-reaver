@@ -557,8 +557,9 @@ const UI = {
   },
 
   /* ================= full screens ================= */
-  /* opts: bg = 'start' | 'starfield' | 'victory' | 'repair' | 'defeat'
-           wide = full-width layout · left = left-aligned hero layout */
+  /* opts: bg = 'start' | 'starfield' | 'galaxy' | 'victory' | 'repair' | 'defeat'
+           wide = full-width layout · left = left-aligned hero layout
+           full = edge-to-edge layout (no max-width, minimal padding) */
   screen(html, opts) {
     opts = opts || {};
     // menu music plays on every out-of-combat screen; it's stopped once a battle
@@ -567,7 +568,7 @@ const UI = {
     const scr = UI.el.screen;
     scr.className = '';
     if (opts.bg) scr.classList.add('bg-' + opts.bg);
-    UI.el.screenInner.className = (opts.wide ? 'wide' : '') + (opts.left ? ' align-left' : '');
+    UI.el.screenInner.className = (opts.wide ? 'wide' : '') + (opts.left ? ' align-left' : '') + (opts.full ? ' full' : '');
     UI.el.screenInner.innerHTML = html;
     scr.scrollTop = 0;
   },
@@ -709,7 +710,6 @@ const UI = {
       '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div>' +
       '<div class="voss-line">VOSS ' + U.esc(Game.vossWarLine()) + '</div>' + storyChip + '</div>' +
       '<div id="galaxymap">' +
-      '<div class="neb neb1"></div><div class="neb neb2"></div><div class="gcore"></div>' +
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines.join('') + '</svg>' +
       nodeHtml +
       '<div class="ginfo" id="ginfo"><div class="gi-empty">Hover a system for intel.</div></div>' +
@@ -721,7 +721,7 @@ const UI = {
       '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('TAS ', ''))).join(' · ') + '</span></div>' +
       '<div class="btnrow"><button class="menu-btn slim" id="mnFleetG">FLEET & REQUISITION</button>' +
       '<button class="menu-btn slim" id="mnMenuG">BACK TO MENU</button></div></div>',
-      { bg: 'starfield', wide: true }
+      { bg: 'galaxy', wide: true, full: true }
     );
     // remember the influence snapshot so the next visit can show the trend
     g.viewCounts = Object.assign({}, inf);

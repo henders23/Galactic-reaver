@@ -295,9 +295,26 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 #screen.bg-repair::before { background: linear-gradient(180deg, rgba(3, 6, 12, .6), rgba(3, 6, 12, .86)); }
 #screen.bg-defeat { background: #04070d url('../assets/bg-starfield.jpg') center/cover fixed no-repeat; }
 #screen.bg-defeat::before { background: radial-gradient(ellipse at center, rgba(28, 8, 8, .62), rgba(10, 4, 4, .92)); }
+/* sector map — a plain black star field, no nebula art */
+#screen.bg-galaxy { background: #010308; }
+#screen.bg-galaxy::before {
+  background-color: transparent;
+  background-image:
+    radial-gradient(1.4px 1.4px at 30px 50px, rgba(255,255,255,.95), transparent),
+    radial-gradient(1px 1px at 120px 20px, rgba(190,215,255,.8), transparent),
+    radial-gradient(1px 1px at 210px 140px, rgba(255,255,255,.7), transparent),
+    radial-gradient(1.6px 1.6px at 90px 210px, rgba(255,255,255,.9), transparent),
+    radial-gradient(1px 1px at 270px 90px, rgba(200,225,255,.7), transparent),
+    radial-gradient(1.2px 1.2px at 320px 250px, rgba(255,255,255,.8), transparent),
+    radial-gradient(1px 1px at 160px 310px, rgba(220,230,255,.6), transparent),
+    radial-gradient(2px 2px at 250px 30px, rgba(255,255,255,.95), transparent);
+  background-size: 360px 360px;
+  background-repeat: repeat;
+}
 
 #screenInner { max-width: 780px; width: 100%; padding: 48px 32px; text-align: center; position: relative; z-index: 1; margin: auto; }
 #screenInner.wide { max-width: 1560px; }
+#screenInner.full { max-width: none; width: 100%; padding: 16px 22px 14px; }
 #screenInner.align-left { text-align: left; }
 
 /* title hero */
@@ -409,8 +426,10 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 
 /* ---------- galaxy (sector) map ---------- */
 .galaxy-head { text-align: center; margin-bottom: 8px; }
-#galaxymap { position: relative; width: 100%; height: calc(100vh - 190px); min-height: 460px; border-radius: 14px; overflow: hidden;
+#galaxymap { position: relative; width: 100%; height: calc(100vh - 168px); min-height: 460px; border-radius: 14px; overflow: hidden;
   background: radial-gradient(ellipse at 50% 46%, rgba(40,30,60,.5), rgba(6,9,16,.9) 70%); border: 1px solid rgba(110,160,255,.14); }
+/* full-screen sector map: let the black star field show through the map area */
+#screenInner.full #galaxymap { height: calc(100vh - 214px); border: none; border-radius: 0; background: transparent; overflow: visible; }
 #galaxymap > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .gcore { position: absolute; left: 50%; top: 46%; width: 26%; height: 34%; transform: translate(-50%,-50%);
   background: radial-gradient(ellipse, rgba(255,238,200,.5), rgba(255,190,120,.16) 40%, transparent 70%); filter: blur(6px); pointer-events: none; }
