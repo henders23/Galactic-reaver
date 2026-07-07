@@ -109,7 +109,8 @@ DATA.CLASSES = {
     desc: 'Dominion carrier. Her bomber waves will grind a fleet down from beyond gun range.',
     weapons: [
       { name: 'DEFENSE FLAK', type: 'battery', arc: 'side', range: 330, dice: 5, need: 4, dmgPer: 1 },
-      { name: 'BOMBER CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 }
+      { name: 'BOMBER CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 },
+      { name: 'FIGHTER CELLS', type: 'bay', craft: 'fighters', arc: 'any', range: 900, salvo: 3, reloadTime: 2 }
     ]
   },
   dreadmaw: {

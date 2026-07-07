@@ -42,13 +42,22 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 - **Boarding actions & prizes** — ships killed by gunfire may break into
   **drifting hulks**. Close alongside to raid live enemies with hit-and-run
   criticals, or board a hulk to capture it — then salvage the prize for
-  requisition or commission it into your own fleet.
+  requisition or commission it into your own fleet. The Dominion boards back:
+  enemy ships raid your decks and send scuttling parties after your prizes.
+- **Morale** — kill the flagship and the whole line breaks; batter their fleet
+  below strength and ships start disengaging one by one. Routing ships stop
+  firing and run for the map edge — the battle ends the moment no willing
+  combatant remains, but escapees pay no bounty and leave no salvage.
 - **Critical hits & damage control** — weapons, engines, shield emitter, bridge,
   fires that burn every turn, hull breaches; repair rolls each turn.
 - **Role-based enemy AI** — raiders hunt your stern, brawlers close, snipers hold
   broadside range, convoy hunters chase the freighter, couriers run for the jump
-  point, carriers stand off behind their bomber waves (and turn to fight if you
-  corner them).
+  point, carriers stand off behind bomber waves and fighter cover (and turn to
+  fight if you corner them). The Dominion concentrates fire on your most
+  battered ship.
+- **Command comforts** — one-key **BROADSIDES AT WILL** (auto-assign every idle
+  gun to its best target, then adjust by hand) and a **1×/2×/3× game-speed
+  toggle**, both persisted.
 - **Presentation** — canvas renderer with starfield, engine wakes, lance beams,
   per-die tracer volleys, shield ripples, explosions, screen shake; fully
   procedural WebAudio sound (no assets).
@@ -60,6 +69,8 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 | Click ship / `1`–`4` | Select a ship |
 | Click order card → click destination → click facing | Plot a move |
 | `SPACE` | Engage / Open fire / End turn |
+| `B` | Broadsides at will (auto-assign all idle guns) |
+| `F` | Game speed 1× / 2× / 3× |
 | Mouse wheel | Zoom to cursor |
 | Shift-drag / middle-drag / `WASD` / arrows | Pan the camera |
 | `C` | Fit the whole battle on screen |
@@ -87,18 +98,15 @@ whole game drivable headlessly for testing.
 
 ## Suggested improvements (roadmap)
 
-1. **Enemy boarding & recapture** — Dominion ships raiding back, contested prizes.
-2. **Morale & disengagement** — beaten enemies routing off-map instead of dying
-   in place; pursuing or letting them go as a choice.
-3. **More terrain & hazards** — gravity wells that bend torpedo runs, solar
+1. **More terrain & hazards** — gravity wells that bend torpedo runs, solar
    flares on a countdown, minefields.
-4. **Campaign events** — random encounters between nodes on the sector map,
+2. **Campaign events** — random encounters between nodes on the sector map,
    supply convoys of your own, emergency refits at a price.
-5. **Multiplayer** — the plotted-orders structure fits hotseat play first
+3. **Multiplayer** — the plotted-orders structure fits hotseat play first
    (plot secretly, resolve together), then async play-by-link.
-6. **Replays & seeds** — a seedable RNG plus an action log for battle replays and
+4. **Replays & seeds** — a seedable RNG plus an action log for battle replays and
    shareable challenges.
-7. **Tech hardening** — TypeScript + a bundler, unit tests for the combat math,
+5. **Tech hardening** — TypeScript + a bundler, unit tests for the combat math,
    inlined fonts for a fully-offline PWA build, touch controls, colorblind-safe
    palette and reduced-motion mode.
 

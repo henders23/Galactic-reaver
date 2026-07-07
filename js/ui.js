@@ -8,9 +8,12 @@ const UI = {
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
-      'btnMute', 'btnHelp', 'btnMenu', 'roster', 'context', 'btnAction', 'map',
+      'btnMute', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
       'hint', 'tip', 'inspector', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
       'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
+
+    Game.loadSpeed();
+    UI.el.btnSpeed.textContent = Game.speed + '×';
 
     const cv = UI.el.map;
     Rend.init(cv);
@@ -53,6 +56,11 @@ const UI = {
     cv.addEventListener('contextmenu', e => { e.preventDefault(); Game.cancel(); });
 
     UI.el.btnAction.addEventListener('click', () => { Snd.init(); UI.mainAction(); });
+    UI.el.btnAuto.addEventListener('click', () => { Snd.init(); Game.autoAssign(); });
+    UI.el.btnSpeed.addEventListener('click', () => {
+      UI.el.btnSpeed.textContent = Game.cycleSpeed() + '×';
+      Snd.click();
+    });
     UI.el.btnMute.addEventListener('click', () => {
       Snd.init();
       const m = Snd.toggleMute();
@@ -81,6 +89,8 @@ const UI = {
       else if (e.key === 'Escape') Game.cancel();
       else if (e.key === 'm' || e.key === 'M') UI.el.btnMute.click();
       else if (e.key === 'h' || e.key === 'H') UI.showHelp();
+      else if (e.key === 'b' || e.key === 'B') { if (Game.b.phase === 'fire') Game.autoAssign(); }
+      else if (e.key === 'f' || e.key === 'F') UI.el.btnSpeed.click();
       else if (/^[1-9]$/.test(e.key)) {
         const ships = Game.playerShips(Game.b);
         const s = ships[Number(e.key) - 1];
@@ -231,6 +241,7 @@ const UI = {
 
   renderAction(b) {
     const btn = UI.el.btnAction;
+    UI.el.btnAuto.classList.toggle('hidden', b.phase !== 'fire');
     btn.className = '';
     if (b.phase === 'move') {
       const ready = Game.allPlotted();
@@ -268,7 +279,7 @@ const UI = {
     else if (b.phase === 'anim') h = 'ALL SHIPS MANEUVERING…';
     else if (b.phase === 'fire') {
       if (b.boardMode) h = '⚔ CLICK AN ADJACENT ENEMY OR HULK TO BOARD';
-      else h = b.armed ? 'CLICK A TARGET ON THE MAP' : 'SELECT WEAPONS AND TARGETS, THEN OPEN FIRE (SPACE) · wheel zoom · shift-drag pan';
+      else h = b.armed ? 'CLICK A TARGET ON THE MAP' : 'ASSIGN TARGETS — B = BROADSIDES AT WILL — THEN OPEN FIRE (SPACE)';
     }
     else if (b.phase === 'firing' || b.phase === 'firewait') h = 'EXCHANGING FIRE…';
     else if (b.phase === 'resolve') h = 'RESULTS LOGGED — END TURN (SPACE)';
@@ -323,6 +334,7 @@ const UI = {
       '<h3>' + U.esc(s.name) + '</h3>' +
       '<div class="sub">' + U.esc(s.label) +
       (s.hulked ? ' · DRIFTING HULK' : (enemy ? ' · HOSTILE' : (s.side === 'ally' ? ' · PROTECTED' : ' · YOUR SHIP'))) +
+      (s.routing ? ' · ⚑ DISENGAGING' : '') +
       (s.vip ? ' · ◆ PRIORITY TARGET' : '') + '</div>';
     if (s.side === 'player' && rank.name !== 'GREEN') {
       html += '<div class="row"><span>' + rank.chev + ' ' + rank.name + ' CREW</span><span class="ok">' + rank.desc + '</span></div>';
@@ -746,12 +758,13 @@ const UI = {
       '<h4>GUNNERY — DICE POOLS</h4>Every gun throws a pool of D6 — a light escort flicks 3 dice, a capital broadside hurls 12. Each die <b>hits on its to-hit number</b> (lances 3+, batteries 4+), and each hit deals its damage. Orders, criticals, evasion and nebulae shift the to-hit number; the log shows every die rolled.' +
       '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields, and each shield point soaks one hit from a volley — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Shields recharge only on turns a ship wasn\'t hit.' +
       '<h4>TORPEDOES & ATTACK CRAFT</h4><b>Torpedoes</b> run straight each movement phase and strike whatever crosses their path — friend or foe — D6 hull per fish, shields bypassed. <b>Bombers</b> (from carriers) home on their mark each turn and bomb through shields; flak turrets thin both. <b>Fighters</b> fly cover over a friendly ship and intercept incoming torpedoes and bomber waves. Bays and tubes take 2 turns to rearm.' +
-      '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet.' +
+      '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet. Beware: <b>the Dominion boards back</b> — enemy ships alongside will raid your decks, and their scuttling parties will try to blow up prizes you\'ve taken.' +
+      '<h4>MORALE</h4>The Dominion fights to win, not to die. Kill the flagship and <b>the whole line breaks and runs</b>; batter their fleet below strength and ships start disengaging one by one (crippled ships may bolt on their own). A routing ship stops firing and runs for the map edge — the battle is <b>won the moment no willing combatant remains</b>, but escapees pay no bounty and leave no salvage. Chase or let them go.' +
       '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier): <b>WEAPONS</b> · <b>ENGINES</b> · <b>SHIELD EMITTER</b> · <b>BRIDGE</b> · <b>FIRE</b> (burns until contained) · <b>HULL BREACH</b>. Damage crews attempt repairs each turn.' +
       '<h4>VETERANCY</h4>Named ships earn XP for kills, boarding actions and surviving missions: <b>SEASONED</b> ' + DATA.RANKS[1].desc + ' · <b>VETERAN</b> ' + DATA.RANKS[2].desc + ' · <b>ELITE</b> ' + DATA.RANKS[3].desc + '. Ships lost in battle are gone for good — with all their experience.' +
       '<h4>HELM ORDERS</h4><b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit and dodges torpedoes. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals tubes and bays.' +
       '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through (torpedoes die in the rocks; bombers fly over). Nebulae hide ships inside (+1 to be hit).' +
-      '<h4>KEYS</h4><b>1–4</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
+      '<h4>KEYS</h4><b>1–4</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>B</b> broadsides at will (auto-assign every idle gun, then adjust) · <b>F</b> game speed 1×/2×/3× · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
       '</div>' +
       '<button class="menu-btn primary" id="mnCloseHelp">' + (inBattle ? 'RETURN TO BATTLE' : 'BACK') + '</button>'
     );

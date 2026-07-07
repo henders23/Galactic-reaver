@@ -734,9 +734,11 @@ const Rend = {
     const nm = s.name.replace('VSS ', '').replace('DKV ', '');
     ctx.font = '600 ' + (10 * ls) + 'px "IBM Plex Mono", monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = ally ? (s.side === 'ally' ? '#8fd8a8' : '#4cd7ea') : '#ff6159';
+    ctx.fillStyle = s.routing ? '#c9a86a' : (ally ? (s.side === 'ally' ? '#8fd8a8' : '#4cd7ea') : '#ff6159');
     const ly = pos.y + s.h / 2 + 18 * ls;
-    ctx.fillText((chev ? chev + ' ' : '') + nm + (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
+    ctx.fillText((s.routing ? '⚑ ' : '') + (chev ? chev + ' ' : '') + nm +
+      (s.routing ? ' — FLEEING' : '') +
+      (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
     // hull bar
     const bw = Math.max(44, s.w * 0.6);
     ctx.fillStyle = 'rgba(20,30,45,.8)';

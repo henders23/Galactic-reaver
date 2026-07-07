@@ -7,6 +7,16 @@ const Game = {
   save: null,             // campaign persistence
   b: null,                // current battle state
   currentNode: null,      // sector node being fought
+  speed: 1,               // game tempo multiplier (1/2/3), persisted
+
+  loadSpeed() {
+    try { Game.speed = U.clamp(parseInt(localStorage.getItem('gr-speed')) || 1, 1, 3); } catch (e) { }
+  },
+  cycleSpeed() {
+    Game.speed = Game.speed >= 3 ? 1 : Game.speed + 1;
+    try { localStorage.setItem('gr-speed', String(Game.speed)); } catch (e) { }
+    return Game.speed;
+  },
 
   /* ================= campaign persistence ================= */
   freshSave() {
@@ -61,7 +71,7 @@ const Game = {
       fires: 0,
       speed: c.speed, maxTurn: c.maxTurn, turrets: c.turrets, pts: c.pts,
       weapons: c.weapons.map(w => DATA.weapon(Object.assign({}, w))),
-      alive: true, exited: false, hulked: false, captured: false,
+      alive: true, exited: false, hulked: false, captured: false, routing: false,
       order: null, plot: null, plotted: false,
       animFrom: null, animCurve: null,
       boarded: false, lastHitBy: null,
@@ -181,7 +191,30 @@ const Game = {
   playerShips(b) { return Game.active(b).filter(s => s.side === 'player'); },
   enemyShips(b) { return Game.active(b).filter(s => s.side === 'enemy'); },
   hulks(b) { return (b || Game.b).ships.filter(s => s.hulked); },
-  sideDead(b, side) { return !b.ships.some(s => s.side === side && s.alive && !s.exited); },
+  // a routing ship is no longer an effective combatant — battles end when the line breaks
+  sideDead(b, side) { return !b.ships.some(s => s.side === side && s.alive && !s.exited && !s.routing); },
+
+  /* ================= morale ================= */
+  routShip(s, reason) {
+    if (!s || s.routing || s.vip || s.side !== 'enemy' || !s.alive || s.exited) return;
+    s.routing = true;
+    s.role = 'rout';
+    s.weapons.forEach(w => { w.target = null; });
+    Game.log('⚑ ' + s.name + ' breaks off — ' + reason, '#ffd465', { big: true });
+  },
+
+  checkMorale(b) {
+    const standing = Game.enemyShips(b).filter(s => !s.routing);
+    if (!standing.length) return;
+    const tot = b.ships.filter(s => s.side === 'enemy').reduce((a, s) => a + s.maxHull, 0);
+    const cur = Game.enemyShips(b).reduce((a, s) => a + Math.max(0, s.hull), 0);
+    const lineBreaking = tot > 0 && cur / tot < 0.4;
+    standing.forEach(s => {
+      if (s.vip) return;
+      if (lineBreaking && U.rand(1, 6) >= 4) Game.routShip(s, 'the line is breaking');
+      else if (s.hull < s.maxHull * 0.25 && U.rand(1, 6) >= 4) Game.routShip(s, 'her crew has had enough');
+    });
+  },
 
   log(t, c, extra) {
     const e = Object.assign({ t, c: c || '#8ba0b8' }, extra || {});
@@ -411,14 +444,18 @@ const Game = {
     const b = Game.b;
     if (!s || s.boarded) return false;
     if (U.dist(s, target) > DATA.BOARD_RANGE) { Snd.deny(); Game.log(s.name + ' — boarding target out of range', '#5c7089'); return false; }
-    const valid = (target.side === 'enemy' && target.alive) || (target.hulked && !target.captured);
-    if (!valid) return false;
+    // valid targets: a living foe (raid), an unclaimed hulk (player capture),
+    // or a player-held prize (Dominion scuttling party)
+    const raid = target.alive && !target.exited && target.side !== s.side;
+    const capture = target.hulked && !target.captured && s.side === 'player';
+    const scuttle = target.hulked && target.captured && s.side === 'enemy';
+    if (!raid && !capture && !scuttle) return false;
     s.boarded = true;
     b.boardMode = null;
     Rend.fx.ring(s.x, s.y, 26, 'rgba(255,212,101,.7)');
     Rend.fx.ring(target.x, target.y, 26, 'rgba(255,212,101,.7)');
     Snd.lock();
-    if (target.hulked) {
+    if (capture) {
       const die = U.rand(1, 6);
       if (die + s.rank >= 5) {
         target.captured = true;
@@ -427,6 +464,17 @@ const Game = {
         Game.log('★ ' + s.name + ' boarding teams secure the wreck of ' + target.name + ' — PRIZE TAKEN', '#ffd465', { big: true });
       } else {
         Game.log(s.name + ' boarding teams pull back from ' + target.name + ' — fire and vacuum below decks (rolled ' + die + ', need 5+)', '#7ba8b8');
+      }
+    } else if (scuttle) {
+      const die = U.rand(1, 6);
+      if (die >= 4) {
+        target.hulked = false; target.captured = false;
+        Snd.explosion(false);
+        Rend.fx.boom(target.x, target.y, false);
+        Rend.shake(9);
+        Game.log('⚠ Dominion boarders scuttle your prize — ' + target.name + ' blooms into wreckage (rolled ' + die + ')', '#ff8a84', { big: true });
+      } else {
+        Game.log('Your prize crew aboard ' + target.name + ' throws the Dominion scuttling party back into the void (rolled ' + die + ', need 4+)', '#6fe0a8');
       }
     } else {
       const att = U.rand(1, 6) + s.rank + (s.hull > s.maxHull * 0.5 ? 1 : 0);
@@ -468,7 +516,7 @@ const Game = {
     Game.stageCraft(b);
     Game.stageIntercepts(b);
     b.phase = 'anim';
-    b.anim = { start: performance.now(), dur: 1500 };
+    b.anim = { start: performance.now(), dur: 1500 / Game.speed };
     b.sel = null; b.ghost = null; b.curOrder = null; b.boardMode = null;
     Snd.click();
     if (window.UI) UI.refresh();
@@ -647,6 +695,37 @@ const Game = {
     return Game.playerShips(Game.b).some(s => s.weapons.some(w => w.target));
   },
 
+  /* broadsides at will: point every idle gun at its best target (player adjusts after) */
+  autoAssign() {
+    const b = Game.b;
+    if (!b || b.phase !== 'fire') return 0;
+    let n = 0;
+    Game.playerShips(b).forEach(s => {
+      if (s.sys['WEAPONS'] >= 2) return;
+      s.weapons.forEach(w => {
+        if (w.reload > 0 || w.target) return;
+        if ((w.type === 'torp' || w.type === 'bay') && s.order && s.order.brace) return;
+        if (w.type === 'bay' && w.craft === 'fighters') { w.target = s.id; n++; return; }
+        let best = null, bp = -1;
+        Game.enemyShips(b).forEach(f => {
+          const sol = Game.solution(s, w, f);
+          if (!sol.ok) return;
+          if (w.type === 'torp' && sol.dist < 200) return;
+          let p = w.type === 'torp' ? 60 : (w.type === 'bay' ? 55 - f.turrets * 4 : sol.exp * 12);
+          if (f.vip) p += 5;
+          if (f.hull < f.maxHull * 0.4) p += 10;
+          if (f.routing) p -= 8; // let them run, unless they're the only shot
+          if (p > bp) { bp = p; best = f; }
+        });
+        if (best) { w.target = best.id; n++; }
+      });
+    });
+    if (n > 0) Snd.lock(); else Snd.deny();
+    b.armed = null; b.boardMode = null;
+    if (window.UI) UI.refresh();
+    return n;
+  },
+
   openFire() {
     const b = Game.b;
     if (b.phase !== 'fire') return;
@@ -656,8 +735,16 @@ const Game = {
         if (w.target && w.reload === 0) b.queue.push({ shooterId: s.id, wIdx: i, targetId: w.target });
       });
     });
+    // the Dominion agrees on a priority target: the most battered player ship
+    const prey = Game.active(b).filter(x => x.side !== 'enemy');
+    prey.sort((a, z) =>
+      (a.hull + (a.sh.F + a.sh.S + a.sh.A) * 2) / a.maxHull -
+      (z.hull + (z.sh.F + z.sh.S + z.sh.A) * 2) / z.maxHull);
+    b.aiFocus = prey.length ? prey[0].id : null;
     Game.enemyShips(b).forEach(s => {
       AI.assignFire(s, b).forEach(q => b.queue.push(q));
+      const board = AI.maybeBoard(s, b);
+      if (board) b.queue.push(board);
     });
     if (!b.queue.length) {
       Game.log('All batteries silent this turn.', '#5c7089');
@@ -674,6 +761,11 @@ const Game = {
     const b = Game.b;
     const s = Game.ship(q.shooterId);
     if (!s || !s.alive) return;
+    if (q.type === 'board') {
+      const t = Game.ship(q.targetId);
+      if (t) Game.tryBoard(s, t);
+      return;
+    }
     const w = s.weapons[q.wIdx];
     const target = Game.ship(q.targetId);
     w.target = null;
@@ -859,6 +951,11 @@ const Game = {
     }
     if (b.sel === target.id) b.sel = null;
     if (b.inspect === target.id) b.inspect = null;
+    // the flagship dying breaks the whole line
+    if (target.vip && target.side === 'enemy') {
+      b.ships.filter(x => x.side === 'enemy' && x.alive && !x.exited && !x.vip)
+        .forEach(x => Game.routShip(x, 'the flagship is gone'));
+    }
   },
 
   resolveTorpedoStrike(tp, target) {
@@ -919,11 +1016,15 @@ const Game = {
       s.animFrom = null;
       s.animCurve = null;
     });
-    // exits (convoy / fleeing vip)
+    // exits (convoy / fleeing vip / routed ships)
+    const WW = DATA.WORLD.w, HH = DATA.WORLD.h;
     Game.active(b).forEach(s => {
-      if ((s.role === 'convoy' || s.role === 'flee') && s.x > DATA.WORLD.w - 60) {
+      if ((s.role === 'convoy' || s.role === 'flee') && s.x > WW - 60) {
         s.exited = true;
         Game.log((s.side === 'enemy' ? '⚠ ' : '★ ') + s.name + ' has left the field', s.side === 'enemy' ? '#ff8a84' : '#6fe0a8', { big: true });
+      } else if (s.routing && (s.x < 70 || s.x > WW - 70 || s.y < 70 || s.y > HH - 70)) {
+        s.exited = true;
+        Game.log('⚑ ' + s.name + ' disengages from the field', '#8ba0b8');
       }
       s.plot = null; s.plotted = false;
     });
@@ -1018,6 +1119,7 @@ const Game = {
       s.order = null;
     });
 
+    Game.checkMorale(b);
     if (Game.checkEnd()) return;
     b.turn++;
     b.phase = 'move';
@@ -1105,13 +1207,12 @@ const Game = {
       const q = b.queue.shift();
       if (q) {
         Game.processShot(q);
-        b.nextShotAt = now + 420;
+        b.nextShotAt = now + 420 / Game.speed;
         if (window.UI) UI.refresh();
       }
       if (!b.queue.length && b.phase === 'firing') {
-        b.nextShotAt = now + 600;
         b.phase = 'firewait';
-        b.fireDoneAt = now + 500;
+        b.fireDoneAt = now + 500 / Game.speed;
       }
     }
     if (b.phase === 'firewait' && now >= b.fireDoneAt) {
@@ -1144,6 +1245,13 @@ const AI = {
     }
     if (s.role === 'flee' && b.turn >= 3) {
       return { pt: { x: W + 160, y: s.y + U.frand(-40, 40) }, face: 0 };
+    }
+    if (s.role === 'rout') {
+      // run for the nearest map edge
+      const H = DATA.WORLD.h;
+      const exits = [{ x: -160, y: s.y }, { x: W + 160, y: s.y }, { x: s.x, y: -160 }, { x: s.x, y: H + 160 }];
+      const pt = exits.sort((a, z) => U.dist(s, a) - U.dist(s, z))[0];
+      return { pt, face: U.angleTo(s, pt) };
     }
     if (!target) return { pt: { x: s.x, y: s.y }, face: s.angle };
     const dToT = U.angleTo(s, target);
@@ -1204,6 +1312,10 @@ const AI = {
     const find = id => orders.find(o => o.id === id) || orders[0];
     if (s.role === 'convoy') return find('heading');
     if (s.role === 'flee' && b.turn >= 3) return find('full');
+    if (s.role === 'rout') {
+      const turnNeeded = Math.abs(U.norm180(U.angleTo(s, want.pt) - s.angle));
+      return turnNeeded < 25 ? find('full') : find('heading');
+    }
     const torpNear = b.torps.some(tp => tp.side !== s.side && U.dist(tp, s) < tp.speed * 1.4);
     if (torpNear && s.hull < s.maxHull * 0.6 && orders.some(o => o.id === 'brace') && Math.random() < 0.5) return find('brace');
     if (s.hull < s.maxHull * 0.35 && orders.some(o => o.id === 'evasive')) return find('evasive');
@@ -1236,8 +1348,9 @@ const AI = {
       if (!inAst) { travel = t; break; }
       if (t < 10) travel = 0;
     }
-    const nx = U.clamp(s.x + Math.cos(rad) * travel, 40, DATA.WORLD.w + (s.role === 'flee' || s.role === 'convoy' ? 200 : -40));
-    const ny = U.clamp(s.y + Math.sin(rad) * travel, 40, DATA.WORLD.h - 40);
+    const escaping = s.role === 'flee' || s.role === 'convoy' || s.role === 'rout';
+    const nx = U.clamp(s.x + Math.cos(rad) * travel, s.role === 'rout' ? -200 : 40, DATA.WORLD.w + (escaping ? 200 : -40));
+    const ny = U.clamp(s.y + Math.sin(rad) * travel, s.role === 'rout' ? -200 : 40, DATA.WORLD.h + (s.role === 'rout' ? 200 : -40));
     const pos = { x: nx, y: ny };
     const face = U.clampFacing(want.face, s.angle, pos, o.maxTurn, s);
     s.plot = { x: pos.x, y: pos.y, angle: face };
@@ -1246,6 +1359,7 @@ const AI = {
 
   assignFire(s, b) {
     const out = [];
+    if (s.routing) return out; // running for the edge, guns silent
     if (s.sys['WEAPONS'] >= 2) {
       Game.log(s.name + ' — weapons offline, holds fire', '#5c7089');
       return out;
@@ -1253,6 +1367,11 @@ const AI = {
     const foes = Game.active(b).filter(x => (s.side === 'enemy' ? x.side !== 'enemy' : x.side === 'enemy'));
     s.weapons.forEach((w, i) => {
       if (w.reload > 0) return;
+      if (w.type === 'bay' && w.craft === 'fighters') {
+        // carriers fly cover over their own flight deck
+        if (!(s.order && s.order.brace)) out.push({ shooterId: s.id, wIdx: i, targetId: s.id });
+        return;
+      }
       let best = null, bestScore = -1;
       foes.forEach(f => {
         const sol = Game.solution(s, w, f);
@@ -1262,6 +1381,7 @@ const AI = {
         else if (w.type === 'bay') score = 70 - f.turrets * 5;
         else score = sol.exp * 12;
         if (s.role === 'hunter' && f.role === 'convoy' && foes.some(x => x.role === 'convoy')) score *= 3;
+        if (f.id === b.aiFocus) score += 18; // concentrate on the fleet's chosen prey
         if (f.vip) score += 5;
         if (f.hull < f.maxHull * 0.4) score += 15;
         if (score > bestScore) { bestScore = score; best = f; }
@@ -1270,6 +1390,19 @@ const AI = {
       if (best) out.push({ shooterId: s.id, wIdx: i, targetId: best.id });
     });
     return out;
+  },
+
+  /* boarding parties: raid an adjacent player/ally ship, or scuttle a captured prize */
+  maybeBoard(s, b) {
+    if (s.boarded || s.routing || !s.alive || s.exited) return null;
+    const targets = b.ships.filter(t =>
+      t.id !== s.id && !t.exited &&
+      ((t.alive && t.side !== 'enemy') || (t.hulked && t.captured)) &&
+      U.dist(s, t) <= DATA.BOARD_RANGE);
+    if (!targets.length) return null;
+    targets.sort((a, z) => (a.hulked ? 1 : 0) - (z.hulked ? 1 : 0) || U.dist(s, a) - U.dist(s, z));
+    if (Math.random() < 0.7) return { type: 'board', shooterId: s.id, targetId: targets[0].id };
+    return null;
   }
 };
 
