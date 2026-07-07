@@ -318,7 +318,8 @@ console.log('galaxy & war');
   ok(!Game.isEngageable('aegis'), 'a Terran-held system is not engageable');
 
   const planets = Game.systemPlanets('reavers');
-  eq(planets.length, 4, 'a system has 4 planets');
+  ok(planets.length >= 2 && planets.length <= 4, 'a system holds 2 to 4 planets');
+  eq(Game.systemPlanets('centauri').length, 4, 'a capital system holds a full four planets');
   eq(planets[0].anchor, 'm_first', "Reaver's Landing planet 1 anchors FIRST BLOOD");
   eq(Game.systemPlanets('dreadfall')[0].anchor, 'm_dreadmaw', 'Dreadfall planet 1 anchors the DREADMAW finale');
   eq(Game.systemPlanets('ulvor')[0].anchor, 'm_hive', "Ul'Vor Broodworld anchors THE HIVE");
