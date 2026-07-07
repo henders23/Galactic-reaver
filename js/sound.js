@@ -98,4 +98,4 @@ const Snd = {
   defeat() { [330, 262, 208, 165].forEach((f, i) => Snd._osc('triangle', f, f * 0.97, 0.42, 0.15, i * 0.17)); }
 };
 
-window.Snd = Snd;
+if (typeof window !== 'undefined') window.Snd = Snd;

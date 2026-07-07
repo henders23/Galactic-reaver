@@ -18,10 +18,16 @@ const Game = {
     return Game.speed;
   },
 
+  skirmishDiff: 'normal',
+  diff() {
+    const id = Game.mode === 'campaign' ? (Game.save && Game.save.diff) : Game.skirmishDiff;
+    return DATA.diffOf(id);
+  },
+
   /* ================= campaign persistence ================= */
   freshSave() {
     return {
-      node: null, completed: [], req: 0,
+      node: null, completed: [], req: 0, diff: 'normal',
       fleet: [{ cls: 'corvette', name: 'VSS KESTREL', xp: 0, refit: false }],
       upgrades: {},
       done: false
@@ -33,7 +39,10 @@ const Game = {
       const raw = localStorage.getItem(Game.SAVE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && Array.isArray(s.fleet) && Array.isArray(s.completed)) return s;
+        if (s && Array.isArray(s.fleet) && Array.isArray(s.completed)) {
+          if (!s.diff) s.diff = 'normal';
+          return s;
+        }
       }
     } catch (e) { /* corrupt/blocked storage -> fresh */ }
     return null;
@@ -65,6 +74,7 @@ const Game = {
       cls, name, side, role: role || 'brawler',
       label: c.label, short: c.short,
       x, y, angle, w: c.w, h: c.h, r: Math.max(c.w, c.h) / 2,
+      shape: c.shape || 'blade',
       hull: c.hull, maxHull: c.hull,
       sh, shMax,
       sys: { 'WEAPONS': 0, 'ENGINES': 0, 'SHIELD EMITTER': 0, 'BRIDGE': 0 },
@@ -139,8 +149,9 @@ const Game = {
     Game.beginBattle(m, ships, m.terrain);
   },
 
-  startSkirmish(fleetSel) {
+  startSkirmish(fleetSel, diffId) {
     Game.mode = 'skirmish';
+    Game.skirmishDiff = diffId || 'normal';
     const fleet = fleetSel.map((cls, i) => ({
       cls, name: i === 0 ? 'VSS KESTREL' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
       xp: 0, refit: false
@@ -154,7 +165,7 @@ const Game = {
       if (!affordable.length) break;
       const p = U.pick(affordable);
       budget -= DATA.CLASSES[p.cls].pts;
-      const nm = names.length ? names.splice(Math.floor(Math.random() * names.length), 1)[0] : 'DKV NULL';
+      const nm = names.length ? names.splice(Math.floor(U.random() * names.length), 1)[0] : 'DKV NULL';
       const role = p.cls === 'hive' ? 'carrier' : p.role;
       ships.push(Game.mkShip(p.cls, nm, 'enemy', role, U.frand(1450, 1850), U.frand(240, 1060), 180 + U.frand(-25, 25)));
       n++;
@@ -177,7 +188,8 @@ const Game = {
       armed: null, boardMode: null, hover: null, inspect: null,
       log: [], banner: null,
       queue: [], nextShotAt: 0, anim: null,
-      killPts: 0
+      killPts: 0,
+      stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
     };
     Game.log('— TURN 01 · MOVEMENT —', '#4cd7ea');
     Game.autoSelect();
@@ -208,7 +220,7 @@ const Game = {
     if (!standing.length) return;
     const tot = b.ships.filter(s => s.side === 'enemy').reduce((a, s) => a + s.maxHull, 0);
     const cur = Game.enemyShips(b).reduce((a, s) => a + Math.max(0, s.hull), 0);
-    const lineBreaking = tot > 0 && cur / tot < 0.4;
+    const lineBreaking = tot > 0 && cur / tot < Game.diff().morale;
     standing.forEach(s => {
       if (s.vip) return;
       if (lineBreaking && U.rand(1, 6) >= 4) Game.routShip(s, 'the line is breaking');
@@ -263,6 +275,7 @@ const Game = {
     if (target.order) need += target.order.dodgeShift;
     if (Game.inNebula(target)) need += 1;
     if (Game.inNebula(shooter)) need += 1;
+    if (shooter.side === 'enemy') need += Game.diff().enemyNeed;
     need = U.clamp(need, 2, 6);
     const exp = w.dice * (7 - need) / 6 * w.dmgPer;
     return {
@@ -660,6 +673,7 @@ const Game = {
     Snd.explosion(false);
     Rend.fx.boom(c.to.x, c.to.y, false);
     Rend.shake(9);
+    if (target.side === 'player') b.stats.bomberHitsOnPlayer++;
     const launcher = Game.ship(c.launcher);
     Game.log('Bombers dive on ' + target.name + ' — ' + hits + ' hit' + (hits === 1 ? '' : 's') + ' · ' + (hits * 2) + ' hull (shields bypassed)', '#ffb454');
     Game.applyDamage(target, hits * 2, { quiet: false, sol: { stern: false }, shooterRef: launcher, hits });
@@ -948,7 +962,10 @@ const Game = {
       Rend.fx.boom(target.x, target.y, big);
       Rend.shake(big ? 16 : 10);
       Game.log('✸ ' + target.name + ' DESTROYED', target.side === 'enemy' ? '#6fe0a8' : '#ff6159', { big: true });
+      // a burning magazine may cook off and hammer everything nearby
+      if (U.rand(1, 6) + (target.fires > 0 ? 1 : 0) >= 6) Game.magazineDetonation(target);
     }
+    if (target.vip && b.stats) b.stats.vipKillTurn = b.turn;
     if (b.sel === target.id) b.sel = null;
     if (b.inspect === target.id) b.inspect = null;
     // the flagship dying breaks the whole line
@@ -956,6 +973,23 @@ const Game = {
       b.ships.filter(x => x.side === 'enemy' && x.alive && !x.exited && !x.vip)
         .forEach(x => Game.routShip(x, 'the flagship is gone'));
     }
+  },
+
+  magazineDetonation(target) {
+    const b = Game.b;
+    Game.log('✹ MAGAZINE DETONATION — ' + target.name + "'s munitions cook off", '#ff8a5c', { big: true });
+    Snd.explosion(true);
+    Rend.fx.boom(target.x, target.y, true);
+    Rend.fx.ring(target.x, target.y, target.r + 140, 'rgba(255,138,92,.75)');
+    Rend.shake(18);
+    const radius = target.r + 120;
+    Game.active(b).slice().forEach(s => {
+      if (s.id === target.id) return;
+      if (U.dist(s, target) > radius) return;
+      const dmg = U.rand(2, 5);
+      Game.log('Blast wave hammers ' + s.name + ' — ' + dmg + ' hull', '#ff8a5c');
+      Game.applyDamage(s, dmg, { quiet: true, sol: { stern: true } });
+    });
   },
 
   resolveTorpedoStrike(tp, target) {
@@ -971,7 +1005,7 @@ const Game = {
     }
     if (torps > 0 && target.order && target.order.evade) {
       let dodged = 0;
-      for (let i = 0; i < torps; i++) if (Math.random() < 0.35) dodged++;
+      for (let i = 0; i < torps; i++) if (U.random() < 0.35) dodged++;
       torps -= dodged;
       if (dodged > 0) Game.log(target.name + ' evasive pattern — ' + dodged + ' torpedo' + (dodged > 1 ? 'es' : '') + ' run wide', '#7ba8b8');
     }
@@ -1006,6 +1040,7 @@ const Game = {
         s.hull -= dmg;
         Rend.fx.spark(to.x, to.y, '#c8b89a', 12);
         Rend.fx.floater(to.x, to.y - s.h / 2 - 14, '-' + dmg + ' ROCKS', '#c8b89a');
+        if (s.side === 'player') b.stats.playerTransits++;
         Game.log(s.name + ' grinds through the asteroid shoal — ' + dmg + ' hull', '#c8b89a');
         if (s.hull <= 0) Game.killShip(s);
       }
@@ -1021,9 +1056,11 @@ const Game = {
     Game.active(b).forEach(s => {
       if ((s.role === 'convoy' || s.role === 'flee') && s.x > WW - 60) {
         s.exited = true;
+        if (s.side === 'enemy') b.stats.enemyEscaped++;
         Game.log((s.side === 'enemy' ? '⚠ ' : '★ ') + s.name + ' has left the field', s.side === 'enemy' ? '#ff8a84' : '#6fe0a8', { big: true });
       } else if (s.routing && (s.x < 70 || s.x > WW - 70 || s.y < 70 || s.y > HH - 70)) {
         s.exited = true;
+        if (s.side === 'enemy') b.stats.enemyEscaped++;
         Game.log('⚑ ' + s.name + ' disengages from the field', '#8ba0b8');
       }
       s.plot = null; s.plotted = false;
@@ -1091,12 +1128,15 @@ const Game = {
         Game.log('Fires burn aboard ' + s.name + ' — ' + burn + ' hull', '#ff8a84');
         Rend.fx.floater(s.x, s.y - s.h / 2 - 14, '-' + burn + ' FIRE', '#ff8a84');
         if (s.hull <= 0) { Game.killShip(s); return; }
-        let out = 0;
-        for (let i = 0; i < s.fires; i++) if (U.rand(1, 6) >= 4) out++;
-        if (out > 0) {
-          s.fires -= out;
-          Game.log(s.name + ' damage crews contain ' + out + ' fire' + (out > 1 ? 's' : ''), '#6fe0a8');
+        let out = 0, spread = 0;
+        for (let i = 0; i < s.fires; i++) {
+          const die = U.rand(1, 6);
+          if (die >= 4) out++;
+          else if (die === 1) spread++; // a botched containment roll feeds the blaze
         }
+        s.fires = s.fires - out + spread;
+        if (out > 0) Game.log(s.name + ' damage crews contain ' + out + ' fire' + (out > 1 ? 's' : ''), '#6fe0a8');
+        if (spread > 0) Game.log('⚠ Fire spreads through ' + s.name + ' — now burning ×' + s.fires, '#ff8a84');
       }
       // repairs (veteran crews or ELITE rank: 4+)
       const tgt = (s.side === 'player' && (crewUpg || s.rank >= 3)) ? 4 : 5;
@@ -1155,7 +1195,8 @@ const Game = {
 
   earnings() {
     const b = Game.b;
-    return (b.banner && b.banner.win ? (b.mission.reward || 0) : 0) + Math.round(b.killPts * 0.5);
+    const base = (b.banner && b.banner.win ? (b.mission.reward || 0) : 0) + Math.round(b.killPts * 0.5);
+    return Math.round(base * Game.diff().reqMul);
   },
 
   /* Apply XP / permadeath / prize results to the campaign fleet after a win.
@@ -1317,7 +1358,7 @@ const AI = {
       return turnNeeded < 25 ? find('full') : find('heading');
     }
     const torpNear = b.torps.some(tp => tp.side !== s.side && U.dist(tp, s) < tp.speed * 1.4);
-    if (torpNear && s.hull < s.maxHull * 0.6 && orders.some(o => o.id === 'brace') && Math.random() < 0.5) return find('brace');
+    if (torpNear && s.hull < s.maxHull * 0.6 && orders.some(o => o.id === 'brace') && U.random() < 0.5) return find('brace');
     if (s.hull < s.maxHull * 0.35 && orders.some(o => o.id === 'evasive')) return find('evasive');
     const d = U.dist(s, want.pt);
     if (d > Game.effSpeed(s) * 1.2) {
@@ -1401,10 +1442,10 @@ const AI = {
       U.dist(s, t) <= DATA.BOARD_RANGE);
     if (!targets.length) return null;
     targets.sort((a, z) => (a.hulked ? 1 : 0) - (z.hulked ? 1 : 0) || U.dist(s, a) - U.dist(s, z));
-    if (Math.random() < 0.7) return { type: 'board', shooterId: s.id, targetId: targets[0].id };
+    if (U.random() < 0.7) return { type: 'board', shooterId: s.id, targetId: targets[0].id };
     return null;
   }
 };
 
-window.Game = Game;
-window.AI = AI;
+if (typeof window !== 'undefined') window.Game = Game;
+if (typeof window !== 'undefined') window.AI = AI;

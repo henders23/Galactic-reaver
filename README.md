@@ -49,7 +49,14 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   firing and run for the map edge — the battle ends the moment no willing
   combatant remains, but escapees pay no bounty and leave no salvage.
 - **Critical hits & damage control** — weapons, engines, shield emitter, bridge,
-  fires that burn every turn, hull breaches; repair rolls each turn.
+  fires that burn every turn (and spread on a botched containment roll), hull
+  breaches; repair rolls each turn. Ships killed by gunfire may suffer a
+  **magazine detonation** that hammers everything nearby — killing a cruiser at
+  point-blank range is a decision.
+- **Difficulty & secondary objectives** — PATROL / LINE DUTY / FORLORN HOPE
+  shift Dominion gunnery, their breaking point and requisition earned; every
+  campaign mission carries an optional secondary objective paying bonus
+  requisition (shown in the briefing).
 - **Role-based enemy AI** — raiders hunt your stern, brawlers close, snipers hold
   broadside range, convoy hunters chase the freighter, couriers run for the jump
   point, carriers stand off behind bomber waves and fighter cover (and turn to
@@ -78,6 +85,13 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 | Click any ship or hulk | Inspect it |
 | `M` / `H` | Mute / Help |
 
+## Tests
+
+`node tests/rules.test.js` runs a 50-assert suite over the rules engine —
+firing-solution modifiers, dice-volley resolution, shields, brace, morale,
+boarding, magazine blasts and the movement curves — using the seedable RNG
+(`U.setSeed`) for deterministic dice.
+
 ## Code layout
 
 ```
@@ -104,11 +118,11 @@ whole game drivable headlessly for testing.
    supply convoys of your own, emergency refits at a price.
 3. **Multiplayer** — the plotted-orders structure fits hotseat play first
    (plot secretly, resolve together), then async play-by-link.
-4. **Replays & seeds** — a seedable RNG plus an action log for battle replays and
-   shareable challenges.
-5. **Tech hardening** — TypeScript + a bundler, unit tests for the combat math,
-   inlined fonts for a fully-offline PWA build, touch controls, colorblind-safe
-   palette and reduced-motion mode.
+4. **Replays & daily challenges** — the RNG is now seedable; an action log on
+   top of it would enable battle replays and shareable seeded skirmishes.
+5. **Tech hardening** — TypeScript + a bundler, inlined fonts for a
+   fully-offline PWA build, touch controls, colorblind-safe palette and
+   reduced-motion mode.
 
 ## Development notes
 

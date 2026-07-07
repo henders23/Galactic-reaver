@@ -131,7 +131,7 @@ const UI = {
     UI.el.pipMove.className = 'pip' + (move ? ' on' : ' done');
     UI.el.pipFire.className = 'pip' + (fire ? ' fire' : (res || b.phase === 'over' ? ' done' : ''));
     UI.el.pipRes.className = 'pip' + (res ? ' res' : '');
-    UI.el.missionTag.textContent = b.mission.name + ' · ' + (b.mission.sub || '');
+    UI.el.missionTag.textContent = b.mission.name + ' · ' + (b.mission.sub || '') + ' · ' + Game.diff().name;
     UI.el.reqTag.textContent = Game.mode === 'campaign' ? '⬡ ' + Game.save.req + ' REQ' : '';
   },
 
@@ -413,9 +413,16 @@ const UI = {
       return;
     }
     if (win) {
-      const earned = Game.earnings();
+      let earned = Game.earnings();
+      const m = b.mission;
+      let bonusResult = null;
+      if (m.bonus) {
+        bonusResult = { desc: m.bonus.desc, reward: m.bonus.reward, done: !!m.bonus.check(b) };
+        if (bonusResult.done) earned += m.bonus.reward;
+      }
       Game.save.req += earned;
       const report = Game.applyBattleResults();
+      report.bonus = bonusResult;
       const node = DATA.sectorNode(Game.currentNode);
       if (!Game.save.completed.includes(Game.currentNode)) Game.save.completed.push(Game.currentNode);
       Game.save.node = Game.currentNode;
@@ -464,14 +471,30 @@ const UI = {
     );
     const cont = document.getElementById('mnContinue');
     if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; UI.showSector(); });
-    document.getElementById('mnNew').addEventListener('click', () => {
-      Snd.init();
-      Game.save = Game.freshSave();
-      Game.persist();
-      UI.showSector();
-    });
+    document.getElementById('mnNew').addEventListener('click', () => { Snd.init(); UI.showDifficulty(); });
     document.getElementById('mnSkirmish').addEventListener('click', () => { Snd.init(); UI.showSkirmishSetup(); });
     document.getElementById('mnHelp').addEventListener('click', () => UI.showHelp());
+  },
+
+  showDifficulty() {
+    UI.screen(
+      '<div class="brieftitle">COMMISSION</div>' +
+      '<div class="briefsub">HOW HARD WILL THE DRIFT FIGHT BACK?</div>' +
+      '<div class="pickrow">' + DATA.DIFFS.map(d =>
+        '<div class="pickcard" data-diff="' + d.id + '"><h4>' + d.name + '</h4>' +
+        '<div class="ds">' + d.desc + '</div></div>').join('') + '</div>' +
+      '<button class="menu-btn" id="mnBackT">BACK</button>'
+    );
+    UI.el.screenInner.querySelectorAll('[data-diff]').forEach(card => {
+      card.addEventListener('click', () => {
+        Snd.select();
+        Game.save = Game.freshSave();
+        Game.save.diff = card.dataset.diff;
+        Game.persist();
+        UI.showSector();
+      });
+    });
+    document.getElementById('mnBackT').addEventListener('click', () => UI.showTitle());
   },
 
   /* ---------------- sector map ---------------- */
@@ -525,8 +548,10 @@ const UI = {
       '<div class="brieftitle">' + m.name + '</div>' +
       '<div class="briefsub">' + m.sub + '</div>' +
       '<div class="briefbody">' + m.briefing.map(p =>
-        '<p class="' + (p.startsWith('OBJECTIVE') ? 'obj' : '') + '">' + U.esc(p) + '</p>').join('') + '</div>' +
-      '<div class="fleetline">YOUR FLEET — ' + U.esc(fleet) + '</div>' +
+        '<p class="' + (p.startsWith('OBJECTIVE') ? 'obj' : '') + '">' + U.esc(p) + '</p>').join('') +
+      (m.bonus ? '<p style="color:#7ce8f7">SECONDARY — ' + U.esc(m.bonus.desc) + ' (+' + m.bonus.reward + ' REQ)</p>' : '') +
+      '</div>' +
+      '<div class="fleetline">YOUR FLEET — ' + U.esc(fleet) + ' · ' + Game.diff().name + '</div>' +
       '<button class="menu-btn primary" id="mnBegin">BEGIN ENGAGEMENT ▸</button>' +
       '<button class="menu-btn" id="mnBackSec">SECTOR MAP</button>'
     );
@@ -564,6 +589,9 @@ const UI = {
       report.gains.forEach(g => rows.push('<div class="row"><span>' + U.esc(g.name) + ' — +' + g.xp + ' XP' +
         (g.kills ? ' · ' + g.kills + ' kill' + (g.kills > 1 ? 's' : '') : '') + '</span>' +
         (g.rankUp ? '<span class="ok">▲ PROMOTED — ' + g.rankUp + '</span>' : '<span></span>') + '</div>'));
+      if (report.bonus) rows.push(report.bonus.done
+        ? '<div class="row"><span>★ SECONDARY COMPLETE — ' + U.esc(report.bonus.desc) + '</span><span class="ok">+' + report.bonus.reward + ' REQ</span></div>'
+        : '<div class="row"><span>SECONDARY FAILED — ' + U.esc(report.bonus.desc) + '</span><span class="bad">—</span></div>');
       report.losses.forEach(n => rows.push('<div class="row dmg"><span>' + U.esc(n) + '</span><span class="bad">LOST WITH ALL HANDS</span></div>'));
       if (report.replacement) rows.push('<div class="row"><span>' + report.replacement + ' commissioned to replace the fleet</span><span class="ok">NEW</span></div>');
       if (report.salvage) rows.push('<div class="row"><span>Scavenger teams strip the drifting wrecks</span><span class="ok">+' + report.salvage + ' REQ</span></div>');
@@ -706,6 +734,7 @@ const UI = {
 
   showSkirmishSetup() {
     const picks = ['corvette'];
+    let diffId = 'normal';
     const HULLS = ['corvette', 'frigate', 'lcruiser', 'argus'];
     const render = () => {
       const cards = HULLS.map(cls => {
@@ -717,15 +746,21 @@ const UI = {
           '<div class="pt">' + c.pts + ' PTS · HULL ' + c.hull + ' · SPD ' + c.speed + '</div></div>';
       }).join('');
       const pts = picks.reduce((a, p) => a + DATA.CLASSES[p].pts, 0);
+      const diffChips = DATA.DIFFS.map(d =>
+        '<div class="pickcard' + (diffId === d.id ? ' sel' : '') + '" data-sdiff="' + d.id + '" style="width:150px"><h4>' + d.name + '</h4></div>').join('');
       UI.screen(
         '<div class="brieftitle">SKIRMISH</div>' +
         '<div class="briefsub">BUILD YOUR FLEET — CLICK TO ADD, RIGHT-CLICK TO REMOVE · MAX ' + DATA.MAX_FLEET + ' SHIPS</div>' +
         '<div class="pickrow">' + cards + '</div>' +
+        '<div class="pickrow">' + diffChips + '</div>' +
         '<div class="fleetline">FLEET: ' + picks.map(p => DATA.CLASSES[p].short).join(' · ') + ' — ' + pts + ' PTS · Dominion gets a matched force</div>' +
         '<button class="menu-btn primary" id="mnLaunch"' + (picks.length ? '' : ' disabled') + '>LAUNCH ▸</button>' +
         '<button class="menu-btn" id="mnTitleK">BACK</button>'
       );
-      UI.el.screenInner.querySelectorAll('.pickcard').forEach(card => {
+      UI.el.screenInner.querySelectorAll('[data-sdiff]').forEach(chip => {
+        chip.addEventListener('click', () => { diffId = chip.dataset.sdiff; Snd.click(); render(); });
+      });
+      UI.el.screenInner.querySelectorAll('.pickcard[data-cls]').forEach(card => {
         card.addEventListener('click', () => {
           if (picks.length < DATA.MAX_FLEET) { picks.push(card.dataset.cls); Snd.click(); render(); }
         });
@@ -739,7 +774,7 @@ const UI = {
         if (!picks.length) return;
         Snd.init(); Snd.click();
         UI.closeScreen();
-        Game.startSkirmish(picks);
+        Game.startSkirmish(picks, diffId);
         UI.rebuildLog();
       });
       document.getElementById('mnTitleK').addEventListener('click', () => UI.showTitle());
@@ -760,7 +795,8 @@ const UI = {
       '<h4>TORPEDOES & ATTACK CRAFT</h4><b>Torpedoes</b> run straight each movement phase and strike whatever crosses their path — friend or foe — D6 hull per fish, shields bypassed. <b>Bombers</b> (from carriers) home on their mark each turn and bomb through shields; flak turrets thin both. <b>Fighters</b> fly cover over a friendly ship and intercept incoming torpedoes and bomber waves. Bays and tubes take 2 turns to rearm.' +
       '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet. Beware: <b>the Dominion boards back</b> — enemy ships alongside will raid your decks, and their scuttling parties will try to blow up prizes you\'ve taken.' +
       '<h4>MORALE</h4>The Dominion fights to win, not to die. Kill the flagship and <b>the whole line breaks and runs</b>; batter their fleet below strength and ships start disengaging one by one (crippled ships may bolt on their own). A routing ship stops firing and runs for the map edge — the battle is <b>won the moment no willing combatant remains</b>, but escapees pay no bounty and leave no salvage. Chase or let them go.' +
-      '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier): <b>WEAPONS</b> · <b>ENGINES</b> · <b>SHIELD EMITTER</b> · <b>BRIDGE</b> · <b>FIRE</b> (burns until contained) · <b>HULL BREACH</b>. Damage crews attempt repairs each turn.' +
+      '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier): <b>WEAPONS</b> · <b>ENGINES</b> · <b>SHIELD EMITTER</b> · <b>BRIDGE</b> · <b>FIRE</b> (burns until contained — and a botched containment roll <b>spreads the blaze</b>) · <b>HULL BREACH</b>. Damage crews attempt repairs each turn. When a ship dies by gunfire her <b>magazine may cook off</b>, hammering everything nearby — think twice before killing a cruiser at point-blank range.' +
+      '<h4>OBJECTIVES & DIFFICULTY</h4>Campaign missions carry an optional <b>secondary objective</b> paying bonus requisition — shown in the briefing. Difficulty (chosen at commissioning) shifts Dominion gunnery by ±1, their breaking point, and requisition earned.' +
       '<h4>VETERANCY</h4>Named ships earn XP for kills, boarding actions and surviving missions: <b>SEASONED</b> ' + DATA.RANKS[1].desc + ' · <b>VETERAN</b> ' + DATA.RANKS[2].desc + ' · <b>ELITE</b> ' + DATA.RANKS[3].desc + '. Ships lost in battle are gone for good — with all their experience.' +
       '<h4>HELM ORDERS</h4><b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit and dodges torpedoes. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals tubes and bays.' +
       '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through (torpedoes die in the rocks; bombers fly over). Nebulae hide ships inside (+1 to be hit).' +
@@ -774,4 +810,4 @@ const UI = {
   }
 };
 
-window.UI = UI;
+if (typeof window !== 'undefined') window.UI = UI;

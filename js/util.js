@@ -5,9 +5,23 @@ const U = {
   TAU: Math.PI * 2,
   D2R: Math.PI / 180,
 
-  rand(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); },
-  frand(a, b) { return a + Math.random() * (b - a); },
-  pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; },
+  /* ---- RNG: Math.random by default, deterministic when seeded (tests/replays) ---- */
+  _rng: null,
+  setSeed(seed) {
+    let s = (seed >>> 0) || 1;
+    U._rng = function () {
+      s |= 0; s = s + 0x6D2B79F5 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  },
+  clearSeed() { U._rng = null; },
+  random() { return U._rng ? U._rng() : Math.random(); },
+
+  rand(a, b) { return a + Math.floor(U.random() * (b - a + 1)); },
+  frand(a, b) { return a + U.random() * (b - a); },
+  pick(arr) { return arr[Math.floor(U.random() * arr.length)]; },
   clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); },
   lerp(a, b, t) { return a + (b - a) * t; },
   easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; },
@@ -112,4 +126,4 @@ const U = {
   esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 };
 
-window.U = U;
+if (typeof window !== 'undefined') window.U = U;
