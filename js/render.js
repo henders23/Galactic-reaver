@@ -391,6 +391,37 @@ const Rend = {
     ctx.restore();
   },
 
+  /* daub a ship's livery marks in its local frame (nose at +x, centred at origin).
+     ctx must already be translated+rotated onto the hull. */
+  paintLivery(ctx, s) {
+    const lv = s.livery;
+    if (!lv || !window.DATA || !DATA.LIVERY_PARTS) return;
+    let any = false;
+    for (const k in lv) { if (lv[k] && lv[k] !== 'none') { any = true; break; } }
+    if (!any) return;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    DATA.LIVERY_PARTS.forEach(part => {
+      const col = DATA.LIVERY_COLORS[lv[part.id]];
+      if (!col) return;
+      ctx.fillStyle = col;
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 6;
+      part.polys.forEach(poly => {
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        poly.forEach((p, i) => {
+          const px = (p[0] - 0.5) * s.w, py = (p[1] - 0.5) * s.h;
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fill();
+      });
+    });
+    ctx.restore();
+  },
+
   sector(ctx, x, y, r, centerDeg, halfDeg, fill) {
     ctx.fillStyle = fill;
     ctx.beginPath();
@@ -773,6 +804,8 @@ const Rend = {
       ctx.moveTo(-s.w * 0.4, 0); ctx.lineTo(s.w * 0.34, 0);
       ctx.stroke();
     }
+    // player livery marks (Starbase paint)
+    if (s.livery) Rend.paintLivery(ctx, s);
     // vip marker
     if (s.vip) {
       ctx.fillStyle = '#ffd465';
