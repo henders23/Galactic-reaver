@@ -548,9 +548,24 @@ DATA.STORY = [
     ]
   },
   {
+    id: 'sc_herald', chapter: 1, act: 'I', type: 'op', title: "THE WOLF'S MESSAGE",
+    brief: 'Skarr is watching. He wants you to know it.',
+    trigger: () => Game.save.story.done.includes('sc_meridian') && Game.terranSystems().length > 10,
+    mission: {
+      factionId: 'crimson', archetypeId: 'interdict', tierId: 'medium',
+      planet: { name: 'Kessel Deep', type: 'Gas' }, system: { name: 'THE KESSEL DRIFT' },
+      name: "THE WOLF'S MESSAGE",
+      briefing: [
+        "A lone Crimson courier burns into the Drift under a sigil you have learned to hate — Skarr's wolf. It is not here to fight. It is here to be seen.",
+        'Voss: "He is taunting you, Captain. That runner is carrying his compliments and nothing else. Kill it if you can — but the Butcher does not send anything he cannot afford to lose."',
+        'OBJECTIVE — Destroy the courier before it jumps.'
+      ]
+    }
+  },
+  {
     id: 'sc_dynasty', chapter: 2, act: 'II', type: 'op', title: 'THE OLD EMPIRE',
     brief: "The Za'Argon have noticed you.",
-    trigger: () => Game.save.story.done.includes('sc_meridian') &&
+    trigger: () => Game.save.story.done.includes('sc_herald') &&
       DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 2,
     mission: {
       factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
@@ -560,15 +575,31 @@ DATA.STORY = [
         "You have pushed too close to something the Za'Argon call sacred. A Dynasty battle-line translates in-system, running silent, lances already glowing.",
         'Exarch Vorun (all channels): "Little ghost of a dying empire. You stand upon the threshold of the First Emperor. Turn back — or be scattered like the ash of Meridian."',
         'Voss: "Ignore the sermon. Cross their bows and break their line before those lances warm up."',
-        'OBJECTIVE — Break the Za’Argon battle-line.'
+        "OBJECTIVE — Break the Za'Argon battle-line."
+      ]
+    }
+  },
+  {
+    id: 'sc_reliquary', chapter: 2, act: 'II', type: 'op', title: 'THE RELIQUARY',
+    brief: 'Seize the star-charts the Dynasty would rather burn.',
+    trigger: () => Game.save.story.done.includes('sc_dynasty') &&
+      DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 3,
+    mission: {
+      factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
+      planet: { name: 'the Reliquary Anchorage', type: 'Rocky' }, system: { name: 'THE KESSEL DRIFT' },
+      name: 'THE RELIQUARY',
+      briefing: [
+        'A Za\'Argon shrine-ship rides at anchor over a dead moon, its holds heavy with star-charts older than the Alliance — and, Voss suspects, the truth about whatever the Dynasty is dying to protect out here.',
+        'Voss: "Whatever they are guarding, the answer is in that reliquary. Punch through the honour guard and take it before Vorun scuttles the lot."',
+        'OBJECTIVE — Destroy the Za\'Argon guard and seize the reliquary.'
       ]
     }
   },
   {
     id: 'sc_gate', chapter: 2, act: 'II', type: 'interstitial', title: 'THE THRONE GATE',
     brief: 'What the Dynasty is dying for.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
-    trigger: () => Game.save.story.done.includes('sc_dynasty') &&
-      DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 3,
+    trigger: () => Game.save.story.done.includes('sc_reliquary') &&
+      DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 4,
     body: [
       "Deep in a captured Za'Argon vault, your survey teams find it on the oldest star-charts: a structure at the very heart of the Kessel Drift the Dynasty calls the THRONE GATE — a jump-gate older than the Alliance, older than the Dynasty itself, dormant, and bleeding a slow and colourless light.",
       'Voss goes quiet when you bring it to him. Too quiet.',
@@ -601,6 +632,26 @@ DATA.STORY = [
         'OBJECTIVE — Hold the line: keep the station alive and break the swarm.'
       ]
     }
+  },
+  {
+    id: 'sc_skarr', chapter: 3, act: 'III', type: 'interstitial', title: "THE BUTCHER'S DEBT",
+    brief: 'The DREADMAW has stopped running.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => Game.save.story.done.includes('sc_breakout'),
+    body: [
+      'The intercepts are unmistakable now. Warlord Skarr has pulled the DREADMAW back to Dreadfall, the rotten heart of the Crimson Reach — the ship that broke Meridian, sitting still, daring you to come.',
+      'Voss studies the plot for a long time. "He knows the swarm is coming. He knows we know exactly where he is. This is not a hiding place, Captain. It is an invitation."',
+      '"So take it. Whatever else burns out here before the end — that debt gets paid at Dreadfall. For Meridian. For every good crew we put in the ground holding a line that was already lost."'
+    ]
+  },
+  {
+    id: 'sc_lastlight', chapter: 3, act: 'III', type: 'interstitial', title: 'THE LAST LIGHT',
+    brief: 'One decision left in the whole of the Verge.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => Game.save.story.done.includes('sc_skarr'),
+    body: [
+      'The Drift has become a graveyard of fleets, and at its heart the Throne Gate burns brighter with every ship that dies near it — as if the war itself were pouring into that ancient light and waking it further.',
+      'Voss finds you one last time before the end. "When the final throne falls, that Gate is yours to answer for. Command wants it. The Dynasty worshipped it. The swarm is drinking it. You will have to decide what it actually is."',
+      '"Whatever you choose down there, Captain — you already did the hardest thing anyone ever asked of you, a long time ago, at Meridian. The rest of it is just gunnery."'
+    ]
   }
 ];
 
