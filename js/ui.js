@@ -5,12 +5,13 @@ const UI = {
   el: {},
   panState: null,
   squelchClick: false,
+  oobSide: 'ally',   // ORDER OF BATTLE filter: 'ally' | 'enemy'
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
       'btnMute', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
       'hint', 'tip', 'inspector', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
-      'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
+      'oob', 'logtitle', 'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
 
     Game.loadSpeed();
     UI.el.btnSpeed.textContent = Game.speed + '×';
@@ -65,6 +66,7 @@ const UI = {
       Snd.init();
       const m = Snd.toggleMute();
       UI.el.btnMute.classList.toggle('off', m);
+      if (window.Music) Music.syncMute();
     });
     UI.el.btnHelp.addEventListener('click', () => UI.showHelp());
     UI.el.btnMenu.addEventListener('click', () => UI.confirmAbandon());
@@ -120,6 +122,86 @@ const UI = {
     UI.renderAction(b);
     UI.renderHint(b);
     UI.renderInspector(b);
+    UI.renderOOB(b);
+  },
+
+  /* ================= order-of-battle overlay (right panel) =================
+     A filterable roster of every hull on the field, drawn as sprite outlines.
+     Toggle ALLIES / HOSTILES; click a ship to inspect its weapons and damage. */
+  shipSilhouette(shape, w, h, side, livery, px) {
+    const pts = (Rend && Rend.SHAPES[shape]) || Rend.SHAPES.blade;
+    const W = px, H = Math.round(px * 0.5);
+    const map = (p) => (p[0] * (W - 4) + 2).toFixed(1) + ',' + (p[1] * (H - 4) + 2).toFixed(1);
+    const stroke = side === 'enemy' ? '#ff6159' : (side === 'ally' ? '#8fd8a8' : '#4cd7ea');
+    const fill = side === 'enemy' ? 'rgba(255,97,89,.10)' : (side === 'ally' ? 'rgba(143,216,168,.10)' : 'rgba(76,215,234,.12)');
+    let marks = '';
+    if (livery) {
+      DATA.LIVERY_PARTS.forEach(part => {
+        const col = DATA.LIVERY_COLORS[livery[part.id]];
+        if (!col) return;
+        part.polys.forEach(poly => {
+          marks += '<polygon points="' + poly.map(map).join(' ') + '" fill="' + col + '" opacity="0.9"/>';
+        });
+      });
+    }
+    return '<svg class="silo" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" preserveAspectRatio="xMidYMid meet">' +
+      '<polygon points="' + pts.map(map).join(' ') + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+      marks + '</svg>';
+  },
+
+  renderOOB(b) {
+    const host = UI.el.oob;
+    if (!host) return;
+    const side = UI.oobSide;
+    const list = b.ships.filter(s => {
+      if (s.exited) return false;
+      if (!s.alive && !s.hulked) return false;
+      return side === 'enemy' ? s.side === 'enemy' : s.side !== 'enemy';
+    });
+    const allies = b.ships.filter(s => s.side !== 'enemy' && !s.exited && (s.alive || s.hulked)).length;
+    const foes = b.ships.filter(s => s.side === 'enemy' && !s.exited && (s.alive || s.hulked)).length;
+    let html = '<div class="paneltitle oobtitle">ORDER OF BATTLE</div>' +
+      '<div class="oobtabs">' +
+      '<button class="oobtab' + (side === 'ally' ? ' on' : '') + '" data-oob="ally">ALLIES <span>' + allies + '</span></button>' +
+      '<button class="oobtab enemy' + (side === 'enemy' ? ' on' : '') + '" data-oob="enemy">HOSTILES <span>' + foes + '</span></button>' +
+      '</div><div class="ooblist">';
+    if (!list.length) {
+      html += '<div class="oobempty">No contacts.</div>';
+    } else {
+      list.forEach(s => {
+        const hp = Math.max(0, s.hull / s.maxHull);
+        const hclass = hp > 0.55 ? '' : (hp > 0.25 ? 'warn' : 'crit');
+        const dmgPct = Math.round((1 - hp) * 100);
+        let flag = '';
+        if (!s.alive && s.hulked) flag = '<span class="oobflag hulk">' + (s.captured ? 'PRIZE' : 'HULK') + '</span>';
+        else if (s.routing) flag = '<span class="oobflag rout">FLEEING</span>';
+        else if (s.vip) flag = '<span class="oobflag vip">◆ PRIORITY</span>';
+        const sysHit = DATA.SYS.filter(n => s.sys[n] > 0).length;
+        const meta = (s.alive ? 'HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + (dmgPct > 0 ? ' · −' + dmgPct + '%' : '') : 'DERELICT') +
+          (s.fires > 0 ? ' · FIRE×' + s.fires : '') + (sysHit ? ' · ' + sysHit + ' SYS' : '');
+        const sel = b.inspect === s.id ? ' sel' : '';
+        html += '<div class="oobcard' + sel + (s.hulked ? ' hulk' : '') + '" data-ship="' + s.id + '">' +
+          '<div class="oobsilo">' + UI.shipSilhouette(s.shape, s.w, s.h, s.side, s.livery, 62) + '</div>' +
+          '<div class="oobbody">' +
+          '<div class="oobnm">' + U.esc(s.name) + flag + '</div>' +
+          '<div class="oobcls">' + U.esc(s.short) + '</div>' +
+          '<div class="hullbar"><i class="' + hclass + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
+          '<div class="oobmeta">' + meta + '</div>' +
+          '</div></div>';
+      });
+    }
+    html += '</div>';
+    host.innerHTML = html;
+    host.querySelectorAll('[data-oob]').forEach(btn => {
+      btn.addEventListener('click', () => { UI.oobSide = btn.dataset.oob; Snd.click(); UI.refresh(); });
+    });
+    host.querySelectorAll('[data-ship]').forEach(card => {
+      card.addEventListener('click', () => {
+        Game.b.inspect = card.dataset.ship;
+        Snd.select();
+        UI.refresh();
+      });
+    });
   },
 
   renderTopbar(b) {
@@ -461,6 +543,9 @@ const UI = {
            wide = full-width layout · left = left-aligned hero layout */
   screen(html, opts) {
     opts = opts || {};
+    // menu music plays on every out-of-combat screen; it's stopped once a battle
+    // begins (Game.beginBattle) and stays off through the fight and its overlays
+    if (window.Music && (!Game.b || Game.b.phase === 'over')) Music.start();
     const scr = UI.el.screen;
     scr.className = '';
     if (opts.bg) scr.classList.add('bg-' + opts.bg);
@@ -503,13 +588,13 @@ const UI = {
 
   showDifficulty() {
     UI.screen(
-      '<div class="brieftitle">COMMISSION</div>' +
+      '<div class="brieftitle">SELECT DIFFICULTY</div>' +
       '<div class="briefsub">HOW HARD WILL THE DRIFT FIGHT BACK?</div>' +
       '<div class="pickrow">' + DATA.DIFFS.map(d =>
         '<div class="pickcard" data-diff="' + d.id + '"><h4>' + d.name + '</h4>' +
         '<div class="ds">' + d.desc + '</div></div>').join('') + '</div>' +
       '<button class="menu-btn" id="mnBackT">BACK</button>',
-      { bg: 'starfield' }
+      { bg: 'start' }
     );
     UI.el.screenInner.querySelectorAll('[data-diff]').forEach(card => {
       card.addEventListener('click', () => {
@@ -517,10 +602,43 @@ const UI = {
         Game.save = Game.freshSave();
         Game.save.diff = card.dataset.diff;
         Game.persist();
-        UI.showSector();
+        UI.showContext();
       });
     });
     document.getElementById('mnBackT').addEventListener('click', () => UI.showTitle());
+  },
+
+  /* ---------------- briefing dossier: who you are, who you fight ----------------
+     Shown once, after difficulty is chosen, before the sector map. Introduces the
+     Terran Alliance, the Dominion, and Admiral Voss (whose portrait rides here). */
+  showContext() {
+    UI.screen(
+      '<div class="brief-cols">' +
+      '<div class="brief-main">' +
+      '<div class="brieftitle">THE KESSEL DRIFT</div>' +
+      '<div class="briefsub">7TH EXPEDITIONARY FLEET · COMMANDER\'S DOSSIER</div>' +
+      '<div class="briefbody">' +
+      '<p><b>You</b> are a newly-posted captain of the <b>Terran Alliance</b>, sent to the Verge — the ragged frontier where Alliance space frays into the dark. Your command carries the <b>VSS</b> pennant, and a fleet that is yours to grow, keep alive, and bury. Ships lost out here do not come back; neither do their crews.</p>' +
+      '<p>The <b>Kessel Drift</b> is the choke point of the whole Verge — a slow river of derelicts, ice and ore that every convoy must thread. Hold it and the Alliance breathes. Lose it and a dozen worlds go dark.</p>' +
+      '<p>Against you stands the <b>Dominion</b> — the crimson fleets that broke the Alliance line at Meridian and now claim the Drift as their own. Their ships fly the <b>DKV</b> transponder: fast jackal escorts, ravager raiders, carriers that bleed you white with bomber waves, and at the far end of the sector their flagship, the heavy cruiser <b>DREADMAW</b>. Break her and the whole Dominion line breaks with her.</p>' +
+      '<p>Caught between them are the <b>haulers of the Verge</b> — unarmed freighters and couriers who fly for whoever keeps the lane open. Protect them and they fly for you.</p>' +
+      '<p style="color:#7ce8f7">Your standing orders come from <b>Admiral Kade Voss</b>, who broke more Dominion hulls than anyone alive and expects you to do the same. Listen to him. The Verge keeps what it takes.</p>' +
+      '</div>' +
+      '<div class="btnrow left">' +
+      '<button class="menu-btn primary slim" id="mnCtxGo">TAKE COMMAND ▸</button>' +
+      '<button class="menu-btn slim" id="mnCtxBack">BACK</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="brief-art dossier">' +
+      '<img class="admiral-portrait" src="assets/portraits/admiral.png" alt="Admiral Kade Voss">' +
+      '<div class="contact">◆ ADMIRAL KADE VOSS</div>' +
+      '<div class="contact sub">TERRAN ALLIANCE · 7TH EXPEDITIONARY FLEET COMMAND</div>' +
+      '</div>' +
+      '</div>',
+      { bg: 'starfield', wide: true, left: true }
+    );
+    document.getElementById('mnCtxGo').addEventListener('click', () => { Snd.select(); UI.showSector(); });
+    document.getElementById('mnCtxBack').addEventListener('click', () => UI.showDifficulty());
   },
 
   /* ---------------- sector map ---------------- */
@@ -623,7 +741,7 @@ const UI = {
       '<div class="brieftitle" style="color:#ff6159">MISSION FAILED</div>' +
       '<div class="briefsub">' + (m ? m.name : '') + '</div>' +
       '<div class="briefbody"><p>' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</p>' +
-      '<p>The Coalition tows what\'s left of your fleet back to the tender. Hulls are patched, crews replaced. The mission remains.</p></div>' +
+      '<p>The Terran Alliance tows what\'s left of your fleet back to the tender. Hulls are patched, crews replaced. The mission remains.</p></div>' +
       '<button class="menu-btn primary" id="mnRetry">RETRY MISSION ▸</button>' +
       '<button class="menu-btn" id="mnTitleR">SECTOR MAP</button>',
       { bg: 'defeat' }
@@ -664,11 +782,20 @@ const UI = {
       const rank = DATA.RANKS[Game.rankOf(f.xp)];
       const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
       const cost = DATA.refitCost(f.cls);
+      const lv = f.livery || {};
+      const paintBlock = '<div class="paintbox">' +
+        '<div class="painthead">LIVERY · daub blue &amp; yellow bits to tell hulls apart</div>' +
+        '<div class="paintprev" data-prev="' + i + '">' + UI.shipSilhouette(c.shape, c.w, c.h, 'player', lv, 118) + '</div>' +
+        '<div class="paintrow">' + DATA.LIVERY_PARTS.map(part => {
+          const cur = lv[part.id] || 'none';
+          return '<button class="paintbtn paint-' + cur + '" data-paint="' + i + '" data-part="' + part.id + '">' + part.name + '</button>';
+        }).join('') + '</div></div>';
       return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 70) + '</div>' +
         '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
         (f.refit ? '<br>✓ GUNNERY REFIT (+1 die, all guns)' : '') + '</div>' +
+        paintBlock +
         (f.refit ? '<button disabled>REFITTED ✓</button>'
           : '<button data-refit="' + i + '" ' + (sv.req < cost ? 'disabled' : '') + '>GUNNERY REFIT +1 DIE — ' + cost + ' REQ</button>') +
         '</div>';
@@ -718,7 +845,7 @@ const UI = {
       btn.addEventListener('click', () => {
         if (sv.fleet.length >= DATA.MAX_FLEET) return;
         const p = report.prizes.splice(Number(btn.dataset.comm), 1)[0];
-        sv.fleet.push({ cls: p.cls, name: p.name.replace('DKV ', 'VSS ') + ' ⚑', xp: 0, refit: false });
+        sv.fleet.push({ cls: p.cls, name: p.name.replace('DKV ', 'VSS ') + ' ⚑', xp: 0, refit: false, livery: {} });
         Snd.repair();
         rerender();
       });
@@ -741,7 +868,7 @@ const UI = {
         sv.req -= st.cost;
         const used = sv.fleet.map(f => f.name);
         const name = DATA.SHIP_NAMES.find(n => !used.includes(n)) || ('VSS ESCORT ' + (sv.fleet.length + 1));
-        sv.fleet.push({ cls: st.cls, name, xp: 0, refit: false });
+        sv.fleet.push({ cls: st.cls, name, xp: 0, refit: false, livery: {} });
         Snd.repair();
         rerender();
       });
@@ -756,6 +883,24 @@ const UI = {
         rerender();
       });
     });
+    UI.el.screenInner.querySelectorAll('[data-paint]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.paint);
+        const f = sv.fleet[i];
+        if (!f.livery) f.livery = {};
+        const cur = f.livery[btn.dataset.part] || 'none';
+        const next = DATA.LIVERY_CYCLE[cur];
+        if (next === 'none') delete f.livery[btn.dataset.part];
+        else f.livery[btn.dataset.part] = next;
+        Game.persist();
+        Snd.click();
+        // update this card in place (no full re-render → no scroll jump)
+        btn.className = 'paintbtn paint-' + next;
+        const c = DATA.CLASSES[f.cls];
+        const prev = UI.el.screenInner.querySelector('.paintprev[data-prev="' + i + '"]');
+        if (prev) prev.innerHTML = UI.shipSilhouette(c.shape, c.w, c.h, 'player', f.livery, 118);
+      });
+    });
     document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showSector(); });
     Game.b = null;
   },
@@ -764,7 +909,7 @@ const UI = {
     UI.screen(
       '<div class="title-big" style="font-size:44px">DRIFT <span>SECURED</span></div>' +
       '<div class="title-sub">CAMPAIGN COMPLETE</div>' +
-      '<div class="briefbody"><p>The DREADMAW is gone, and with her the Dominion\'s claim on the Kessel Drift. Coalition traffic moves under its own lights again.</p>' +
+      '<div class="briefbody"><p>The DREADMAW is gone, and with her the Dominion\'s claim on the Kessel Drift. Terran Alliance traffic moves under its own lights again.</p>' +
       '<p>Voss: "They\'ll be back — they always come back. But not this year, and not through you. Good gunnery, Captain. Log it and move on."</p>' +
       '<p>Fleet honours: ' + Game.save.fleet.map(f => f.name + ' (' + DATA.RANKS[Game.rankOf(f.xp)].name + ', ' + f.xp + ' XP)').join(' · ') + '</p></div>' +
       '<button class="menu-btn primary" id="mnAgain">NEW CAMPAIGN</button>' +

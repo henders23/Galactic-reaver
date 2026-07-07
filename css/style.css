@@ -171,8 +171,44 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 #inspector .close { position: absolute; top: 8px; right: 10px; color: #5c7089; cursor: pointer; font-size: 13px; }
 #inspector .close:hover { color: #ff6159; }
 
+/* ---------- order-of-battle overlay (right panel) ---------- */
+#oob { flex: none; display: flex; flex-direction: column; margin-bottom: 10px; }
+.oobtitle { margin-bottom: 8px; }
+.oobtabs { display: flex; gap: 6px; margin-bottom: 8px; flex: none; }
+.oobtab {
+  flex: 1; padding: 7px 6px; border-radius: 7px; cursor: pointer;
+  font: 700 10.5px Rajdhani, sans-serif; letter-spacing: 1.5px;
+  background: rgba(13, 20, 31, .7); border: 1px solid rgba(120, 180, 220, .25); color: #7ba0b8;
+}
+.oobtab span { opacity: .7; margin-left: 3px; }
+.oobtab:hover { border-color: rgba(111, 216, 255, .55); color: #cfe6f2; }
+.oobtab.on { border-color: #6fd8ff; color: #6fd8ff; background: rgba(111, 216, 255, .1); box-shadow: 0 0 12px rgba(111, 216, 255, .18); }
+.oobtab.enemy:hover { border-color: rgba(255, 97, 89, .5); color: #ffb6b1; }
+.oobtab.enemy.on { border-color: #ff6159; color: #ff6159; background: rgba(255, 97, 89, .1); box-shadow: 0 0 12px rgba(255, 97, 89, .18); }
+.ooblist { display: flex; flex-direction: column; gap: 7px; max-height: 40vh; overflow-y: auto; padding-right: 3px; }
+.oobempty { font: 400 10px 'IBM Plex Mono', monospace; color: #5c7089; padding: 8px 2px; }
+.oobcard {
+  display: flex; gap: 9px; align-items: center; cursor: pointer;
+  background: rgba(13, 20, 31, .6); border: 1px solid rgba(120, 180, 220, .18); border-radius: 9px;
+  padding: 7px 9px; transition: border-color .15s;
+}
+.oobcard:hover { border-color: rgba(111, 216, 255, .5); }
+.oobcard.sel { border-color: #6fd8ff; background: rgba(111, 216, 255, .08); box-shadow: 0 0 14px rgba(111, 216, 255, .18); }
+.oobcard.hulk { opacity: .6; }
+.oobsilo { flex: none; width: 62px; display: flex; align-items: center; justify-content: center; }
+.oobsilo .silo { filter: drop-shadow(0 0 5px rgba(111, 216, 255, .18)); }
+.oobbody { flex: 1; min-width: 0; }
+.oobnm { font: 700 12px Rajdhani, sans-serif; letter-spacing: 1px; color: #d8ecf2; display: flex; align-items: center; gap: 6px; }
+.oobcls { font: 400 8.5px 'IBM Plex Mono', monospace; color: #5c7089; margin: 1px 0 5px; }
+.oobmeta { font: 500 8.5px 'IBM Plex Mono', monospace; color: #8ba0b8; margin-top: 4px; }
+.oobflag { font: 600 8px 'IBM Plex Mono', monospace; letter-spacing: .5px; padding: 1px 5px; border-radius: 4px; }
+.oobflag.vip { color: #ffd465; border: 1px solid rgba(255, 212, 101, .4); }
+.oobflag.rout { color: #c9a86a; border: 1px solid rgba(201, 168, 106, .4); }
+.oobflag.hulk { color: #9aa3ad; border: 1px solid rgba(150, 160, 170, .35); }
+
 /* ---------- log ---------- */
-#log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+#logtitle { flex: none; }
+#log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; min-height: 80px; }
 .logline { font: 500 10.5px 'IBM Plex Mono', monospace; line-height: 1.45; display: flex; gap: 9px; align-items: flex-start; }
 .logline.box { padding: 6px 9px; background: rgba(13, 20, 31, .7); border: 1px solid rgba(120, 180, 220, .12); border-radius: 8px; }
 .logline.critbox { background: rgba(255, 97, 89, .07); border-color: rgba(255, 97, 89, .35); }
@@ -286,6 +322,17 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .briefbody .obj { color: #ffd465; }
 .fleetline { font: 600 11px 'IBM Plex Mono', monospace; color: #6fd8ff; letter-spacing: 1px; margin-bottom: 26px; }
 
+/* commander's dossier — admiral portrait */
+.brief-art.dossier { max-width: 420px; }
+.admiral-portrait {
+  width: 100%; max-width: 380px; border-radius: 14px;
+  border: 1px solid rgba(255, 212, 101, .35);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .6), 0 0 40px rgba(111, 216, 255, .12), inset 0 1px 0 rgba(160, 200, 255, .1);
+  filter: none;
+}
+.brief-art.dossier .contact { color: #ffd465; }
+.brief-art.dossier .contact.sub { color: #9a8a5a; }
+
 /* briefing two-column layout */
 .brief-cols { display: flex; gap: 40px; align-items: center; min-height: calc(100vh - 96px); }
 .brief-main { flex: none; width: 620px; max-width: 100%; }
@@ -315,6 +362,21 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .storecard button:disabled { opacity: .35; cursor: default; }
 .storecard.owned { border-color: rgba(111, 224, 168, .4); }
 .storecard.owned h4 { color: #6fe0a8; }
+/* Starbase ship paint (livery) */
+.paintbox { margin: 4px 0 12px; padding: 10px; border-radius: 10px; background: rgba(9, 14, 26, .5); border: 1px solid rgba(110, 160, 255, .16); }
+.painthead { font: 500 8.5px 'IBM Plex Mono', monospace; color: #6c7f96; letter-spacing: .5px; margin-bottom: 6px; line-height: 1.4; }
+.paintprev { display: flex; align-items: center; justify-content: center; height: 62px; margin-bottom: 8px; }
+.paintprev .silo { filter: drop-shadow(0 0 8px rgba(111, 216, 255, .2)); }
+.paintrow { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.paintbtn {
+  padding: 6px 4px; border-radius: 6px; cursor: pointer;
+  font: 700 9px Rajdhani, sans-serif; letter-spacing: 1px;
+  background: rgba(13, 20, 31, .8); border: 1px solid rgba(120, 180, 220, .22); color: #7ba0b8;
+}
+.paintbtn:hover { border-color: rgba(111, 216, 255, .5); }
+.paintbtn.paint-blue { border-color: #4cd7ea; color: #04070d; background: #4cd7ea; box-shadow: 0 0 10px rgba(76, 215, 234, .35); }
+.paintbtn.paint-yellow { border-color: #ffd465; color: #221a04; background: #ffd465; box-shadow: 0 0 10px rgba(255, 212, 101, .35); }
+
 .reqbig {
   display: inline-block; font: 700 24px 'IBM Plex Mono', monospace; color: #ffd465; margin-bottom: 22px;
   padding: 12px 26px; border-radius: 12px; letter-spacing: 1px;

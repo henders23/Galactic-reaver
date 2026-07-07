@@ -28,7 +28,7 @@ const Game = {
   freshSave() {
     return {
       node: null, completed: [], req: 0, diff: 'normal',
-      fleet: [{ cls: 'corvette', name: 'VSS KESTREL', xp: 0, refit: false }],
+      fleet: [{ cls: 'corvette', name: 'VSS KESTREL', xp: 0, refit: false, livery: {} }],
       upgrades: {},
       done: false
     };
@@ -88,6 +88,7 @@ const Game = {
       xp: opts.xp || 0, rank, kills: 0, xpEarned: 0,
       fleetRef: (opts.fleetRef !== undefined) ? opts.fleetRef : null,
       refit: !!opts.refit,
+      livery: opts.livery || null,
       vip: !!opts.vip
     };
     // weapon refit: +1 die on all direct-fire weapons
@@ -131,7 +132,7 @@ const Game = {
     return fleet.map((f, i) => {
       const y = spawn.y + (i - (fleet.length - 1) / 2) * 150;
       return Game.mkShip(f.cls, f.name, 'player', 'player', spawn.x, y, -15 + i * 8,
-        { xp: f.xp, refit: f.refit, fleetRef: i });
+        { xp: f.xp, refit: f.refit, fleetRef: i, livery: f.livery });
     });
   },
 
@@ -192,6 +193,7 @@ const Game = {
       stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
     };
     Game.log('— TURN 01 · MOVEMENT —', '#4cd7ea');
+    if (window.Music) Music.stop();   // menu music ends when combat is joined
     Game.autoSelect();
     if (window.Rend) Rend.initBattle();
     if (window.UI) UI.refresh();
@@ -1228,7 +1230,7 @@ const Game = {
       report.prizes.push({ cls: h.cls, name: h.name, pts: h.pts });
     });
     if (!newFleet.length) {
-      newFleet.push({ cls: 'corvette', name: 'VSS KESTREL II', xp: 0, refit: false });
+      newFleet.push({ cls: 'corvette', name: 'VSS KESTREL II', xp: 0, refit: false, livery: {} });
       report.replacement = 'VSS KESTREL II';
     }
     Game.save.fleet = newFleet;

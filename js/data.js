@@ -199,6 +199,26 @@ DATA.refitCost = (cls) => Math.round(DATA.CLASSES[cls].pts * 0.45 / 10) * 10;
 DATA.MAX_FLEET = 4;
 DATA.SHIP_NAMES = ['VSS TEMPEST', 'VSS RESOLUTE', 'VSS ARGUS', 'VSS ORION', 'VSS DAUNTLESS', 'VSS HARRIER', 'VSS VIGIL', 'VSS SOVEREIGN'];
 
+/* ---------------- ship livery (Starbase paint) ----------------
+   Players can daub blue or yellow markings onto parts of a hull to tell their
+   ships apart at a glance. Part geometry is in hull-fraction space shared by the
+   canvas renderer and the DOM silhouettes: x runs 0 (stern) → 1 (nose),
+   y runs 0 → 1 across the beam (0.5 = centreline). Each part is one or more
+   polygons so the paint appears in the same spot on the sprite and the outline. */
+DATA.LIVERY_PARTS = [
+  { id: 'nose', name: 'NOSE', polys: [[[0.80, 0.34], [1.0, 0.5], [0.80, 0.66]]] },
+  { id: 'spine', name: 'SPINE', polys: [[[0.18, 0.45], [0.74, 0.45], [0.74, 0.55], [0.18, 0.55]]] },
+  { id: 'flanks', name: 'FLANKS', polys: [
+    [[0.30, 0.10], [0.68, 0.10], [0.68, 0.23], [0.30, 0.23]],
+    [[0.30, 0.77], [0.68, 0.77], [0.68, 0.90], [0.30, 0.90]]
+  ] },
+  { id: 'engines', name: 'ENGINES', polys: [[[0.0, 0.34], [0.16, 0.34], [0.16, 0.66], [0.0, 0.66]]] }
+];
+DATA.LIVERY_COLORS = { blue: '#4cd7ea', yellow: '#ffd465' };
+/* click cycle for the paint UI */
+DATA.LIVERY_CYCLE = { none: 'blue', blue: 'yellow', yellow: 'none' };
+DATA.liveryPart = (id) => DATA.LIVERY_PARTS.find(p => p.id === id);
+
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {
   m_first: {
@@ -209,7 +229,7 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy all hostile ships.'
     ],
     reward: 140,
-    bonus: { desc: 'CLEAN SWEEP: end with every Coalition ship above half hull', reward: 60,
+    bonus: { desc: 'CLEAN SWEEP: end with every Terran Alliance ship above half hull', reward: 60,
       check: (b) => b.ships.filter(s => s.side === 'player').every(s => s.alive && s.hull > s.maxHull * 0.5) },
     terrain: 'light',
     playerSpawn: { x: 340, y: 680 },
@@ -260,7 +280,7 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy all hostile ships. Asteroids block line of fire and grind hulls that pass through.'
     ],
     reward: 230,
-    bonus: { desc: 'ROCK HOPPER: no Coalition hull grinds through the asteroids', reward: 70,
+    bonus: { desc: 'ROCK HOPPER: no Terran Alliance hull grinds through the asteroids', reward: 70,
       check: (b) => !b.stats.playerTransits },
     terrain: 'heavy',
     playerSpawn: { x: 340, y: 650 },
@@ -309,7 +329,7 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy the HIVE. Her escorts rout when she dies. Watch for bomber waves — point defense and fighter cover are your friends.'
     ],
     reward: 280,
-    bonus: { desc: 'CLEAR SKIES: no Coalition ship is struck by a bomber wave', reward: 90,
+    bonus: { desc: 'CLEAR SKIES: no Terran Alliance ship is struck by a bomber wave', reward: 90,
       check: (b) => !b.stats.bomberHitsOnPlayer },
     terrain: 'medium',
     playerSpawn: { x: 340, y: 650 },
@@ -328,7 +348,7 @@ DATA.MISSION_DEFS = {
   m_dreadmaw: {
     name: 'THE DREADMAW', sub: 'KESSEL DRIFT · DOMINION LINE',
     briefing: [
-      'There she is. The DREADMAW — the heavy cruiser that broke the Coalition line at Meridian. Her escorts have never lost her.',
+      'There she is. The DREADMAW — the heavy cruiser that broke the Terran Alliance line at Meridian. Her escorts have never lost her.',
       'Voss: "No clever speech, Captain. That ship is the Dominion\'s claim on the Drift. Take her spine off and the rest of them will remember they\'re mortal."',
       'OBJECTIVE — Destroy the DREADMAW. Break her and her escorts rout.'
     ],

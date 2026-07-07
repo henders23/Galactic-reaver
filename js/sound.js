@@ -99,3 +99,74 @@ const Snd = {
 };
 
 if (typeof window !== 'undefined') window.Snd = Snd;
+
+/* ---------------- menu music ----------------
+   Streamed MP3 that plays across the menus (title, difficulty, briefing room,
+   sector map, fleet command) and stops the moment a battle begins. Autoplay is
+   gated by the browser until the first user gesture, so we also arm a one-shot
+   gesture listener that kicks playback off. */
+const Music = {
+  el: null,
+  wanted: false,   // should music be playing right now (menus, not combat)?
+  armed: false,
+
+  init() {
+    if (Music.el) return;
+    const a = new Audio('assets/music/drift-beyond-orion.mp3');
+    a.loop = true;
+    a.volume = 0.0;
+    a.preload = 'auto';
+    Music.el = a;
+    // start playback on the first gesture if autoplay was blocked
+    const kick = () => {
+      if (Music.wanted && Music.el && Music.el.paused) Music._play();
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+      window.addEventListener(ev, kick, { passive: true }));
+    Music.armed = true;
+  },
+
+  _play() {
+    if (!Music.el) return;
+    const p = Music.el.play();
+    if (p && p.catch) p.catch(() => { /* blocked until a gesture — kick handles it */ });
+    Music._fadeTo(Snd.muted ? 0 : 0.42);
+  },
+
+  _fadeTo(target) {
+    const a = Music.el;
+    if (!a) return;
+    const step = () => {
+      const d = target - a.volume;
+      if (Math.abs(d) < 0.02) { a.volume = target; return; }
+      a.volume = Math.max(0, Math.min(1, a.volume + Math.sign(d) * 0.04));
+      setTimeout(step, 40);
+    };
+    step();
+  },
+
+  /* play the menu track (call from any out-of-combat screen) */
+  start() {
+    Music.init();
+    Music.wanted = true;
+    Music._play();
+  },
+
+  /* stop when combat is entered */
+  stop() {
+    Music.wanted = false;
+    if (Music.el && !Music.el.paused) {
+      Music._fadeTo(0);
+      const a = Music.el;
+      setTimeout(() => { if (!Music.wanted) a.pause(); }, 420);
+    }
+  },
+
+  /* keep music volume in step with the mute button */
+  syncMute() {
+    if (!Music.el) return;
+    Music.el.volume = (Snd.muted || !Music.wanted) ? 0 : 0.42;
+  }
+};
+
+if (typeof window !== 'undefined') window.Music = Music;
