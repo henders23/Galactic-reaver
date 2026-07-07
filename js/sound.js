@@ -112,7 +112,7 @@ const Music = {
 
   init() {
     if (Music.el) return;
-    const a = new Audio('assets/music/drift-beyond-orion.mp3');
+    const a = new Audio('assets/music/ashes-over-orion.mp3');
     a.loop = true;
     a.volume = 0.0;
     a.preload = 'auto';
