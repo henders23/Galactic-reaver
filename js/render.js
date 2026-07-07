@@ -122,10 +122,16 @@ const Rend = {
   fx: {
     add(o) { o.t0 = performance.now(); Rend.fxList.push(o); },
 
-    beam(from, to, hit, color) {
+    beam(from, to, hit, color, human) {
       const tx = hit ? to.x : to.x + U.frand(-70, 70), ty = hit ? to.y : to.y + U.frand(-70, 70);
-      Rend.fx.add({ type: 'beam', x1: from.x, y1: from.y, x2: tx, y2: ty, color, dur: 360 });
-      if (hit) Rend.fx.add({ type: 'flash', x: tx, y: ty, r: 16, color, dur: 260 });
+      const ang = Math.atan2(ty - from.y, tx - from.x) / U.D2R;
+      Rend.fx.add({ type: 'beam', x1: from.x, y1: from.y, x2: tx, y2: ty, color, dur: 360, sprite: human ? 'beamPlayer' : 'beamEnemy' });
+      // muzzle flash at the emitter
+      Rend.fx.add({ type: 'imgflash', x: from.x, y: from.y, angle: ang, r: 26, sprite: 'muzzle', dur: 200 });
+      if (hit) {
+        Rend.fx.add({ type: 'flash', x: tx, y: ty, r: 16, color, dur: 260 });
+        Rend.fx.add({ type: 'imgflash', x: tx, y: ty, angle: 0, r: 30, sprite: human ? 'sparkPlayer' : 'sparkEnemy', dur: 300 });
+      }
     },
 
     tracers(from, to, hit, color) {
@@ -140,15 +146,24 @@ const Rend = {
     },
 
     // one tracer per die in the pool; misses streak wide of the hull
-    volley(from, to, dieHits, color) {
+    volley(from, to, dieHits, color, human) {
+      const shell = human ? 'shellPlayer' : 'shellEnemy';
+      const spark = human ? 'sparkPlayer' : 'sparkEnemy';
+      const ma = Math.atan2(to.y - from.y, to.x - from.x) / U.D2R;
+      // one muzzle flash at the battery for the salvo
+      Rend.fx.add({ type: 'imgflash', x: from.x, y: from.y, angle: ma, r: 30, sprite: 'muzzle', dur: 220 });
       dieHits.forEach((hit, i) => {
+        const x1 = from.x + U.frand(-10, 10), y1 = from.y + U.frand(-10, 10);
         const tx = (hit ? to.x + U.frand(-10, 10) : to.x + U.frand(-95, 95));
         const ty = (hit ? to.y + U.frand(-10, 10) : to.y + U.frand(-95, 95));
         Rend.fx.add({
-          type: 'tracer', x1: from.x + U.frand(-10, 10), y1: from.y + U.frand(-10, 10),
-          x2: tx, y2: ty, color, dur: 340, delay: i * 55
+          type: 'tracer', x1, y1, x2: tx, y2: ty, color, dur: 340, delay: i * 55,
+          sprite: shell, angle: Math.atan2(ty - y1, tx - x1) / U.D2R
         });
-        if (hit) Rend.fx.add({ type: 'flash', x: tx, y: ty, r: 10, color, dur: 200, delay: i * 55 + 280 });
+        if (hit) {
+          Rend.fx.add({ type: 'flash', x: tx, y: ty, r: 10, color, dur: 200, delay: i * 55 + 280 });
+          Rend.fx.add({ type: 'imgflash', x: tx, y: ty, angle: 0, r: 22, sprite: spark, dur: 280, delay: i * 55 + 280 });
+        }
       });
     },
 
@@ -180,6 +195,8 @@ const Rend = {
       Rend.fx.add({ type: 'ring', x, y, r: big ? 120 : 70, color: 'rgba(255,180,84,.8)', dur: 600 });
       Rend.fx.add({ type: 'ring', x, y, r: big ? 190 : 100, color: 'rgba(255,97,89,.5)', dur: 850 });
       Rend.fx.add({ type: 'flash', x, y, r: big ? 90 : 50, color: '#fff2d8', dur: 300 });
+      // animated explosion sprite from the projectiles/explosions pack
+      Rend.fx.add({ type: 'anim', set: big ? 'big' : 'small', x, y, r: big ? 170 : 100, dur: big ? 900 : 640 });
     },
 
     floater(x, y, text, color) {
@@ -532,30 +549,45 @@ const Rend = {
         y = U.lerp(tp.from.y, tp.to.y, t);
       }
       const rad = tp.angle * U.D2R;
+      const hostile = tp.side === 'enemy';
+      const col = hostile ? '#ff8a5c' : '#ffd465';
+      const torpImg = ASSETS.projectile(hostile ? 'torpEnemy' : 'torpPlayer');
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(rad);
-      const hostile = tp.side === 'enemy';
-      const col = hostile ? '#ff8a5c' : '#ffd465';
-      // trail
+      // exhaust trail
       const tg = ctx.createLinearGradient(-46, 0, 0, 0);
       tg.addColorStop(0, 'rgba(255,180,84,0)');
-      tg.addColorStop(1, 'rgba(255,180,84,.5)');
+      tg.addColorStop(1, hostile ? 'rgba(255,138,92,.5)' : 'rgba(255,180,84,.5)');
       ctx.fillStyle = tg;
       ctx.fillRect(-46, -2, 46, 4);
-      // fish
-      for (let i = 0; i < tp.count; i++) {
-        const oy = (i - (tp.count - 1) / 2) * 8;
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.moveTo(8, oy);
-        ctx.lineTo(-5, oy - 3);
-        ctx.lineTo(-5, oy + 3);
-        ctx.closePath();
-        ctx.fill();
-        const fl = 0.6 + 0.4 * Math.sin(now / 60 + i * 2);
-        ctx.fillStyle = 'rgba(255,220,150,' + fl + ')';
-        ctx.fillRect(-9, oy - 1.2, 4, 2.4);
+      if (torpImg) {
+        // one torpedo sprite per fish in the salvo, fanned out
+        for (let i = 0; i < tp.count; i++) {
+          const oy = (i - (tp.count - 1) / 2) * 11;
+          const ar = torpImg.width / torpImg.height || 0.3;
+          const h = 34, w = h * ar;
+          ctx.save();
+          ctx.translate(0, oy);
+          ctx.rotate(U.D2R * 90);   // sprite faces up → align to +X travel
+          ctx.drawImage(torpImg, -w / 2, -h / 2, w, h);
+          ctx.restore();
+        }
+      } else {
+        // procedural fallback
+        for (let i = 0; i < tp.count; i++) {
+          const oy = (i - (tp.count - 1) / 2) * 8;
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.moveTo(8, oy);
+          ctx.lineTo(-5, oy - 3);
+          ctx.lineTo(-5, oy + 3);
+          ctx.closePath();
+          ctx.fill();
+          const fl = 0.6 + 0.4 * Math.sin(now / 60 + i * 2);
+          ctx.fillStyle = 'rgba(255,220,150,' + fl + ')';
+          ctx.fillRect(-9, oy - 1.2, 4, 2.4);
+        }
       }
       ctx.restore();
       const tls = Rend.labelScale || 1;
@@ -823,6 +855,18 @@ const Rend = {
     ctx.fillRect(pos.x - bw / 2, ly + 4 * ls, bw * hp, 3 * ls);
   },
 
+  /* draw a nose-up projectile/impact sprite centred at (x,y), rotated so its nose
+     points along angleDeg (0 = +X), scaled to `size` px on its long edge */
+  drawSpriteAt(ctx, img, x, y, angleDeg, size) {
+    const ar = img.width / img.height || 1;
+    const h = size, w = size * ar;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((angleDeg + 90) * U.D2R);   // sprites face up; +90 aligns up→+X
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  },
+
   drawFx(ctx, now) {
     Rend.fxList = Rend.fxList.filter(f => {
       const delay = f.delay || 0;
@@ -832,8 +876,22 @@ const Rend = {
       if (t >= 1) return false;
       switch (f.type) {
         case 'beam': {
+          const img = f.sprite && ASSETS.projectile(f.sprite);
           ctx.save();
-          ctx.globalAlpha = 1 - t;
+          if (img) {
+            // stretch the beam sprite along the shot, with a bright core line over it
+            const dx = f.x2 - f.x1, dy = f.y2 - f.y1;
+            const len = Math.hypot(dx, dy) || 1;
+            const ang = Math.atan2(dy, dx);
+            ctx.globalAlpha = 1 - t;
+            ctx.translate(f.x1, f.y1);
+            ctx.rotate(ang);
+            const bw = (img.width / img.height) * 18;
+            ctx.drawImage(img, 0, -bw / 2, len, bw);
+            ctx.restore();
+            ctx.save();
+          }
+          ctx.globalAlpha = (1 - t) * (img ? 0.85 : 1);
           ctx.strokeStyle = f.color;
           ctx.lineWidth = 3.2 * (1 - t) + 0.6;
           ctx.shadowColor = f.color;
@@ -842,12 +900,44 @@ const Rend = {
           ctx.restore();
           break;
         }
+        case 'imgflash': {
+          const img = f.sprite && ASSETS.projectile(f.sprite);
+          if (img) {
+            const sc = 0.7 + t * 0.6;
+            ctx.save();
+            ctx.globalAlpha = (1 - t) * 0.95;
+            Rend.drawSpriteAt(ctx, img, f.x, f.y, (f.angle || 0), f.r * 2 * sc);
+            ctx.restore();
+          } else {
+            ctx.globalAlpha = (1 - t) * 0.7;
+            ctx.fillStyle = '#fff2d8';
+            ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - t * 0.5), 0, U.TAU); ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+          break;
+        }
+        case 'anim': {
+          const rec = ASSETS.explosion(f.set);
+          if (rec) {
+            const fi = Math.min(rec.frames - 1, Math.floor(t * rec.frames));
+            const col = fi % rec.cols, row = Math.floor(fi / rec.cols);
+            const fs = rec.frame;
+            ctx.save();
+            ctx.globalAlpha = 1;
+            ctx.drawImage(rec.img, col * fs, row * fs, fs, fs, f.x - f.r, f.y - f.r, f.r * 2, f.r * 2);
+            ctx.restore();
+          }
+          break;
+        }
         case 'tracer': {
           const px = U.lerp(f.x1, f.x2, t), py = U.lerp(f.y1, f.y2, t);
           const bx = U.lerp(f.x1, f.x2, Math.max(0, t - 0.08)), by = U.lerp(f.y1, f.y2, Math.max(0, t - 0.08));
+          // glowing streak behind the round
           ctx.strokeStyle = f.color;
           ctx.lineWidth = 2;
           ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(px, py); ctx.stroke();
+          const img = f.sprite && ASSETS.projectile(f.sprite);
+          if (img) Rend.drawSpriteAt(ctx, img, px, py, f.angle, 26);
           break;
         }
         case 'p': {

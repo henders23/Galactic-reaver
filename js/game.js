@@ -413,13 +413,23 @@ const Game = {
      Exactly one planet is the boss FINALE — an authored boss anchor if the system
      has one, else a generated decapitation vs the faction flagship, led by a named
      commander. The finale is fought last (see isPlanetLocked). */
+  /* how many planets a system holds — 2, 3 or 4. Capitals are always full 4-planet
+     systems; the rest vary deterministically so no two neighbours feel alike.
+     Anchored worlds (see DATA.ANCHORS) reference indices up to :1, so the floor is 2. */
+  systemPlanetCount(sysId) {
+    const sys = DATA.system(sysId);
+    if (sys && sys.type === 'capital') return 4;
+    return 2 + (Game.hashSeed('pcount_' + sysId) % 3);   // 2, 3 or 4
+  },
+
   systemPlanets(sysId) {
     const sys = DATA.system(sysId);
+    const count = Game.systemPlanetCount(sysId);
     let s = Game.hashSeed(sysId) || 1;
     const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
     const types = DATA.PLANET_TYPE_LIST, archs = DATA.MISSION_ARCHETYPES;
     const out = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < count; i++) {
       const anchorId = DATA.ANCHORS[sysId + ':' + i];
       out.push({
         idx: i,
@@ -430,10 +440,11 @@ const Game = {
       });
     }
     // designate the finale: an authored boss anchor, else the last free planet
+    const last = count - 1;
     let finaleIdx = out.findIndex(p => p.anchor && DATA.BOSS_ANCHORS.includes(p.anchor));
     if (finaleIdx < 0) {
-      finaleIdx = out[3].anchor ? out.findIndex(p => !p.anchor) : 3;
-      if (finaleIdx < 0) finaleIdx = 3;
+      finaleIdx = out[last].anchor ? out.findIndex(p => !p.anchor) : last;
+      if (finaleIdx < 0) finaleIdx = last;
       out[finaleIdx].archetype = 'decap';
       out[finaleIdx].generatedBoss = true;
       out[finaleIdx].commander = Game.systemCommander(sysId);
@@ -451,7 +462,7 @@ const Game = {
 
   clearedPlanets(sysId) { return (Game.save.galaxy.cleared[sysId] || []); },
   isPlanetCleared(sysId, idx) { return Game.clearedPlanets(sysId).includes(idx); },
-  isSystemTaken(sysId) { return Game.clearedPlanets(sysId).length >= 4; },
+  isSystemTaken(sysId) { return Game.clearedPlanets(sysId).length >= Game.systemPlanetCount(sysId); },
   systemProgress(sysId) { return Game.clearedPlanets(sysId).length; },
 
   terranSystems() { return DATA.GALAXY.systems.filter(s => Game.systemOwner(s.id) === 'terran'); },
@@ -1302,13 +1313,15 @@ const Game = {
       if (r >= sol.need) hits++;
     }
     const diceStr = sol.dice + 'd6 [' + rolls.join(' ') + '] need ' + sol.need + '+';
+    const human = s.side === 'player';
     if (isLance) {
       Snd.laser();
-      for (let i = 0; i < sol.dice; i++) Rend.fx.beam(s, target, rolls[i] >= sol.need, s.side === 'player' ? '#7ce8f7' : '#ff7a72');
+      for (let i = 0; i < sol.dice; i++) Rend.fx.beam(s, target, rolls[i] >= sol.need, human ? '#7ce8f7' : '#ff7a72', human);
     } else {
-      Snd.cannon();
-      if (sol.dice >= 6) Snd.cannon();
-      Rend.fx.volley(s, target, rolls.map(r => r >= sol.need), s.side === 'player' ? '#ffd9a0' : '#ff9a92');
+      // human ships' main broadside cannons use the recorded broadside track
+      if (human) Snd.broadside();
+      else { Snd.cannon(); if (sol.dice >= 6) Snd.cannon(); }
+      Rend.fx.volley(s, target, rolls.map(r => r >= sol.need), human ? '#ffd9a0' : '#ff9a92', human);
     }
     if (hits === 0) {
       Game.log(s.name + ' ' + w.name + ' → ' + target.name + ' — MISSES · ' + diceStr, '#5c7089');
@@ -1411,12 +1424,12 @@ const Game = {
       target.hulked = true;
       target.sh = { F: 0, S: 0, A: 0 };
       target.fires = Math.max(1, target.fires);
-      Snd.explosion(false);
+      Snd.shipDestroyed(false);
       Rend.fx.boom(target.x, target.y, false);
       Rend.shake(8);
       Game.log('✸ ' + target.name + ' breaks — a drifting hulk, ripe for boarding', '#ffd465', { big: true });
     } else {
-      Snd.explosion(big);
+      Snd.shipDestroyed(big);
       Rend.fx.boom(target.x, target.y, big);
       Rend.shake(big ? 16 : 10);
       Game.log('✸ ' + target.name + ' DESTROYED', target.side === 'enemy' ? '#6fe0a8' : '#ff6159', { big: true });
@@ -1471,7 +1484,7 @@ const Game = {
       Game.log(target.name + ' rides out the salvo untouched', '#7ba8b8');
       return;
     }
-    Snd.explosion(false);
+    Snd.torpBoom();
     Rend.fx.boom(tp.x, tp.y, false);
     Rend.shake(12);
     const launcher = Game.ship(tp.launcher);

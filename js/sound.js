@@ -3,6 +3,23 @@
 
 const Snd = {
   ctx: null, master: null, muted: false,
+  buffers: {},        // name → decoded AudioBuffer (sample pack)
+  _loading: false,
+
+  /* mp3 sample pack — real recorded weapon / explosion audio. Falls back to the
+     procedural synths below if a sample has not loaded (or fetch is unavailable). */
+  SAMPLE_SRC: {
+    laserCannon: 'assets/sounds/laser-cannon.mp3',
+    laserBeam: 'assets/sounds/laser-beam.mp3',
+    blaster: 'assets/sounds/blaster.mp3',
+    cannon: 'assets/sounds/cannon.mp3',
+    broadside: 'assets/sounds/broadside.mp3',
+    explosionSmall: 'assets/sounds/explosion-small.mp3',
+    explosionMedium: 'assets/sounds/explosion-medium.mp3',
+    torpedoExplosion: 'assets/sounds/torpedo-explosion.mp3',
+    shipDestroyedSmall: 'assets/sounds/ship-destroyed-small.mp3',
+    shipDestroyedMedium: 'assets/sounds/ship-destroyed-medium.mp3'
+  },
 
   init() {
     if (Snd.ctx) return;
@@ -11,7 +28,34 @@ const Snd = {
       Snd.master = Snd.ctx.createGain();
       Snd.master.gain.value = 0.5;
       Snd.master.connect(Snd.ctx.destination);
+      Snd._loadSamples();
     } catch (e) { Snd.ctx = null; }
+  },
+
+  _loadSamples() {
+    if (Snd._loading || !Snd.ctx || typeof fetch !== 'function') return;
+    Snd._loading = true;
+    Object.entries(Snd.SAMPLE_SRC).forEach(([name, url]) => {
+      fetch(url).then(r => r.arrayBuffer())
+        .then(buf => Snd.ctx.decodeAudioData(buf))
+        .then(audio => { Snd.buffers[name] = audio; })
+        .catch(() => { /* fall back to procedural synth for this sound */ });
+    });
+  },
+
+  /* play a decoded sample through the master bus; returns true if it fired */
+  _sample(name, gain, rate) {
+    if (!Snd.ctx || Snd.muted) return false;
+    const buf = Snd.buffers[name];
+    if (!buf) return false;
+    const src = Snd.ctx.createBufferSource();
+    src.buffer = buf;
+    if (rate) src.playbackRate.value = rate;
+    const g = Snd.ctx.createGain();
+    g.gain.value = gain == null ? 0.7 : gain;
+    src.connect(g); g.connect(Snd.master);
+    src.start();
+    return true;
   },
 
   resume() { if (Snd.ctx && Snd.ctx.state === 'suspended') Snd.ctx.resume(); },
@@ -70,8 +114,12 @@ const Snd = {
   deny() { Snd._osc('square', 220, 140, 0.12, 0.12); },
   lock() { Snd._osc('sine', 640, 640, 0.05, 0.14); Snd._osc('sine', 960, 960, 0.06, 0.12, 0.06); },
 
-  laser() { Snd._osc('sawtooth', 880, 130, 0.22, 0.16); Snd._osc('sawtooth', 1240, 180, 0.16, 0.08); },
-  cannon() { Snd._boom(0.16, 0.22, 1400); Snd._osc('square', 190, 70, 0.1, 0.1); },
+  // lance / beam weapons — recorded laser with a procedural fallback
+  laser() { if (Snd._sample('laserCannon', 0.5)) return; Snd._osc('sawtooth', 880, 130, 0.22, 0.16); Snd._osc('sawtooth', 1240, 180, 0.16, 0.08); },
+  // enemy / generic gun batteries — blaster report
+  cannon() { if (Snd._sample('blaster', 0.5)) return; Snd._boom(0.16, 0.22, 1400); Snd._osc('square', 190, 70, 0.1, 0.1); },
+  // the human ships' main broadside cannons — the attached 'broadside' track
+  broadside() { if (Snd._sample('broadside', 0.75)) return; Snd._boom(0.22, 0.3, 1200); Snd._osc('square', 160, 60, 0.14, 0.14); },
   torp() {
     if (!Snd.ctx || Snd.muted) return;
     const ctx = Snd.ctx, t0 = ctx.currentTime;
@@ -89,8 +137,19 @@ const Snd = {
   hit() { Snd._boom(0.24, 0.26, 2200); },
   crit() { Snd._boom(0.3, 0.24, 2600); Snd._osc('sawtooth', 300, 60, 0.32, 0.14, 0.03); },
   explosion(big) {
+    if (Snd._sample(big ? 'explosionMedium' : 'explosionSmall', big ? 0.8 : 0.55)) return;
     Snd._boom(big ? 1.1 : 0.6, big ? 0.55 : 0.4, big ? 900 : 1300);
     Snd._osc('sine', big ? 110 : 90, 30, big ? 1.0 : 0.55, 0.3);
+  },
+  // a ship breaking apart — heavier than a hit explosion
+  shipDestroyed(big) {
+    if (Snd._sample(big ? 'shipDestroyedMedium' : 'shipDestroyedSmall', big ? 0.85 : 0.6)) return;
+    Snd.explosion(big);
+  },
+  // a torpedo / ordnance detonation
+  torpBoom() {
+    if (Snd._sample('torpedoExplosion', 0.7)) return;
+    Snd.explosion(false);
   },
   alarm() { Snd._osc('square', 660, 660, 0.13, 0.09); Snd._osc('square', 500, 500, 0.13, 0.09, 0.16); },
   repair() { Snd._osc('sine', 520, 780, 0.08, 0.1); Snd._osc('sine', 780, 1040, 0.08, 0.09, 0.09); },

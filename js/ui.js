@@ -669,7 +669,7 @@ const UI = {
       if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
       else if (siege > 0 && by) sub = '<div class="gsub siege" style="color:' + DATA.faction(by).color + '">◎ ' + siege + '/' + Game.siegeThreshold(s.id) + '</div>';
       return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
-        '<div class="gdot" style="--fc:' + F.color + '"></div>' +
+        '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt=""></div>' +
         '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + '</div>';
     }).join('');
     const inf = Game.factionInfluence();
@@ -726,14 +726,24 @@ const UI = {
       const s = DATA.system(sid), owner = Game.systemOwner(sid), F = DATA.faction(owner);
       const t = DATA.SYSTEM_TYPES[s.type];
       const engage = Game.isEngageable(sid);
-      infoEl.innerHTML = '<div class="gi-name" style="color:' + F.color + '">' + s.name + '</div>' +
-        '<div class="gi-own">' + F.name + ' · ' + t.name + '</div>' +
-        '<div class="gi-row"><span>STRATEGIC VALUE</span><b>' + t.value + '</b></div>' +
-        (owner !== 'terran'
-          ? '<div class="gi-row"><span>PLANETS SECURED</span><b>' + Game.systemProgress(sid) + '/4</b></div>'
-          : '<div class="gi-row"><span>STATUS</span><b style="color:#6fe0a8">TERRAN-HELD</b></div>') +
+      const held = owner === 'terran';
+      const count = Game.systemPlanetCount(sid);
+      const secured = Game.systemProgress(sid);
+      const threat = held ? { t: 'SECURE', c: 'low' }
+        : t.value === 'CRITICAL' ? { t: 'SEVERE', c: 'crit' }
+          : t.value === 'HIGH' ? { t: 'HIGH', c: 'high' }
+            : t.value === 'MODERATE' ? { t: 'MODERATE', c: 'mod' } : { t: 'LIGHT', c: 'low' };
+      infoEl.innerHTML = '<div class="gi-hd">SYSTEM INFORMATION</div>' +
+        '<div class="gi-name" style="color:' + F.color + '">' + s.name + '</div>' +
+        '<div class="gi-own">' + F.name + '</div>' +
+        '<div class="gi-badge" style="color:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt="">' + t.name + '</div>' +
+        '<div class="gi-blurb">' + U.esc(F.blurb) + '</div>' +
+        '<div class="gi-div"></div>' +
+        '<div class="gi-row"><span>' + (held ? 'STATUS' : 'PLANETS') + '</span><b>' +
+        (held ? '<span style="color:#6fe0a8">TERRAN-HELD</span>' : secured + ' / ' + count) + '</b></div>' +
+        '<div class="gi-row"><span>THREAT</span><b class="th ' + threat.c + '">' + threat.t + '</b></div>' +
         (engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
-          : (owner === 'terran' ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
+          : (held ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
     };
     UI.el.screenInner.querySelectorAll('[data-sys]').forEach(el => {
       el.addEventListener('mouseenter', () => renderInfo(el.dataset.sys));
@@ -743,36 +753,76 @@ const UI = {
     document.getElementById('mnMenuG').addEventListener('click', () => UI.showTitle());
   },
 
-  /* ---------------- system / planet map ---------------- */
+  /* ---------------- system / planet map (orbital) ----------------
+     Planets orbit a central star. Each world's orbit, angle and size are seeded
+     from the system id, so a given system always looks the same but no two systems
+     share a layout — some hold two planets, some three, some four. */
   showSystem(sysId) {
     const sys = DATA.system(sysId), owner = Game.systemOwner(sysId), F = DATA.faction(owner);
     const planets = Game.systemPlanets(sysId);
+    const N = planets.length;
+    const sysVal = DATA.SYSTEM_TYPES[sys.type].value;
     // default selection: first available (cleared-and-locked planets skipped)
     let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i) && !Game.isPlanetLocked(sysId, i));
     if (selIdx < 0) selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
     if (selIdx < 0) selIdx = 0;
     let tierId = 'medium';
-    const stageTrack = () => {
-      const prog = Game.systemProgress(sysId);
-      return '<div class="progtrack">' + DATA.SYSTEM_STAGES.map((st, i) => {
-        const done = i < 4 ? prog >= i + 1 : Game.isSystemTaken(sysId);
-        const active = (i < 4 && prog === i) || (i === 4 && prog >= 4 && !Game.isSystemTaken(sysId));
-        return '<div class="stage' + (done ? ' done' : '') + (active ? ' active' : '') + '">' +
-          '<div class="stnode">' + (done ? '✓' : (i + 1)) + '</div><div class="stlbl">' + st + '</div></div>';
-      }).join('<div class="stsep"></div>') + '</div>';
-    };
+
+    // seeded orbital layout — radius, angle, size and portrait per planet
+    const cx = 40, cy = 52;
+    let hs = Game.hashSeed('orbit_' + sysId) || 1;
+    const rnd = () => { hs = (hs * 9301 + 49297) % 233280; return hs / 233280; };
+    const rot = rnd() * Math.PI * 2;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const step = N <= 2 ? 10 : N === 3 ? 8 : 6.5;
+    const layout = planets.map((p, i) => {
+      const rx = 13 + i * step + rnd() * 3;
+      const ry = rx * 0.62;
+      const ang = rot + (i / N) * Math.PI * 2 + (rnd() - 0.5) * 0.6;
+      const size = Math.max(72, Math.round(104 + rnd() * 58 - i * 6));
+      return {
+        rx, ry, size,
+        // keep worlds (and their cards) on-screen and clear of the details panel
+        x: clamp(cx + Math.cos(ang) * rx, 15, 62),
+        y: clamp(cy + Math.sin(ang) * ry, 21, 80),
+        img: ASSETS.planetImageSrc(p.type, Game.hashSeed('pimg_' + sysId + '_' + i))
+      };
+    });
+    // threat descriptor for a planet
+    const threatOf = (p) => p.finale ? { t: 'CRITICAL', c: 'crit' }
+      : p.anchor ? { t: 'HIGH', c: 'high' }
+        : sysVal === 'CRITICAL' ? { t: 'SEVERE', c: 'crit' }
+          : sysVal === 'HIGH' ? { t: 'HIGH', c: 'high' }
+            : sysVal === 'MODERATE' ? { t: 'MODERATE', c: 'mod' } : { t: 'LIGHT', c: 'low' };
+
     const render = () => {
-      const quads = planets.map((p, i) => {
+      const prog = Game.systemProgress(sysId);
+      const rings = layout.map(l =>
+        '<div class="orbit" style="left:' + cx + '%;top:' + cy + '%;width:' + (l.rx * 2) + '%;height:' + (l.ry * 2) + '%"></div>').join('');
+      const worlds = planets.map((p, i) => {
+        const l = layout[i];
         const cleared = Game.isPlanetCleared(sysId, i);
         const locked = Game.isPlanetLocked(sysId, i);
         const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
         const tag = p.finale ? ' · ★ FINALE' : (p.anchor ? ' · ◆ SET-PIECE' : '');
-        return '<div class="planet' + (selIdx === i ? ' sel' : '') + (cleared ? ' done' : '') +
-          (locked ? ' locked' : '') + (p.finale ? ' finale' : '') + '" data-planet="' + i + '">' +
-          '<div class="pl-n">' + (locked ? '🔒 ' : '') + (i + 1) + '. ' + U.esc(p.name) + '</div>' +
-          '<div class="pl-t">' + p.type.toUpperCase() + ' PLANET' + tag + '</div>' +
-          '<div class="pl-m">' + (cleared ? '<span class="ok">✓ SECURED</span>' : (locked ? '<span class="lk">SECURE THE SYSTEM FIRST</span>' : U.esc(mname))) + '</div></div>';
+        const th = threatOf(p);
+        const chip = cleared ? '<span class="ok">✓ SECURED</span>'
+          : locked ? '<span class="lk">🔒 LOCKED</span>'
+            : '<span class="th ' + th.c + '">● ' + th.t + '</span>';
+        return '<div class="world' + (selIdx === i ? ' sel' : '') + (cleared ? ' done' : '') +
+          (locked ? ' locked' : '') + (p.finale ? ' finale' : '') + '" data-planet="' + i +
+          '" style="left:' + l.x.toFixed(2) + '%;top:' + l.y.toFixed(2) + '%">' +
+          '<div class="pl-orb" style="width:' + l.size + 'px;height:' + l.size + 'px">' +
+          '<img src="' + l.img + '" alt="" draggable="false">' +
+          (locked ? '<div class="pl-badge lock">🔒</div>' : cleared ? '<div class="pl-badge done">✓</div>' : '') +
+          '</div>' +
+          '<div class="pl-card">' +
+          '<div class="pl-c-n">' + (i + 1) + '. ' + U.esc(p.name) + '</div>' +
+          '<div class="pl-c-t">' + p.type.toUpperCase() + ' PLANET' + tag + '</div>' +
+          '<div class="pl-c-m">' + U.esc(mname) + ' <span class="pl-c-th">' + chip + '</span></div>' +
+          '</div></div>';
       }).join('');
+
       const p = planets[selIdx];
       const cleared = Game.isPlanetCleared(sysId, selIdx);
       const locked = Game.isPlanetLocked(sysId, selIdx);
@@ -781,28 +831,41 @@ const UI = {
         ? (DATA.MISSION_DEFS[p.anchor].briefing.find(x => x.startsWith('OBJECTIVE')) || '').replace('OBJECTIVE — ', '')
         : DATA.archetype(p.archetype).obj;
       const commander = p.finale && p.commander ? p.commander : null;
+      const th = threatOf(p);
       const tierChips = DATA.MISSION_TIERS.map(t =>
         '<div class="tierchip' + (tierId === t.id ? ' sel' : '') + '" data-tier="' + t.id + '" style="--tc:' + t.color + '">' +
         '<h4>' + t.name + '</h4><div class="tr">' + t.rec + '</div></div>').join('');
-      const prog = Game.systemProgress(sysId);
+      const enemyPresence = th.c === 'crit' ? 'Heavy enemy presence' : th.c === 'high' ? 'High enemy presence'
+        : th.c === 'mod' ? 'Moderate enemy presence' : 'Light enemy presence';
+
       UI.screen(
-        '<div class="sys-head"><div class="brieftitle" style="color:' + F.color + '">' + sys.name + '</div>' +
-        '<div class="briefsub">' + F.name + ' SPACE · ' + DATA.SYSTEM_TYPES[sys.type].name + ' · ' + prog + '/4 PLANETS SECURED</div>' +
-        '<div class="sys-intel">' + U.esc(F.blurb) + '</div></div>' +
-        stageTrack() +
-        '<div class="sys-cols"><div class="planetgrid">' + quads + '</div>' +
+        '<div class="sysmap-head">' +
+        '<div class="smh-left"><img class="smh-emblem" src="' + ASSETS.emblemSrc(owner) + '" alt="">' +
+        '<div><div class="smh-name" style="color:' + F.color + '">' + sys.name + '</div>' +
+        '<div class="smh-space">' + F.name + ' SPACE</div></div></div>' +
+        '<div class="smh-center"><div class="smh-title">SYSTEM MAP</div>' +
+        '<div class="smh-sub">Select a planet to view missions · ' + prog + '/' + N + ' secured</div></div>' +
+        '<button class="menu-btn slim smh-back" id="mnBackG">◂ BACK TO SECTOR MAP</button>' +
+        '</div>' +
+        '<div id="sysmap">' +
+        '<div class="sun"></div><div class="sun-glow"></div>' +
+        rings + worlds +
         '<div class="misspanel">' +
+        '<div class="mp-hd">MISSION DETAILS</div>' +
         '<div class="mp-title">' + (p.finale ? '★ ' : (p.anchor ? '◆ ' : '')) + U.esc(mname) + '</div>' +
         '<div class="mp-sub">' + U.esc(p.name) + ' · ' + p.type.toUpperCase() + ' PLANET</div>' +
         (commander ? '<div class="mp-cmd">◆ ENEMY COMMANDER — ' + U.esc(commander) + '</div>' : '') +
         '<div class="mp-obj">' + U.esc(obj) + '</div>' +
-        (locked ? '<div class="mp-lock">🔒 The system\'s capital is dug in. Secure the other worlds before you strike here.</div>'
+        (locked
+          ? '<div class="mp-lock">🔒 The system\'s capital is dug in. Secure the other worlds before you strike here.</div>'
           : cleared ? '<div class="mp-done">✓ THIS PLANET IS SECURED</div>'
-            : (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
-              : '<div class="mp-tierlabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
+            : '<div class="mp-threat">THREAT <span class="th ' + th.c + '">● ' + th.t + '</span></div>' +
+              '<div class="mp-elabel">ENEMY FLEET</div><div class="mp-enemy">⚑ ' + enemyPresence + '</div>' +
+              (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
+                : '<div class="mp-elabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
         (cleared || locked ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
-        '</div></div>' +
-        '<div class="btnrow left"><button class="menu-btn slim" id="mnBackG">◂ SECTOR MAP</button></div>',
+        '</div>' +
+        '</div>',
         { bg: 'starfield', wide: true, left: true }
       );
       UI.el.screenInner.querySelectorAll('[data-planet]').forEach(el =>
@@ -830,7 +893,8 @@ const UI = {
       if (res.status === 'win') { Game.persist(); Game.warContext = null; Game.b = null; UI.showEndgame(); return; }
       if (res.status === 'lose') { Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignDefeat(); return; }
       if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
-        lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
+        lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId),
+        sysCount: Game.systemPlanetCount(res.sysId) };
       Game.warContext = null;
       UI.showDebrief(res.report, res.earned);
       return;
@@ -1108,7 +1172,7 @@ const UI = {
     } else if (w) {
       warBanner = '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
         (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
-          : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/4 taken') +
+          : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/' + (w.sysCount || 4) + ' taken') +
         capitalBeat +
         (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
           w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
