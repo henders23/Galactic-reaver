@@ -471,8 +471,19 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .trend.dn { color: #ff6159; }
 .trend.flat { color: #4a5a6c; }
 
-/* galaxy header — Voss commentary + priority operation */
+/* galaxy header — act badge + Voss commentary + priority operation */
+.act-badge { display: inline-block; font: 700 10px 'IBM Plex Mono', monospace; letter-spacing: 3px;
+  color: #ffd465; border: 1px solid rgba(255,212,101,.35); border-radius: 20px; padding: 4px 14px; margin-bottom: 10px; }
 .voss-line { font: 400 11px 'IBM Plex Mono', monospace; color: #7ce8f7; margin-top: 8px; letter-spacing: .3px; }
+
+/* act title card — full-screen chapter divider */
+.actcard { min-height: calc(100vh - 120px); display: flex; flex-direction: column; align-items: flex-start;
+  justify-content: center; text-align: left; }
+.act-kicker { font: 700 16px 'IBM Plex Mono', monospace; letter-spacing: 10px; color: #ffd465; margin-bottom: 14px; }
+.act-title { font: 700 clamp(46px, 8vw, 96px) Rajdhani, sans-serif; letter-spacing: 3px; line-height: .98; color: #eaf6ff;
+  text-shadow: 0 4px 40px rgba(0,0,0,.7); }
+.act-tag { font: 400 15px 'IBM Plex Mono', monospace; color: #9fb4c8; line-height: 1.6; margin: 22px 0 34px; max-width: 720px; }
+.actcard .menu-btn { margin: 0; }
 .storychip { display: inline-block; margin-top: 10px; padding: 8px 16px; border-radius: 8px; cursor: pointer;
   font: 700 11px Rajdhani, sans-serif; letter-spacing: 1.5px; color: #ffd465; background: rgba(255,212,101,.08);
   border: 1px solid rgba(255,212,101,.5); box-shadow: 0 0 16px rgba(255,212,101,.15); animation: gpulse 2s ease-in-out infinite; }

@@ -649,6 +649,11 @@ const UI = {
     Game.mode = 'war';
     const sv = Game.save;
     Game.galaxyInit(sv);
+    // auto-present the next narrative beat (prologue, act card, admiral dispatch)
+    // before drawing the map. Ops are left for the pulsing chip so a battle never
+    // starts unprompted. Completing the beat re-enters showGalaxy → next beat/map.
+    const pend = Game.storyBeatAvailable();
+    if (pend && (pend.type === 'interstitial' || pend.type === 'actcard')) { UI.showStoryBeat(pend); return; }
     const g = sv.galaxy;
     const sys = DATA.GALAXY.systems;
     const pos = {}; sys.forEach(s => pos[s.id] = s);
@@ -705,8 +710,11 @@ const UI = {
     const beat = Game.storyBeatAvailable();
     const storyChip = beat ? '<button class="storychip" id="mnStory">◆ ' +
       (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) + '</button>' : '';
+    const actInfo = DATA.act(Math.max(1, (sv.story && sv.story.chapter) || 1));
     UI.screen(
-      '<div class="galaxy-head"><div class="brieftitle">GALACTIC SECTOR MAP</div>' +
+      '<div class="galaxy-head">' +
+      '<div class="act-badge">◆ ' + actInfo.name + ' · ' + actInfo.title + '</div>' +
+      '<div class="brieftitle">GALACTIC SECTOR MAP</div>' +
       '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div>' +
       '<div class="voss-line">VOSS ' + U.esc(Game.vossWarLine()) + '</div>' + storyChip + '</div>' +
       '<div id="galaxymap">' +
@@ -935,15 +943,40 @@ const UI = {
     }
   },
 
-  /* narrative interstitial (no battle) — advances the chapter */
+  /* narrative beat (no battle) — an act title card or an admiral's dispatch.
+     Advances save.story.chapter, then hands back to the sector map (which will
+     auto-present the next narrative beat, if any). */
   showStoryBeat(beat) {
-    UI.screen(
-      '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
-      (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
-      '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
-      '<button class="menu-btn primary" id="mnBeatGo">CONTINUE ▸</button>',
-      { bg: beat.bg || 'starfield' }
-    );
+    if (beat.type === 'actcard') {
+      UI.screen(
+        '<div class="actcard">' +
+        '<div class="act-kicker">' + U.esc(beat.name || '') + '</div>' +
+        '<div class="act-title">' + U.esc(beat.title) + '</div>' +
+        (beat.tagline ? '<div class="act-tag">' + U.esc(beat.tagline) + '</div>' : '') +
+        '<button class="menu-btn primary" id="mnBeatGo">BEGIN ▸</button>' +
+        '</div>',
+        { bg: beat.bg || 'starfield', wide: true }
+      );
+    } else {
+      // admiral dispatches ride with Voss's portrait so they read as orders
+      const voss = beat.speaker && /VOSS/i.test(beat.speaker);
+      UI.screen(
+        '<div class="brief-cols">' +
+        '<div class="brief-main">' +
+        '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
+        (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
+        '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
+        '<div class="btnrow left"><button class="menu-btn primary slim" id="mnBeatGo">CONTINUE ▸</button></div>' +
+        '</div>' +
+        (voss ? '<div class="brief-art dossier">' +
+          '<img class="admiral-portrait" src="assets/portraits/admiral.png" alt="Admiral Kade Voss">' +
+          '<div class="contact">◆ ADMIRAL KADE VOSS</div>' +
+          '<div class="contact sub">7TH EXPEDITIONARY FLEET COMMAND</div>' +
+          '</div>' : '') +
+        '</div>',
+        { bg: beat.bg || 'starfield', wide: true, left: true }
+      );
+    }
     document.getElementById('mnBeatGo').addEventListener('click', () => { Snd.click(); Game.completeStoryBeat(beat.id); UI.showGalaxy(); });
   },
 

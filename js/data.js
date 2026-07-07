@@ -523,7 +523,38 @@ DATA.SYSTEM_STAGES = ['INTEL GATHERING', 'ESTABLISH FOOTHOLD', 'ELIMINATE THREAT
 
    `trigger` receives the save and may call Game.* helpers.
    Types: 'op' (launches a battle) · 'interstitial' (narrative screen, no battle). */
+/* ---------------- acts ----------------
+   The three-act spine, surfaced as full-screen title cards (DATA.STORY beats of
+   type 'actcard') and as the act badge on the sector-map header. `chapter` maps
+   to save.story.chapter. */
+DATA.ACTS = [
+  { chapter: 1, name: 'ACT I', title: 'FIRST BLOOD',
+    tagline: 'The Crimson Reach is bleeding the Verge white — and the ship that broke Meridian is out here somewhere.' },
+  { chapter: 2, name: 'ACT II', title: 'THE OLD EMPIRE',
+    tagline: "The Za'Argon Dynasty stands between you and the heart of the Drift. Learn what they are dying to protect." },
+  { chapter: 3, name: 'ACT III', title: 'THE RECKONING',
+    tagline: 'The swarm breaks out, drawn by the waking Gate. Three thrones, one relic, and a debt owed since Meridian.' }
+];
+DATA.act = (chapter) => DATA.ACTS.find(a => a.chapter === chapter) || DATA.ACTS[0];
+
 DATA.STORY = [
+  {
+    id: 'sc_prologue', chapter: 1, act: 'I', type: 'interstitial', title: 'THE GHOST OF MERIDIAN',
+    brief: 'How you got here.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => true,   // the cold-open — always available, shown first thing
+    body: [
+      'MERIDIAN. Two years ago.',
+      'The Dominion flagship DREADMAW broke the Alliance line in ninety seconds, and Admiral Kade Voss gave the order every captain dreads — hold. You watched the fleet die holding a line that was already gone. Then you disobeyed, and cut your corvette through the enemy escorts to shield the civilian convoys running for the jump point.',
+      'Eleven thousand people lived. The fleet did not. You brought one ship out of the fire: the TAS REAVER.',
+      'The Alliance could not decide whether you were a hero or the coward who ran while the fleet burned — so they split the difference and sent you here. To the Verge, the dying frontier, with the ragtag 7th Expeditionary Fleet and the name they gave you in the wreckage of Meridian: the Ghost.',
+      'Voss came with you. He blames himself, not you. The Kessel Drift is his second chance — and yours.'
+    ]
+  },
+  {
+    id: 'act_1', chapter: 1, act: 'I', type: 'actcard', title: 'FIRST BLOOD', name: 'ACT I',
+    tagline: 'The Crimson Reach is bleeding the Verge white — and the ship that broke Meridian is out here somewhere.',
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_prologue')
+  },
   {
     id: 'sc_butcher', chapter: 1, act: 'I', type: 'op', title: "THE BUTCHER'S TRAIL",
     brief: 'A lead on the DREADMAW — the ship that broke Meridian.',
@@ -563,6 +594,11 @@ DATA.STORY = [
         'OBJECTIVE — Destroy the courier before it jumps.'
       ]
     }
+  },
+  {
+    id: 'act_2', chapter: 2, act: 'II', type: 'actcard', title: 'THE OLD EMPIRE', name: 'ACT II',
+    tagline: "The Za'Argon Dynasty stands between you and the heart of the Drift. Learn what they are dying to protect.",
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_herald')
   },
   {
     id: 'sc_dynasty', chapter: 2, act: 'II', type: 'op', title: 'THE OLD EMPIRE',
@@ -618,6 +654,11 @@ DATA.STORY = [
       'Voss overlays the sector map. Where there was a smear of purple at the edge of the Drift, there is now a bruise spreading inward — the Hive, swallowing system after system while the rest of you fight over the middle.',
       '"It is the Gate. That light we found — the swarm is drinking it, and it is waking up hungry." He exhales. "We are running out of war to fight before there is only one enemy left. And it will not be the pirates."'
     ]
+  },
+  {
+    id: 'act_3', chapter: 3, act: 'III', type: 'actcard', title: 'THE RECKONING', name: 'ACT III',
+    tagline: 'The swarm breaks out, drawn by the waking Gate. Three thrones, one relic, and a debt owed since Meridian.',
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_swarm_stirs')
   },
   {
     id: 'sc_breakout', chapter: 3, act: 'III', type: 'op', title: 'THE SWARM BREAKS',

@@ -428,6 +428,8 @@ console.log('living war');
   // story framework: a beat surfaces, launches, completes, advances the chapter
   DATA.STORY.push({ id: 'test_beat', chapter: 1, title: 'TEST OPERATION', trigger: () => true });
   Game.save = Game.freshSave();
+  // clear the authored spine so the injected beat is the one left to surface
+  Game.save.story.done = DATA.STORY.filter(b => b.id !== 'test_beat').map(b => b.id);
   const avail = Game.storyBeatAvailable();
   ok(avail && avail.id === 'test_beat', 'an available story beat surfaces');
   Game.completeStoryBeat('test_beat');
@@ -453,11 +455,14 @@ console.log('story beats');
   ok(DATA.STORY.some(b => b.id === 'sc_butcher') && DATA.STORY.some(b => b.id === 'sc_breakout'),
     'the authored spine is present');
 
-  // at campaign start, no beat has triggered yet
+  // at campaign start the prologue cold-open surfaces first thing
   Game.save = Game.freshSave();
-  ok(!Game.storyBeatAvailable(), 'no story beat surfaces at the very start');
+  const opener = Game.storyBeatAvailable();
+  ok(opener && opener.id === 'sc_prologue', 'the prologue surfaces at campaign start');
 
-  // taking the first system surfaces the Act I opener
+  // after the prologue + Act I card, taking the first system surfaces the Act I opener op
+  Game.completeStoryBeat('sc_prologue');
+  Game.completeStoryBeat('act_1');
   Game.save.galaxy.owner['centauri'] = 'terran';
   const first = Game.storyBeatAvailable();
   ok(first && first.id === 'sc_butcher', 'taking a system surfaces THE BUTCHER\'S TRAIL');
