@@ -23,7 +23,7 @@ DATA.weapon = (over) => Object.assign({
 DATA.CLASSES = {
   /* --- player hulls --- */
   corvette: {
-    cls: 'corvette', shape: 'blade', label: 'KESTREL-CLASS CORVETTE', short: 'CORVETTE',
+    sprite: 'terran-2', cls: 'corvette', shape: 'blade', label: 'KESTREL-CLASS CORVETTE', short: 'CORVETTE',
     w: 110, h: 44, hull: 26, sh: { F: 2, S: 1, A: 1 },
     speed: 190, maxTurn: 90, turrets: 1, pts: 160,
     desc: 'Fast, agile line ship. Fore lance, side batteries, one torpedo tube.',
@@ -34,7 +34,7 @@ DATA.CLASSES = {
     ]
   },
   frigate: {
-    cls: 'frigate', shape: 'blade', label: 'TEMPEST-CLASS FRIGATE', short: 'FRIGATE',
+    sprite: 'terran-3', cls: 'frigate', shape: 'blade', label: 'TEMPEST-CLASS FRIGATE', short: 'FRIGATE',
     w: 122, h: 48, hull: 34, sh: { F: 2, S: 2, A: 1 },
     speed: 165, maxTurn: 60, turrets: 2, pts: 220,
     desc: 'Tough gun platform. Heavy broadsides, light fore lance.',
@@ -44,7 +44,7 @@ DATA.CLASSES = {
     ]
   },
   lcruiser: {
-    cls: 'lcruiser', shape: 'spine', label: 'RESOLUTE-CLASS LIGHT CRUISER', short: 'LT CRUISER',
+    sprite: 'terran-4', cls: 'lcruiser', shape: 'spine', label: 'RESOLUTE-CLASS LIGHT CRUISER', short: 'LT CRUISER',
     w: 150, h: 58, hull: 48, sh: { F: 3, S: 2, A: 1 },
     speed: 140, maxTurn: 45, turrets: 3, pts: 340,
     desc: 'Ship of the line. Lance decks, massed batteries, triple torpedo tubes.',
@@ -55,7 +55,7 @@ DATA.CLASSES = {
     ]
   },
   argus: {
-    cls: 'argus', shape: 'slab', label: 'ARGUS-CLASS ESCORT CARRIER', short: 'CARRIER',
+    sprite: 'terran-5', cls: 'argus', shape: 'slab', label: 'ARGUS-CLASS ESCORT CARRIER', short: 'CARRIER',
     w: 162, h: 64, hull: 42, sh: { F: 2, S: 2, A: 1 },
     speed: 120, maxTurn: 30, turrets: 3, pts: 380,
     desc: 'Flight decks for bomber strikes and fighter cover. Keep her out of the brawl.',
@@ -67,7 +67,7 @@ DATA.CLASSES = {
   },
   /* --- civilian --- */
   freighter: {
-    cls: 'freighter', shape: 'box', label: 'PELICAN-CLASS FREIGHTER', short: 'FREIGHTER',
+    sprite: 'zaargon-2', cls: 'freighter', shape: 'box', label: 'PELICAN-CLASS FREIGHTER', short: 'FREIGHTER',
     w: 130, h: 56, hull: 30, sh: { F: 1, S: 1, A: 1 },
     speed: 120, maxTurn: 30, turrets: 1, pts: 0,
     desc: 'Unarmed bulk hauler. Keep it alive.',
@@ -75,7 +75,7 @@ DATA.CLASSES = {
   },
   /* --- Dominion hulls --- */
   jackal: {
-    cls: 'jackal', shape: 'dart', label: 'JACKAL-CLASS ESCORT', short: 'ESCORT',
+    sprite: 'crimson-1', cls: 'jackal', shape: 'dart', label: 'JACKAL-CLASS ESCORT', short: 'ESCORT',
     w: 80, h: 34, hull: 13, sh: { F: 1, S: 0, A: 0 },
     speed: 230, maxTurn: 90, turrets: 1, pts: 90,
     desc: 'Fast attack craft. Weak alone, deadly in packs at your stern.',
@@ -84,7 +84,7 @@ DATA.CLASSES = {
     ]
   },
   ravager: {
-    cls: 'ravager', shape: 'dart', label: 'RAVAGER-CLASS RAIDER', short: 'RAIDER',
+    sprite: 'crimson-2', cls: 'ravager', shape: 'dart', label: 'RAVAGER-CLASS RAIDER', short: 'RAIDER',
     w: 120, h: 50, hull: 22, sh: { F: 1, S: 1, A: 0 },
     speed: 165, maxTurn: 45, turrets: 1, pts: 150,
     desc: 'Dominion raider. Closes fast and hammers with flak cannon.',
@@ -93,7 +93,7 @@ DATA.CLASSES = {
     ]
   },
   marauder: {
-    cls: 'marauder', shape: 'spine', label: 'MARAUDER-CLASS DESTROYER', short: 'DESTROYER',
+    sprite: 'crimson-3', cls: 'marauder', shape: 'spine', label: 'MARAUDER-CLASS DESTROYER', short: 'DESTROYER',
     w: 135, h: 54, hull: 32, sh: { F: 2, S: 1, A: 1 },
     speed: 145, maxTurn: 45, turrets: 2, pts: 250,
     desc: 'Destroyer with heavy broadsides and torpedo tubes.',
@@ -103,7 +103,7 @@ DATA.CLASSES = {
     ]
   },
   hive: {
-    cls: 'hive', shape: 'slab', label: 'HIVE-CLASS CARRIER', short: 'CARRIER',
+    sprite: 'hive-4', cls: 'hive', shape: 'slab', label: 'HIVE-CLASS CARRIER', short: 'CARRIER',
     w: 168, h: 66, hull: 45, sh: { F: 2, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 3, pts: 420,
     desc: 'Dominion carrier. Her bomber waves will grind a fleet down from beyond gun range.',
@@ -114,7 +114,7 @@ DATA.CLASSES = {
     ]
   },
   dreadmaw: {
-    cls: 'dreadmaw', shape: 'spine', label: 'DREADMAW-CLASS HEAVY CRUISER', short: 'HEAVY CRUISER',
+    sprite: 'crimson-5', cls: 'dreadmaw', shape: 'spine', label: 'DREADMAW-CLASS HEAVY CRUISER', short: 'HEAVY CRUISER',
     w: 175, h: 66, hull: 60, sh: { F: 3, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 4, pts: 500,
     desc: 'Dominion flagship of the Drift. Kill it and the line breaks.',

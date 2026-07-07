@@ -223,12 +223,22 @@ const Rend = {
     );
     Rend.labelScale = U.clamp(1 / z, 1, 2.2);
 
-    // space
-    const g = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W * 0.7);
-    g.addColorStop(0, '#0d1420');
-    g.addColorStop(1, '#070b12');
-    ctx.fillStyle = g;
-    ctx.fillRect(-60, -60, W + 120, H + 120);
+    // space — deep-field photo backdrop with a soft vignette for readability
+    const sf = window.ASSETS && ASSETS.starfield;
+    if (sf && sf.complete && sf.naturalWidth > 0) {
+      ctx.drawImage(sf, -60, -60, W + 120, H + 120);
+      const vg = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, W * 0.72);
+      vg.addColorStop(0, 'rgba(5,8,13,.15)');
+      vg.addColorStop(1, 'rgba(5,8,13,.5)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(-60, -60, W + 120, H + 120);
+    } else {
+      const g = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W * 0.7);
+      g.addColorStop(0, '#0d1420');
+      g.addColorStop(1, '#070b12');
+      ctx.fillStyle = g;
+      ctx.fillRect(-60, -60, W + 120, H + 120);
+    }
     // world boundary
     ctx.strokeStyle = 'rgba(76,215,234,.14)';
     ctx.setLineDash([10, 14]);
@@ -261,16 +271,22 @@ const Rend = {
   },
 
   drawIdle(ctx, now) {
-    // title screen backdrop: slow drifting hulk silhouette
+    // title screen backdrop: slow drifting capital ship
     ctx.save();
-    ctx.globalAlpha = 0.14;
     ctx.translate(DATA.WORLD.w * 0.72 + Math.sin(now / 5200) * 20, DATA.WORLD.h * 0.3 + Math.cos(now / 6100) * 14);
     ctx.rotate(0.4 + Math.sin(now / 9000) * 0.05);
-    Rend.tracePoly(ctx, 320, 128, 'spine');
-    ctx.fillStyle = '#17414f';
-    ctx.strokeStyle = '#4cd7ea';
-    ctx.lineWidth = 2;
-    ctx.fill(); ctx.stroke();
+    const img = window.ASSETS && ASSETS.sprite('terran-5');
+    if (img) {
+      ctx.globalAlpha = 0.22;
+      Rend.paintSprite(ctx, img, 340);
+    } else {
+      ctx.globalAlpha = 0.14;
+      Rend.tracePoly(ctx, 320, 128, 'spine');
+      ctx.fillStyle = '#17414f';
+      ctx.strokeStyle = '#4cd7ea';
+      ctx.lineWidth = 2;
+      ctx.fill(); ctx.stroke();
+    }
     ctx.restore();
   },
 
@@ -359,6 +375,22 @@ const Rend = {
     ctx.closePath();
   },
 
+  /* faction sprite for a ship, or null while it loads */
+  spriteOf(s) {
+    const c = DATA.CLASSES[s.cls];
+    return (c && c.sprite && window.ASSETS) ? ASSETS.sprite(c.sprite) : null;
+  },
+
+  /* draw a nose-up sprite pointing along local +x, centred at the origin.
+     ctx must already be rotated to the ship's heading. */
+  paintSprite(ctx, img, len) {
+    const beam = len * (img.width / img.height);
+    ctx.save();
+    ctx.rotate(Math.PI / 2); // sprite art faces up; heading is +x
+    ctx.drawImage(img, -beam / 2, -len / 2, beam, len);
+    ctx.restore();
+  },
+
   sector(ctx, x, y, r, centerDeg, halfDeg, fill) {
     ctx.fillStyle = fill;
     ctx.beginPath();
@@ -444,13 +476,26 @@ const Rend = {
     ctx.globalAlpha = alpha;
     ctx.translate(plot.x, plot.y);
     ctx.rotate(plot.angle * U.D2R);
-    Rend.tracePoly(ctx, ship.w, ship.h, ship.shape);
-    ctx.fillStyle = 'rgba(76,215,234,.13)';
-    ctx.strokeStyle = 'rgba(76,215,234,.9)';
-    ctx.setLineDash([4, 4]);
-    ctx.lineWidth = 1.2;
-    ctx.fill(); ctx.stroke();
-    ctx.setLineDash([]);
+    const sprite = Rend.spriteOf(ship);
+    if (sprite) {
+      ctx.globalAlpha = alpha * 0.55;
+      Rend.paintSprite(ctx, sprite, ship.w);
+      ctx.globalAlpha = alpha;
+      Rend.tracePoly(ctx, ship.w, ship.h, ship.shape);
+      ctx.strokeStyle = 'rgba(76,215,234,.9)';
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      Rend.tracePoly(ctx, ship.w, ship.h, ship.shape);
+      ctx.fillStyle = 'rgba(76,215,234,.13)';
+      ctx.strokeStyle = 'rgba(76,215,234,.9)';
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.2;
+      ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.restore();
   },
 
@@ -526,17 +571,31 @@ const Rend = {
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(s.angle * U.D2R);
-    Rend.tracePoly(ctx, s.w, s.h, s.shape);
-    ctx.fillStyle = '#181a1f';
-    ctx.strokeStyle = s.captured ? 'rgba(255,212,101,.75)' : 'rgba(120,120,130,.5)';
-    ctx.lineWidth = 1.2;
-    ctx.fill(); ctx.stroke();
-    // scorch marks + guttering fires
-    ctx.strokeStyle = 'rgba(60,60,68,.9)';
-    ctx.beginPath();
-    ctx.moveTo(-s.w * 0.3, -s.h * 0.15); ctx.lineTo(s.w * 0.1, s.h * 0.2);
-    ctx.moveTo(s.w * 0.05, -s.h * 0.25); ctx.lineTo(s.w * 0.3, 0);
-    ctx.stroke();
+    const sprite = Rend.spriteOf(s);
+    if (sprite) {
+      const prevFilter = ctx.filter;
+      ctx.filter = 'grayscale(80%) brightness(0.45)';
+      Rend.paintSprite(ctx, sprite, s.w);
+      ctx.filter = prevFilter || 'none';
+      if (s.captured) {
+        Rend.tracePoly(ctx, s.w, s.h, s.shape);
+        ctx.strokeStyle = 'rgba(255,212,101,.75)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    } else {
+      Rend.tracePoly(ctx, s.w, s.h, s.shape);
+      ctx.fillStyle = '#181a1f';
+      ctx.strokeStyle = s.captured ? 'rgba(255,212,101,.75)' : 'rgba(120,120,130,.5)';
+      ctx.lineWidth = 1.2;
+      ctx.fill(); ctx.stroke();
+      // scorch marks
+      ctx.strokeStyle = 'rgba(60,60,68,.9)';
+      ctx.beginPath();
+      ctx.moveTo(-s.w * 0.3, -s.h * 0.15); ctx.lineTo(s.w * 0.1, s.h * 0.2);
+      ctx.moveTo(s.w * 0.05, -s.h * 0.25); ctx.lineTo(s.w * 0.3, 0);
+      ctx.stroke();
+    }
     for (let i = 0; i < 2; i++) {
       ctx.fillStyle = 'rgba(255,' + Math.floor(U.frand(90, 150)) + ',50,' + U.frand(0.08, 0.3) + ')';
       ctx.beginPath();
@@ -689,23 +748,31 @@ const Rend = {
       ctx.fillStyle = eg;
       ctx.fillRect(-s.w * 0.5 - 30, -s.h * 0.16, 30, s.h * 0.32);
     }
-    Rend.tracePoly(ctx, s.w, s.h, s.shape);
-    const grad = ctx.createLinearGradient(-s.w / 2, -s.h / 2, s.w / 2, s.h / 2);
-    if (ally) { grad.addColorStop(0, '#17414f'); grad.addColorStop(1, '#0f2833'); }
-    else { grad.addColorStop(0, '#35181c'); grad.addColorStop(1, '#22101a'); }
-    ctx.fillStyle = grad;
-    ctx.shadowColor = ally ? 'rgba(76,215,234,.4)' : 'rgba(255,97,89,.32)';
-    ctx.shadowBlur = 16;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = ally ? 'rgba(76,215,234,.9)' : (b.armed && b.phase === 'fire' ? '#ffb454' : 'rgba(255,97,89,.7)');
-    ctx.lineWidth = 1.3;
-    ctx.stroke();
-    // spine detail
-    ctx.strokeStyle = ally ? 'rgba(120,220,240,.25)' : 'rgba(255,130,120,.2)';
-    ctx.beginPath();
-    ctx.moveTo(-s.w * 0.4, 0); ctx.lineTo(s.w * 0.34, 0);
-    ctx.stroke();
+    const sprite = Rend.spriteOf(s);
+    if (sprite) {
+      ctx.shadowColor = ally ? 'rgba(76,215,234,.45)' : 'rgba(255,97,89,.4)';
+      ctx.shadowBlur = 18;
+      Rend.paintSprite(ctx, sprite, s.w);
+      ctx.shadowBlur = 0;
+    } else {
+      Rend.tracePoly(ctx, s.w, s.h, s.shape);
+      const grad = ctx.createLinearGradient(-s.w / 2, -s.h / 2, s.w / 2, s.h / 2);
+      if (ally) { grad.addColorStop(0, '#17414f'); grad.addColorStop(1, '#0f2833'); }
+      else { grad.addColorStop(0, '#35181c'); grad.addColorStop(1, '#22101a'); }
+      ctx.fillStyle = grad;
+      ctx.shadowColor = ally ? 'rgba(76,215,234,.4)' : 'rgba(255,97,89,.32)';
+      ctx.shadowBlur = 16;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = ally ? 'rgba(76,215,234,.9)' : (b.armed && b.phase === 'fire' ? '#ffb454' : 'rgba(255,97,89,.7)');
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      // spine detail
+      ctx.strokeStyle = ally ? 'rgba(120,220,240,.25)' : 'rgba(255,130,120,.2)';
+      ctx.beginPath();
+      ctx.moveTo(-s.w * 0.4, 0); ctx.lineTo(s.w * 0.34, 0);
+      ctx.stroke();
+    }
     // vip marker
     if (s.vip) {
       ctx.fillStyle = '#ffd465';
