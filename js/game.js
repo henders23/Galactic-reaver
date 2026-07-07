@@ -31,12 +31,15 @@ const Game = {
 
   /* ================= campaign persistence ================= */
   freshSave() {
-    return {
-      node: null, completed: [], req: 0, diff: 'normal',
+    const s = {
+      req: 0, diff: 'normal',
       fleet: [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }],
       upgrades: {},
+      galaxy: null,       // { owner, cleared, siege, turn } — built by galaxyInit
       done: false
     };
+    Game.galaxyInit(s);
+    return s;
   },
 
   loadSave() {
@@ -44,8 +47,9 @@ const Game = {
       const raw = localStorage.getItem(Game.SAVE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && Array.isArray(s.fleet) && Array.isArray(s.completed)) {
+        if (s && Array.isArray(s.fleet)) {
           if (!s.diff) s.diff = 'normal';
+          Game.galaxyInit(s);   // migrate older saves / ensure galaxy state
           return s;
         }
       }
@@ -54,7 +58,7 @@ const Game = {
   },
 
   persist() {
-    if (Game.mode !== 'campaign' || !Game.save) return;
+    if ((Game.mode !== 'campaign' && Game.mode !== 'war') || !Game.save) return;
     try { localStorage.setItem(Game.SAVE_KEY, JSON.stringify(Game.save)); } catch (e) { }
   },
 
@@ -347,6 +351,146 @@ const Game = {
     m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip })));
     Game.beginBattle(m, ships, m.terrain);
     return m;
+  },
+
+  /* ================= galaxy & the war (P1) ================= */
+  warContext: null,   // { sysId, planetIdx, tierId, anchor } for the active war mission
+
+  hashSeed(v) {
+    v = String(v);
+    let h = 2166136261;
+    for (let i = 0; i < v.length; i++) { h ^= v.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  },
+
+  galaxyInit(save) {
+    if (!save) return;
+    if (save.galaxy && save.galaxy.owner) return;
+    const owner = {};
+    DATA.GALAXY.systems.forEach(s => { owner[s.id] = s.owner; });
+    save.galaxy = { owner, cleared: {}, siege: {}, turn: 0 };
+  },
+
+  systemOwner(sysId) { return Game.save && Game.save.galaxy ? Game.save.galaxy.owner[sysId] : DATA.system(sysId).owner; },
+
+  /* a system may be engaged if it isn't Terran-held and borders Terran space */
+  isEngageable(sysId) {
+    if (Game.systemOwner(sysId) === 'terran') return false;
+    const sys = DATA.system(sysId);
+    return sys.links.some(l => Game.systemOwner(l) === 'terran');
+  },
+
+  /* deterministic 4-planet layout for a system (names, types, archetype, anchors) */
+  systemPlanets(sysId) {
+    const sys = DATA.system(sysId);
+    let s = Game.hashSeed(sysId) || 1;
+    const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    const types = DATA.PLANET_TYPE_LIST, archs = DATA.MISSION_ARCHETYPES;
+    const out = [];
+    for (let i = 0; i < 4; i++) {
+      const anchorId = DATA.ANCHORS[sysId + ':' + i];
+      out.push({
+        idx: i,
+        name: sys.name + ' ' + DATA.PLANET_NUMERALS[i],
+        type: types[Math.floor(rnd() * types.length)],
+        archetype: archs[Math.floor(rnd() * archs.length)].id,
+        anchor: (anchorId && DATA.MISSION_DEFS[anchorId]) ? anchorId : null
+      });
+    }
+    return out;
+  },
+
+  clearedPlanets(sysId) { return (Game.save.galaxy.cleared[sysId] || []); },
+  isPlanetCleared(sysId, idx) { return Game.clearedPlanets(sysId).includes(idx); },
+  isSystemTaken(sysId) { return Game.clearedPlanets(sysId).length >= 4; },
+  systemProgress(sysId) { return Game.clearedPlanets(sysId).length; },
+
+  terranSystems() { return DATA.GALAXY.systems.filter(s => Game.systemOwner(s.id) === 'terran'); },
+  factionInfluence() {
+    const counts = {};
+    DATA.GALAXY.systems.forEach(s => { const o = Game.systemOwner(s.id); counts[o] = (counts[o] || 0) + 1; });
+    return counts;
+  },
+
+  /* launch the mission on a planet — an authored anchor, or a generated battle */
+  startPlanetMission(sysId, planetIdx, tierId) {
+    const sys = DATA.system(sysId);
+    const planet = Game.systemPlanets(sysId)[planetIdx];
+    Game.mode = 'war';
+    Game.warContext = { sysId, planetIdx, tierId, anchor: planet.anchor };
+    if (planet.anchor) {
+      // authored set-piece: use its own balance (global campaign difficulty)
+      Game.curTier = null;
+      const m = DATA.MISSION_DEFS[planet.anchor];
+      const ships = Game.fleetSpawn(m.playerSpawn, Game.save.fleet);
+      (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
+      m.enemies.forEach(e => {
+        const role = e.cls === 'hive' ? 'carrier' : e.role;
+        ships.push(Game.mkShip(e.cls, e.name, 'enemy', role, e.x, e.y, e.angle, { vip: e.vip }));
+      });
+      Game.beginBattle(m, ships, m.terrain);
+      return m;
+    }
+    return Game.startProceduralMission({
+      factionId: sys.owner, archetypeId: planet.archetype, tierId,
+      planet: { name: planet.name, type: planet.type }, system: { name: sys.name },
+      seed: Game.hashSeed(sysId + '_' + planetIdx + '_' + tierId), playerFleetPts: Game.playerFleetPts()
+    });
+  },
+
+  /* apply the outcome of a war mission to the galaxy; returns a summary */
+  applyWarResult(win) {
+    const wc = Game.warContext;
+    const g = Game.save.galaxy;
+    const sys = DATA.system(wc.sysId);
+    const res = { win, sysId: wc.sysId, sysName: sys.name, taken: false, lost: [], earned: 0, report: null, status: null };
+    if (win) {
+      res.earned = Game.earnings();
+      Game.save.req += res.earned;
+      res.report = Game.applyBattleResults();
+      const set = g.cleared[wc.sysId] || (g.cleared[wc.sysId] = []);
+      if (!set.includes(wc.planetIdx)) set.push(wc.planetIdx);
+      if (Game.isSystemTaken(wc.sysId)) {
+        g.owner[wc.sysId] = 'terran';
+        g.siege[wc.sysId] = 0;
+        res.taken = true;
+      }
+      g.turn = (g.turn || 0) + 1;
+      res.lost = Game.enemyPressure();
+    }
+    res.status = Game.warStatus();
+    Game.persist();
+    return res;
+  },
+
+  /* the enemy pushes back: each faction sieges a bordering Terran frontier system;
+     enough pressure flips it. The Terran capital is never lost this way. */
+  enemyPressure() {
+    const g = Game.save.galaxy;
+    const lost = [];
+    const diffMul = { easy: 0.5, normal: 1, hard: 1.5 }[Game.save.diff] || 1;
+    DATA.enemyFactions().forEach(fid => {
+      const frontier = DATA.GALAXY.systems.filter(s =>
+        Game.systemOwner(s.id) === 'terran' && s.id !== DATA.TERRAN_CAPITAL &&
+        s.links.some(l => Game.systemOwner(l) === fid));
+      if (!frontier.length) return;
+      const target = frontier[Game.hashSeed(fid + '_' + g.turn) % frontier.length];
+      const gain = (1 + Math.floor(U.random() * 2)) * diffMul;
+      g.siege[target.id] = (g.siege[target.id] || 0) + gain;
+      if (g.siege[target.id] >= 4) {
+        g.owner[target.id] = fid;
+        g.siege[target.id] = 0;
+        g.cleared[target.id] = [];
+        lost.push({ sysId: target.id, name: target.name, faction: fid });
+      }
+    });
+    return lost;
+  },
+
+  warStatus() {
+    if (DATA.enemyCapitals().every(c => Game.systemOwner(c) === 'terran')) return 'win';
+    if (!Game.terranSystems().length) return 'lose';
+    return null;
   },
 
   beginBattle(mission, ships, terrainDensity) {
@@ -1375,7 +1519,8 @@ const Game = {
   applyBattleResults() {
     const b = Game.b;
     const report = { gains: [], losses: [], prizes: [], salvage: 0 };
-    if (Game.mode !== 'campaign') return report;
+    if (Game.mode !== 'campaign' && Game.mode !== 'war') return report;
+    if (!Game.save) return report;
     const newFleet = [];
     Game.save.fleet.forEach((f, i) => {
       const ship = b.ships.find(s => s.fleetRef === i);

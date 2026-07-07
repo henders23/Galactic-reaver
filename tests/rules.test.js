@@ -304,6 +304,42 @@ console.log('generator');
   Game.mode = 'skirmish'; Game.b = null;
 }
 
+/* ================= galaxy & the war (P1) ================= */
+console.log('galaxy & war');
+{
+  Game.mode = 'war';
+  Game.save = Game.freshSave();
+  Game.galaxyInit(Game.save);
+  eq(Game.systemOwner('aegis'), 'terran', 'Aegis Prime starts Terran');
+  eq(Game.systemOwner('centauri'), 'zaargon', "Centauri Gate starts Za'Argon");
+  ok(Game.isEngageable('centauri'), "Za'Argon system bordering Terran is engageable");
+  ok(Game.isEngageable('elytra'), 'Elytra Junction bordering Terran is engageable');
+  ok(!Game.isEngageable('dreadfall'), 'deep Crimson capital is not engageable at the start');
+  ok(!Game.isEngageable('aegis'), 'a Terran-held system is not engageable');
+
+  const planets = Game.systemPlanets('reavers');
+  eq(planets.length, 4, 'a system has 4 planets');
+  eq(planets[0].anchor, 'm_first', "Reaver's Landing planet 1 anchors FIRST BLOOD");
+  eq(Game.systemPlanets('dreadfall')[0].anchor, 'm_dreadmaw', 'Dreadfall planet 1 anchors the DREADMAW finale');
+  eq(Game.systemPlanets('ulvor')[0].anchor, 'm_hive', "Ul'Vor Broodworld anchors THE HIVE");
+  eq(planets[1].name, Game.systemPlanets('reavers')[1].name, 'planet layout is deterministic');
+
+  Game.save.galaxy.cleared['centauri'] = [0, 1, 2, 3];
+  ok(Game.isSystemTaken('centauri'), 'four cleared planets = system taken');
+
+  // a front can be lost: sustained enemy pressure eventually flips a frontier system
+  let anyLost = null;
+  for (let i = 0; i < 30 && !anyLost; i++) {
+    Game.save.galaxy.turn = i + 2;
+    const l = Game.enemyPressure();
+    if (l.length) anyLost = l[0];
+  }
+  ok(!!anyLost, 'sustained enemy pressure takes a frontier Terran system (the front can be lost)');
+  if (anyLost) eq(Game.systemOwner(anyLost.sysId), anyLost.faction, 'a lost system flips to the attacking faction');
+  eq(Game.systemOwner('aegis'), 'terran', 'the Terran capital is never lost to siege');
+  Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

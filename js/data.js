@@ -426,6 +426,65 @@ DATA.archetype = (id) => DATA.MISSION_ARCHETYPES.find(a => a.id === id) || DATA.
 DATA.PLANET_TYPES = {
   Rocky: 'heavy', Desert: 'medium', Ice: 'medium', Ocean: 'light', Gas: 'light', Volcanic: 'heavy', Barren: 'light'
 };
+DATA.PLANET_TYPE_LIST = ['Rocky', 'Ocean', 'Desert', 'Ice', 'Gas', 'Volcanic', 'Barren'];
+DATA.PLANET_NUMERALS = ['II', 'III', 'IV', 'V'];
+
+/* ---------------- galaxy (sector map) ----------------
+   Systems on the galaxy, tinted by their owning faction and joined by lanes.
+   x/y are percentages on the galaxy screen. `type` drives the system dossier and
+   its strategic value. The front is wherever Terran space meets another power;
+   the player may only engage a system that borders Terran-held space. */
+DATA.SYSTEM_TYPES = {
+  capital: { name: 'CAPITAL', value: 'CRITICAL', planets: 4 },
+  majorhub: { name: 'MAJOR HUB', value: 'HIGH', planets: 4 },
+  minorhub: { name: 'MINOR HUB', value: 'MODERATE', planets: 4 },
+  shipyard: { name: 'SHIPYARD', value: 'HIGH', planets: 4 },
+  resource: { name: 'RESOURCE', value: 'MODERATE', planets: 4 },
+  outpost: { name: 'OUTPOST', value: 'LOW', planets: 4 }
+};
+DATA.GALAXY = {
+  systems: [
+    // --- Terran Alliance (west) ---
+    { id: 'aegis', name: 'AEGIS PRIME', type: 'capital', owner: 'terran', x: 12, y: 44, links: ['celestia', 'providence', 'horizon', 'vanguard'] },
+    { id: 'vanguard', name: 'VANGUARD', type: 'majorhub', owner: 'terran', x: 22, y: 22, links: ['aegis', 'northwatch', 'celestia'] },
+    { id: 'northwatch', name: 'NORTHWATCH', type: 'outpost', owner: 'terran', x: 12, y: 19, links: ['vanguard'] },
+    { id: 'celestia', name: 'CELESTIA', type: 'minorhub', owner: 'terran', x: 23, y: 37, links: ['aegis', 'vanguard', 'horizon'] },
+    { id: 'providence', name: 'PROVIDENCE', type: 'resource', owner: 'terran', x: 14, y: 58, links: ['aegis', 'valoris', 'fortitude'] },
+    { id: 'valoris', name: 'VALORIS', type: 'shipyard', owner: 'terran', x: 11, y: 71, links: ['providence', 'fortitude'] },
+    { id: 'fortitude', name: 'FORTITUDE', type: 'outpost', owner: 'terran', x: 25, y: 64, links: ['providence', 'valoris', 'horizon'] },
+    { id: 'horizon', name: 'HORIZON', type: 'minorhub', owner: 'terran', x: 31, y: 45, links: ['aegis', 'celestia', 'fortitude', 'elytra', 'centauri'] },
+    // --- Za'Argon Dynasty (centre) ---
+    { id: 'centauri', name: 'CENTAURI GATE', type: 'capital', owner: 'zaargon', x: 45, y: 30, links: ['horizon', 'elytra', 'pax', 'reavers'] },
+    { id: 'elytra', name: 'ELYTRA JUNCTION', type: 'minorhub', owner: 'zaargon', x: 40, y: 52, links: ['horizon', 'centauri', 'nexus', 'churn'] },
+    { id: 'pax', name: 'PAX STATION', type: 'resource', owner: 'zaargon', x: 55, y: 40, links: ['centauri', 'trinity', 'ravagers'] },
+    { id: 'nexus', name: 'NEXUS POINT', type: 'outpost', owner: 'zaargon', x: 50, y: 63, links: ['elytra', 'trinity', 'churn'] },
+    { id: 'trinity', name: 'TRINITY EXCHANGE', type: 'minorhub', owner: 'zaargon', x: 61, y: 55, links: ['pax', 'nexus', 'ulvor'] },
+    // --- Crimson Reach (north-east) ---
+    { id: 'reavers', name: "REAVER'S LANDING", type: 'majorhub', owner: 'crimson', x: 62, y: 16, links: ['centauri', 'dreadfall', 'ravagers'] },
+    { id: 'dreadfall', name: 'DREADFALL', type: 'capital', owner: 'crimson', x: 76, y: 24, links: ['reavers', 'bloodmoon'] },
+    { id: 'bloodmoon', name: 'BLOODMOON HOLD', type: 'outpost', owner: 'crimson', x: 82, y: 37, links: ['dreadfall', 'ravagers'] },
+    { id: 'ravagers', name: "RAVAGER'S GULF", type: 'minorhub', owner: 'crimson', x: 71, y: 40, links: ['reavers', 'pax', 'bloodmoon'] },
+    // --- The Hive (south) ---
+    { id: 'churn', name: 'THE CHURN', type: 'majorhub', owner: 'hive', x: 44, y: 75, links: ['elytra', 'nexus', 'kthrak', 'ulvor'] },
+    { id: 'kthrak', name: "K'THRAK NEST", type: 'outpost', owner: 'hive', x: 33, y: 83, links: ['churn'] },
+    { id: 'ulvor', name: "UL'VOR BROODWORLD", type: 'capital', owner: 'hive', x: 59, y: 77, links: ['trinity', 'churn', 'vxor'] },
+    { id: 'vxor', name: 'VXOR CATACOMBS', type: 'outpost', owner: 'hive', x: 57, y: 91, links: ['ulvor'] }
+  ]
+};
+DATA.system = (id) => DATA.GALAXY.systems.find(s => s.id === id);
+DATA.enemyCapitals = () => ['centauri', 'dreadfall', 'ulvor'];
+DATA.TERRAN_CAPITAL = 'aegis';
+
+/* Authored set-piece anchors: 'systemId:planetIndex' → mission-def id. These launch
+   the hand-built missions in place of a generated one. */
+DATA.ANCHORS = {
+  'reavers:0': 'm_first',
+  'bloodmoon:0': 'm_convoy',
+  'ravagers:0': 'm_anvil',
+  'dreadfall:1': 'm_hunt',
+  'dreadfall:0': 'm_dreadmaw',
+  'ulvor:0': 'm_hive'
+};
 
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {
