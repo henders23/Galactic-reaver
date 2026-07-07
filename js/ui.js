@@ -155,10 +155,13 @@ const UI = {
         if (s.order) meta.push('<span class="ord">' + s.order.name + '</span>');
       }
       card.innerHTML =
+        '<div class="thumb">' + UI.shipImg(s.cls, 46) + '</div>' +
+        '<div class="body">' +
         '<div class="nm">' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(s.name) + status + '</div>' +
         '<div class="cls">' + U.esc(s.short) + (s.side === 'player' && rank.name !== 'GREEN' ? ' · ' + rank.name : '') + ' · HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
         '<div class="hullbar"><i class="' + hclass + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
-        (meta.length ? '<div class="meta">' + meta.join(' ') + '</div>' : '');
+        (meta.length ? '<div class="meta">' + meta.join(' ') + '</div>' : '') +
+        '</div>';
       if (s.alive && !s.exited && s.side === 'player') card.addEventListener('click', () => Game.selectShip(s.id));
       host.appendChild(card);
     });
@@ -399,6 +402,7 @@ const UI = {
       UI.el.bannerText.className = b.banner.win ? 'win' : 'lose';
       UI.el.bannerSub.textContent = b.banner.msg;
       UI.el.bannerBtn.textContent = 'CONTINUE ▸';
+      UI.el.banner.classList.toggle('win', !!b.banner.win);
       UI.el.banner.classList.remove('hidden');
     }, 1400);
   },
@@ -445,29 +449,50 @@ const UI = {
       '<div class="brieftitle">ABANDON ENGAGEMENT?</div>' +
       '<div class="briefsub">PROGRESS THIS BATTLE WILL BE LOST</div>' +
       '<button class="menu-btn danger" id="mnAbandon">ABANDON — RETURN TO MENU</button>' +
-      '<button class="menu-btn" id="mnBack">KEEP FIGHTING</button>'
+      '<button class="menu-btn" id="mnBack">KEEP FIGHTING</button>',
+      { bg: 'starfield' }
     );
     document.getElementById('mnAbandon').addEventListener('click', () => { Game.b = null; UI.showTitle(); });
     document.getElementById('mnBack').addEventListener('click', () => UI.closeScreen());
   },
 
   /* ================= full screens ================= */
-  screen(html) {
+  /* opts: bg = 'start' | 'starfield' | 'victory' | 'repair' | 'defeat'
+           wide = full-width layout · left = left-aligned hero layout */
+  screen(html, opts) {
+    opts = opts || {};
+    const scr = UI.el.screen;
+    scr.className = '';
+    if (opts.bg) scr.classList.add('bg-' + opts.bg);
+    UI.el.screenInner.className = (opts.wide ? 'wide' : '') + (opts.left ? ' align-left' : '');
     UI.el.screenInner.innerHTML = html;
-    UI.el.screen.classList.remove('hidden');
+    scr.scrollTop = 0;
   },
-  closeScreen() { UI.el.screen.classList.add('hidden'); },
+  closeScreen() { UI.el.screen.className = 'hidden'; },
+
+  /* small helper: sprite <img> for a ship class */
+  shipImg(cls, h, extra) {
+    const c = DATA.CLASSES[cls];
+    if (!c || !c.sprite) return '';
+    return '<img class="shipsprite" src="assets/ships/' + c.sprite + '.png" style="height:' + h + 'px;' + (extra || '') + '" alt="">';
+  },
 
   showTitle() {
     const save = Game.loadSave();
     UI.screen(
-      '<div class="title-big">GALACTIC <span>REAVER</span></div>' +
+      '<div class="hero">' +
+      '<div class="hero-kicker">▮ TERRAN ALLIANCE NAVAL COMMAND</div>' +
+      '<div class="title-big">GALACTIC<br><span>REAVER</span></div>' +
       '<div class="title-sub">BATTLE FOR THE KESSEL DRIFT</div>' +
-      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN — ' + save.completed.length + '/4 ENGAGEMENTS</button>' : '') +
+      '<div class="hero-menu">' +
+      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN <span class="btn-note">' + save.completed.length + '/4 ENGAGEMENTS</span></button>' : '') +
       '<button class="menu-btn' + (save && !save.done ? '' : ' primary') + '" id="mnNew">NEW CAMPAIGN</button>' +
       '<button class="menu-btn" id="mnSkirmish">SKIRMISH</button>' +
       '<button class="menu-btn" id="mnHelp">HOW TO PLAY</button>' +
-      '<div style="margin-top:34px;font:400 9.5px \'IBM Plex Mono\',monospace;color:#3a4a5e">a Battlefleet Gothic–inspired tactical space combat game<br>dice-pool broadsides · torpedo salvos · bomber waves · boarding actions · the Verge keeps what it takes</div>'
+      '</div>' +
+      '<div class="hero-note">a Battlefleet Gothic–inspired tactical space combat game<br>dice-pool broadsides · torpedo salvos · bomber waves · boarding actions<br>the Verge keeps what it takes</div>' +
+      '</div>',
+      { bg: 'start', wide: true, left: true }
     );
     const cont = document.getElementById('mnContinue');
     if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; UI.showSector(); });
@@ -483,7 +508,8 @@ const UI = {
       '<div class="pickrow">' + DATA.DIFFS.map(d =>
         '<div class="pickcard" data-diff="' + d.id + '"><h4>' + d.name + '</h4>' +
         '<div class="ds">' + d.desc + '</div></div>').join('') + '</div>' +
-      '<button class="menu-btn" id="mnBackT">BACK</button>'
+      '<button class="menu-btn" id="mnBackT">BACK</button>',
+      { bg: 'starfield' }
     );
     UI.el.screenInner.querySelectorAll('[data-diff]').forEach(card => {
       card.addEventListener('click', () => {
@@ -508,28 +534,43 @@ const UI = {
       const a = pos[e[0]], b2 = pos[e[1]];
       const done = sv.completed.includes(e[0]) && (sv.completed.includes(e[1]) || avail.includes(e[1]));
       return '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b2.x + '" y2="' + b2.y + '" stroke="' +
-        (done ? 'rgba(111,224,168,.5)' : 'rgba(76,215,234,.22)') + '" stroke-width="0.4" stroke-dasharray="1.6 1.2"/>';
+        (done ? 'rgba(111,224,168,.55)' : 'rgba(111,216,255,.2)') + '" stroke-width="0.3" stroke-dasharray="1.4 1.1"/>';
     }).join('');
+    // where the fleet is holding: last secured node, else staging at the left edge
+    const fleetAt = sv.node && pos[sv.node] ? pos[sv.node] : { x: 4, y: 50 };
     const nodeHtml = nodes.map(n => {
       const m = DATA.MISSION_DEFS[n.mission];
       const done = sv.completed.includes(n.id);
       const open = avail.includes(n.id);
       const cls = done ? 'done' : (open ? 'open' : 'locked');
+      const art = n.final ? '<img class="shipsprite secart" src="assets/ships/crimson-5.png" alt="">' : '';
       return '<div class="secnode ' + cls + '" data-node="' + n.id + '" style="left:' + n.x + '%;top:' + n.y + '%">' +
+        art +
         '<div class="dot"></div>' +
         '<div class="lbl">' + (done ? '✓ ' : '') + m.name + (n.final ? ' ◆' : '') + '</div>' +
         '<div class="sub2">' + (done ? 'SECURED' : (open ? 'ENGAGE ▸' : 'NO ROUTE')) + '</div></div>';
     }).join('');
+    const fleetMarker = '<div class="secfleet" style="left:' + fleetAt.x + '%;top:' + (fleetAt.y - 9) + '%">' +
+      '<img class="shipsprite" src="assets/ships/terran-3.png" alt="">' +
+      '<div class="tag">YOUR FLEET</div></div>';
     UI.screen(
-      '<div class="brieftitle">KESSEL DRIFT — SECTOR MAP</div>' +
-      '<div class="briefsub">CHOOSE YOUR NEXT ENGAGEMENT · ROUTES BRANCH — EACH CAMPAIGN FIGHTS 4 OF 6 BATTLES</div>' +
+      '<div class="sector-head"><div class="brieftitle">KESSEL DRIFT — SECTOR MAP</div>' +
+      '<div class="briefsub">CHOOSE YOUR NEXT ENGAGEMENT · ROUTES BRANCH — EACH CAMPAIGN FIGHTS 4 OF 6 BATTLES</div></div>' +
       '<div id="secmap">' +
+      '<div class="neb neb1"></div><div class="neb neb2"></div><div class="neb neb3"></div>' +
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines + '</svg>' +
-      nodeHtml +
+      nodeHtml + fleetMarker +
+      '<div class="seccorner tl">TERRAN ALLIANCE ADVANCE · 7TH EXPEDITIONARY</div>' +
+      '<div class="seccorner br">DOMINION LINE — CRIMSON REACH ▸</div>' +
       '</div>' +
-      '<div class="fleetline">⬡ ' + sv.req + ' REQ · FLEET: ' + sv.fleet.map(f => f.name.replace('VSS ', '')).join(' · ') + '</div>' +
-      '<button class="menu-btn" id="mnFleetMgmt">FLEET & REQUISITION</button>' +
-      '<button class="menu-btn" id="mnTitleSec">BACK TO MENU</button>'
+      '<div class="sector-foot">' +
+      '<div class="reqpill"><span class="req">⬡ ' + sv.req + ' REQ</span><span class="sep">|</span>' +
+      '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('VSS ', ''))).join(' · ') + '</span></div>' +
+      '<div class="btnrow">' +
+      '<button class="menu-btn slim" id="mnFleetMgmt">FLEET & REQUISITION</button>' +
+      '<button class="menu-btn slim" id="mnTitleSec">BACK TO MENU</button>' +
+      '</div></div>',
+      { bg: 'starfield', wide: true }
     );
     UI.el.screenInner.querySelectorAll('.secnode.open').forEach(el => {
       el.addEventListener('click', () => { Snd.select(); UI.showBriefing(el.dataset.node); });
@@ -544,16 +585,27 @@ const UI = {
     const m = node && DATA.MISSION_DEFS[node.mission];
     if (!m) { UI.showTitle(); return; }
     const fleet = Game.save.fleet.map(f => f.name + ' (' + DATA.CLASSES[f.cls].short + ')').join(' · ');
+    // hostile contact artwork: the priority target if there is one, else the heaviest hull
+    const foe = (m.enemies || []).slice().sort((a, b2) =>
+      (b2.vip ? 1 : 0) - (a.vip ? 1 : 0) || DATA.CLASSES[b2.cls].pts - DATA.CLASSES[a.cls].pts)[0];
+    const foeArt = foe ? '<div class="brief-art">' + UI.shipImg(foe.cls, 340, 'transform:rotate(-14deg)') +
+      '<div class="contact">⨂ HOSTILE CONTACT — ' + U.esc(foe.name) + '</div>' +
+      '<div class="contact sub">LONG-RANGE PICKET IMAGERY · ' + U.esc(DATA.CLASSES[foe.cls].label) + '</div></div>' : '';
     UI.screen(
+      '<div class="brief-cols"><div class="brief-main">' +
       '<div class="brieftitle">' + m.name + '</div>' +
-      '<div class="briefsub">' + m.sub + '</div>' +
+      '<div class="briefsub">' + m.sub + ' · ' + Game.diff().name + '</div>' +
       '<div class="briefbody">' + m.briefing.map(p =>
         '<p class="' + (p.startsWith('OBJECTIVE') ? 'obj' : '') + '">' + U.esc(p) + '</p>').join('') +
       (m.bonus ? '<p style="color:#7ce8f7">SECONDARY — ' + U.esc(m.bonus.desc) + ' (+' + m.bonus.reward + ' REQ)</p>' : '') +
       '</div>' +
-      '<div class="fleetline">YOUR FLEET — ' + U.esc(fleet) + ' · ' + Game.diff().name + '</div>' +
-      '<button class="menu-btn primary" id="mnBegin">BEGIN ENGAGEMENT ▸</button>' +
-      '<button class="menu-btn" id="mnBackSec">SECTOR MAP</button>'
+      '<div class="fleetline">' + UI.shipImg(Game.save.fleet[0].cls, 26, 'vertical-align:middle;transform:rotate(90deg);margin-right:8px') +
+      'YOUR FLEET — ' + U.esc(fleet) + '</div>' +
+      '<div class="btnrow left">' +
+      '<button class="menu-btn primary slim" id="mnBegin">BEGIN ENGAGEMENT ▸</button>' +
+      '<button class="menu-btn slim" id="mnBackSec">SECTOR MAP</button>' +
+      '</div></div>' + foeArt + '</div>',
+      { bg: 'starfield', wide: true, left: true }
     );
     document.getElementById('mnBegin').addEventListener('click', () => {
       Snd.init(); Snd.click();
@@ -573,7 +625,8 @@ const UI = {
       '<div class="briefbody"><p>' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</p>' +
       '<p>The Coalition tows what\'s left of your fleet back to the tender. Hulls are patched, crews replaced. The mission remains.</p></div>' +
       '<button class="menu-btn primary" id="mnRetry">RETRY MISSION ▸</button>' +
-      '<button class="menu-btn" id="mnTitleR">SECTOR MAP</button>'
+      '<button class="menu-btn" id="mnTitleR">SECTOR MAP</button>',
+      { bg: 'defeat' }
     );
     document.getElementById('mnRetry').addEventListener('click', () => UI.showBriefing(Game.currentNode));
     document.getElementById('mnTitleR').addEventListener('click', () => UI.showSector());
@@ -598,7 +651,8 @@ const UI = {
       report.prizes.forEach((p, i) => {
         const c = DATA.CLASSES[p.cls];
         const full = sv.fleet.length >= DATA.MAX_FLEET;
-        rows.push('<div class="row prize"><span>⚑ PRIZE — ' + U.esc(p.name) + ' (' + c.short + ')</span>' +
+        rows.push('<div class="row prize"><span>' + UI.shipImg(p.cls, 22, 'vertical-align:middle;transform:rotate(90deg);margin-right:6px') +
+          '⚑ PRIZE — ' + U.esc(p.name) + ' (' + c.short + ')</span>' +
           '<span><button class="pbtn" data-salv="' + i + '">SALVAGE +' + Math.round(p.pts * 0.6) + ' REQ</button> ' +
           '<button class="pbtn" data-comm="' + i + '" ' + (full ? 'disabled' : '') + '>COMMISSION</button></span></div>');
       });
@@ -610,7 +664,8 @@ const UI = {
       const rank = DATA.RANKS[Game.rankOf(f.xp)];
       const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
       const cost = DATA.refitCost(f.cls);
-      return '<div class="storecard"><h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
+      return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 70) + '</div>' +
+        '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
         (f.refit ? '<br>✓ GUNNERY REFIT (+1 die, all guns)' : '') + '</div>' +
@@ -622,7 +677,8 @@ const UI = {
       const c = DATA.CLASSES[st.cls];
       const full = sv.fleet.length >= DATA.MAX_FLEET;
       const afford = sv.req >= st.cost;
-      return '<div class="storecard"><h4>' + c.label + '</h4><div class="ds">' + c.desc +
+      return '<div class="storecard"><div class="art">' + UI.shipImg(st.cls, 62) + '</div>' +
+        '<h4>' + c.label + '</h4><div class="ds">' + c.desc +
         '<br>HULL ' + c.hull + ' · SPD ' + c.speed + ' · TURRETS ' + c.turrets + '</div>' +
         '<button data-buy="' + i + '" ' + (full || !afford ? 'disabled' : '') + '>' +
         (full ? 'FLEET FULL (MAX ' + DATA.MAX_FLEET + ')' : 'COMMISSION — ' + st.cost + ' REQ') + '</button></div>';
@@ -637,16 +693,17 @@ const UI = {
     UI.screen(
       (report
         ? '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div><div class="briefsub">HULLS REPAIRED · CREWS RESTED</div>'
-        : '<div class="brieftitle">FLEET COMMAND</div><div class="briefsub">TENDER & REQUISITION</div>') +
+        : '<div class="brieftitle">FLEET COMMAND</div><div class="briefsub">TENDER & REQUISITION · VETERANS KEEP THEIR CREWS AS LONG AS THEY LIVE</div>') +
       '<div class="reqbig">⬡ ' + sv.req + ' REQUISITION</div>' +
       reportHtml +
-      '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + DATA.MAX_FLEET + ' · veterans keep their crews as long as they live</div>' +
+      '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + DATA.MAX_FLEET + '</div>' +
       '<div class="storegrid">' + fleetHtml + '</div>' +
       '<div class="paneltitle" style="text-align:left">COMMISSION SHIPS</div>' +
       '<div class="storegrid">' + shipRows + '</div>' +
       '<div class="paneltitle" style="text-align:left">FLEET UPGRADES</div>' +
       '<div class="storegrid">' + upRows + '</div>' +
-      '<button class="menu-btn primary" id="mnToSector">SECTOR MAP ▸</button>'
+      '<button class="menu-btn primary" id="mnToSector">SECTOR MAP ▸</button>',
+      { bg: report ? 'victory' : 'repair', wide: true }
     );
     const rerender = () => { Game.persist(); UI.showDebrief(report, earned); };
     UI.el.screenInner.querySelectorAll('[data-salv]').forEach(btn => {
@@ -711,7 +768,8 @@ const UI = {
       '<p>Voss: "They\'ll be back — they always come back. But not this year, and not through you. Good gunnery, Captain. Log it and move on."</p>' +
       '<p>Fleet honours: ' + Game.save.fleet.map(f => f.name + ' (' + DATA.RANKS[Game.rankOf(f.xp)].name + ', ' + f.xp + ' XP)').join(' · ') + '</p></div>' +
       '<button class="menu-btn primary" id="mnAgain">NEW CAMPAIGN</button>' +
-      '<button class="menu-btn" id="mnSk2">SKIRMISH</button>'
+      '<button class="menu-btn" id="mnSk2">SKIRMISH</button>',
+      { bg: 'victory' }
     );
     document.getElementById('mnAgain').addEventListener('click', () => {
       Game.save = Game.freshSave(); Game.persist(); UI.showSector();
@@ -725,7 +783,8 @@ const UI = {
       '<div class="brieftitle" style="color:' + (win ? '#6fe0a8' : '#ff6159') + '">' + (win ? 'SKIRMISH WON' : 'SKIRMISH LOST') + '</div>' +
       '<div class="briefsub">' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</div>' +
       '<button class="menu-btn primary" id="mnSkAgain">FIGHT ANOTHER ▸</button>' +
-      '<button class="menu-btn" id="mnTitleS">BACK TO MENU</button>'
+      '<button class="menu-btn" id="mnTitleS">BACK TO MENU</button>',
+      { bg: win ? 'victory' : 'defeat' }
     );
     document.getElementById('mnSkAgain').addEventListener('click', () => UI.showSkirmishSetup());
     document.getElementById('mnTitleS').addEventListener('click', () => UI.showTitle());
@@ -741,6 +800,7 @@ const UI = {
         const c = DATA.CLASSES[cls];
         const n = picks.filter(p => p === cls).length;
         return '<div class="pickcard' + (n ? ' sel' : '') + '" data-cls="' + cls + '">' +
+          '<div class="art">' + UI.shipImg(cls, 54) + '</div>' +
           '<h4>' + c.short + (n ? ' ×' + n : '') + '</h4>' +
           '<div class="ds">' + c.desc + '</div>' +
           '<div class="pt">' + c.pts + ' PTS · HULL ' + c.hull + ' · SPD ' + c.speed + '</div></div>';
@@ -755,7 +815,8 @@ const UI = {
         '<div class="pickrow">' + diffChips + '</div>' +
         '<div class="fleetline">FLEET: ' + picks.map(p => DATA.CLASSES[p].short).join(' · ') + ' — ' + pts + ' PTS · Dominion gets a matched force</div>' +
         '<button class="menu-btn primary" id="mnLaunch"' + (picks.length ? '' : ' disabled') + '>LAUNCH ▸</button>' +
-        '<button class="menu-btn" id="mnTitleK">BACK</button>'
+        '<button class="menu-btn" id="mnTitleK">BACK</button>',
+        { bg: 'starfield' }
       );
       UI.el.screenInner.querySelectorAll('[data-sdiff]').forEach(chip => {
         chip.addEventListener('click', () => { diffId = chip.dataset.sdiff; Snd.click(); render(); });
@@ -802,7 +863,8 @@ const UI = {
       '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through (torpedoes die in the rocks; bombers fly over). Nebulae hide ships inside (+1 to be hit).' +
       '<h4>KEYS</h4><b>1–4</b> select ship · <b>SPACE</b> engage / open fire / end turn · <b>B</b> broadsides at will (auto-assign every idle gun, then adjust) · <b>F</b> game speed 1×/2×/3× · <b>right-click / ESC</b> cancel · <b>M</b> mute · click any ship to inspect it.' +
       '</div>' +
-      '<button class="menu-btn primary" id="mnCloseHelp">' + (inBattle ? 'RETURN TO BATTLE' : 'BACK') + '</button>'
+      '<button class="menu-btn primary" id="mnCloseHelp">' + (inBattle ? 'RETURN TO BATTLE' : 'BACK') + '</button>',
+      { bg: 'starfield' }
     );
     document.getElementById('mnCloseHelp').addEventListener('click', () => {
       if (inBattle) UI.closeScreen(); else UI.showTitle();
