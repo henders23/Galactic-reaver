@@ -327,16 +327,20 @@ console.log('galaxy & war');
   Game.save.galaxy.cleared['centauri'] = [0, 1, 2, 3];
   ok(Game.isSystemTaken('centauri'), 'four cleared planets = system taken');
 
-  // a front can be lost: sustained enemy pressure eventually flips a frontier system
-  let anyLost = null;
-  for (let i = 0; i < 30 && !anyLost; i++) {
-    Game.save.galaxy.turn = i + 2;
-    const l = Game.enemyPressure();
-    if (l.length) anyLost = l[0];
+  // a front can be lost: a faction hemmed in by Terran space must attack it
+  {
+    const g = Game.save.galaxy;
+    Object.keys(g.owner).forEach(id => g.owner[id] = 'terran');
+    g.owner['dreadfall'] = 'crimson';   // borders reavers + bloodmoon, both Terran now
+    g.siege = {}; g.siegeBy = {};
+    let terranLost = false;
+    for (let i = 0; i < 40 && !terranLost; i++) {
+      const flips = Game.warTick(false);
+      if (flips.some(f => f.from === 'terran')) terranLost = true;
+    }
+    ok(terranLost, 'the front can be lost — sustained pressure flips a Terran frontier system');
+    eq(Game.systemOwner('aegis'), 'terran', 'the Terran capital never falls to siege');
   }
-  ok(!!anyLost, 'sustained enemy pressure takes a frontier Terran system (the front can be lost)');
-  if (anyLost) eq(Game.systemOwner(anyLost.sysId), anyLost.faction, 'a lost system flips to the attacking faction');
-  eq(Game.systemOwner('aegis'), 'terran', 'the Terran capital is never lost to siege');
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
 
@@ -380,6 +384,56 @@ console.log('finales & gating');
   const boss = m.enemies.find(e => e.vip);
   ok(boss && boss.commander === 'EXARCH VORUN', 'the boss ship carries the commander');
   ok(m.briefing.some(b => b.includes('EXARCH VORUN')), 'the briefing names the commander');
+  Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
+/* ================= the living war (P3) ================= */
+console.log('living war');
+{
+  Game.mode = 'war';
+  Game.save = Game.freshSave();
+  Game.galaxyInit(Game.save);
+
+  // faction strength weights systems by type
+  ok(Game.factionStrength('terran') > 0, 'Terran holds territory at the start');
+  ok(Game.siegeThreshold('centauri') > Game.siegeThreshold('vxor'), 'a capital holds out longer than an outpost');
+
+  // enemies fight each other, not only Terran — the whole galaxy shifts
+  let enemyVsEnemy = false;
+  for (let i = 0; i < 60 && !enemyVsEnemy; i++) {
+    const flips = Game.warTick(false);
+    if (flips.some(f => f.from !== 'terran' && f.faction !== 'terran')) enemyVsEnemy = true;
+  }
+  ok(enemyVsEnemy, 'enemy factions seize systems from each other (living galaxy)');
+  ok(Game.save.galaxy.events.length > 0, 'war events are recorded for the feed');
+
+  // player momentum relieves siege on Terran frontier systems
+  Game.save = Game.freshSave();
+  const g = Game.save.galaxy;
+  g.siege['horizon'] = 3; g.siegeBy['horizon'] = 'zaargon';
+  Game.warTick(true);   // a win should push the siege back
+  ok((g.siege['horizon'] || 0) < 3, 'a Terran victory relieves siege on the frontier');
+
+  // victory / defeat arcs
+  Game.save = Game.freshSave();
+  DATA.enemyCapitals().forEach(c => Game.save.galaxy.owner[c] = 'terran');
+  eq(Game.warStatus(), 'win', 'holding all enemy capitals wins the war');
+  Game.save = Game.freshSave();
+  DATA.GALAXY.systems.forEach(s => { if (s.id !== DATA.TERRAN_CAPITAL) Game.save.galaxy.owner[s.id] = 'crimson'; });
+  eq(Game.warStatus(), 'lose', 'reduced to the capital alone loses the war');
+
+  ok(typeof Game.vossWarLine() === 'string' && Game.vossWarLine().length > 0, 'Voss reacts to the war state');
+
+  // story framework: a beat surfaces, launches, completes, advances the chapter
+  DATA.STORY.push({ id: 'test_beat', chapter: 1, title: 'TEST OPERATION', trigger: () => true });
+  Game.save = Game.freshSave();
+  const avail = Game.storyBeatAvailable();
+  ok(avail && avail.id === 'test_beat', 'an available story beat surfaces');
+  Game.completeStoryBeat('test_beat');
+  eq(Game.save.story.chapter, 1, 'completing a beat advances the chapter');
+  ok(!Game.storyBeatAvailable(), 'a completed beat no longer surfaces');
+  DATA.STORY.pop();
+
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
 

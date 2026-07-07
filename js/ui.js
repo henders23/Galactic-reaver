@@ -662,31 +662,47 @@ const UI = {
       const F = DATA.faction(owner);
       const engage = Game.isEngageable(s.id);
       const held = owner === 'terran';
-      const siege = Math.round(g.siege[s.id] || 0);
+      const siege = g.siege[s.id] ? Math.round(g.siege[s.id]) : 0;
+      const by = g.siegeBy[s.id];
       const cls = held ? 'held' : (engage ? 'engage' : 'locked');
+      let sub = '';
+      if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
+      else if (siege > 0 && by) sub = '<div class="gsub siege" style="color:' + DATA.faction(by).color + '">◎ ' + siege + '/' + Game.siegeThreshold(s.id) + '</div>';
       return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
         '<div class="gdot" style="--fc:' + F.color + '"></div>' +
-        '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' +
-        (engage ? '<div class="gsub">ENGAGE ▸</div>' : (siege > 0 && held ? '<div class="gsub siege">◎ SIEGE ' + siege + '/4</div>' : '')) +
-        '</div>';
+        '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + '</div>';
     }).join('');
     const inf = Game.factionInfluence();
     const total = sys.length;
+    const prev = g.viewCounts || {};
+    const trend = (fid) => {
+      const d = (inf[fid] || 0) - (prev[fid] || 0);
+      return d > 0 ? '<span class="trend up">▲</span>' : (d < 0 ? '<span class="trend dn">▼</span>' : '<span class="trend flat">·</span>');
+    };
     const infBars = ['terran', 'crimson', 'zaargon', 'hive'].map(fid => {
       const F = DATA.faction(fid);
       const pct = Math.round(100 * (inf[fid] || 0) / total);
       return '<div class="infrow"><span style="color:' + F.color + '">' + F.short + '</span>' +
         '<div class="infbar"><i style="width:' + pct + '%;background:' + F.color + '"></i></div>' +
-        '<span class="infpct">' + pct + '%</span></div>';
+        trend(fid) + '<span class="infpct">' + pct + '%</span></div>';
     }).join('');
+    const evHtml = (g.events || []).slice(0, 7).map(e => {
+      const F = DATA.faction(e.faction), Fr = DATA.faction(e.from);
+      return '<div class="wev"><span style="color:' + F.color + '">' + F.short + '</span> takes ' +
+        U.esc(e.name) + ' <span class="wfrom">from ' + Fr.short + '</span></div>';
+    }).join('') || '<div class="wev empty">The front is quiet… for now.</div>';
+    const beat = Game.storyBeatAvailable();
+    const storyChip = beat ? '<button class="storychip" id="mnStory">◆ PRIORITY OPERATION — ' + U.esc(beat.title) + '</button>' : '';
     UI.screen(
       '<div class="galaxy-head"><div class="brieftitle">GALACTIC SECTOR MAP</div>' +
-      '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div></div>' +
+      '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div>' +
+      '<div class="voss-line">VOSS ' + U.esc(Game.vossWarLine()) + '</div>' + storyChip + '</div>' +
       '<div id="galaxymap">' +
       '<div class="neb neb1"></div><div class="neb neb2"></div><div class="gcore"></div>' +
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines.join('') + '</svg>' +
       nodeHtml +
       '<div class="ginfo" id="ginfo"><div class="gi-empty">Hover a system for intel.</div></div>' +
+      '<div class="gwar"><div class="gi-title">WAR REPORT</div>' + evHtml + '</div>' +
       '<div class="ginfl"><div class="gi-title">FACTION INFLUENCE</div>' + infBars + '</div>' +
       '</div>' +
       '<div class="sector-foot">' +
@@ -696,6 +712,12 @@ const UI = {
       '<button class="menu-btn slim" id="mnMenuG">BACK TO MENU</button></div></div>',
       { bg: 'starfield', wide: true }
     );
+    // remember the influence snapshot so the next visit can show the trend
+    g.viewCounts = Object.assign({}, inf);
+    Game.persist();
+    if (beat) document.getElementById('mnStory').addEventListener('click', () => {
+      Snd.init(); Snd.click(); UI.closeScreen(); Game.startStoryMission(beat); UI.rebuildLog();
+    });
     const infoEl = document.getElementById('ginfo');
     const renderInfo = (sid) => {
       const s = DATA.system(sid), owner = Game.systemOwner(sid), F = DATA.faction(owner);
@@ -799,11 +821,13 @@ const UI = {
   /* ---------------- war-mission outcomes ---------------- */
   afterWarMission(win) {
     const wc = Game.warContext;
+    if (wc && wc.story) { UI.afterStoryMission(win, wc); return; }
     const res = Game.applyWarResult(win);
     if (win) {
       if (res.status === 'win') { Game.save.done = true; Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignVictory(); return; }
+      if (res.status === 'lose') { Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignDefeat(); return; }
       if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
-        lost: res.lost, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
+        lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
       Game.warContext = null;
       UI.showDebrief(res.report, res.earned);
       return;
@@ -811,22 +835,56 @@ const UI = {
     UI.showWarLoss(wc);
   },
 
+  /* story mission (framework) — completion advances save.story.chapter */
+  afterStoryMission(win, wc) {
+    Game.warContext = null;
+    if (win) {
+      const earned = Game.earnings();
+      Game.save.req += earned;
+      const report = Game.applyBattleResults();
+      Game.completeStoryBeat(wc.story);
+      const beat = (DATA.STORY || []).find(b => b.id === wc.story);
+      report.war = { story: true, title: beat ? beat.title : 'PRIORITY OPERATION' };
+      UI.showDebrief(report, earned);
+    } else {
+      UI.showWarLoss(wc);
+    }
+  },
+
+  showCampaignDefeat() {
+    UI.screen(
+      '<div class="title-big" style="font-size:44px;color:#ff6159">THE VERGE <span style="color:#ff8a5c">FALLS</span></div>' +
+      '<div class="title-sub">CAMPAIGN LOST</div>' +
+      '<div class="briefbody"><p>The front has collapsed. What is left of the 7th Expeditionary Fleet pulls back to Aegis Prime, and the Verge belongs to the powers that took it.</p>' +
+      '<p>Voss: "We held longer than most, Captain. That is not nothing. But the Verge keeps what it takes — and this time it took everything."</p></div>' +
+      '<button class="menu-btn primary" id="mnDefNew">NEW CAMPAIGN</button>' +
+      '<button class="menu-btn" id="mnDefMenu">BACK TO MENU</button>',
+      { bg: 'defeat' }
+    );
+    document.getElementById('mnDefNew').addEventListener('click', () => { Game.save = Game.freshSave(); Game.persist(); UI.showGalaxy(); });
+    document.getElementById('mnDefMenu').addEventListener('click', () => { UI.showTitle(); });
+    Game.b = null;
+  },
+
   showWarLoss(wc) {
     Game.warContext = null;
-    const sys = DATA.system(wc.sysId);
-    const planet = Game.systemPlanets(wc.sysId)[wc.planetIdx];
+    const story = wc.story ? (DATA.STORY || []).find(b => b.id === wc.story) : null;
+    const sys = wc.story ? null : DATA.system(wc.sysId);
+    const planet = wc.story ? null : Game.systemPlanets(wc.sysId)[wc.planetIdx];
+    const sub = story ? (story.title || 'PRIORITY OPERATION') : (sys.name + ' · ' + U.esc(planet.name));
     UI.screen(
       '<div class="brieftitle" style="color:#ff6159">MISSION FAILED</div>' +
-      '<div class="briefsub">' + sys.name + ' · ' + U.esc(planet.name) + '</div>' +
+      '<div class="briefsub">' + sub + '</div>' +
       '<div class="briefbody"><p>' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</p>' +
-      '<p>The Alliance pulls your fleet back to the tender. Hulls are patched, crews replaced. The system still stands against you.</p></div>' +
+      '<p>The Alliance pulls your fleet back to the tender. Hulls are patched, crews replaced. The objective still stands against you.</p></div>' +
       '<button class="menu-btn primary" id="mnRetryP">RETRY MISSION ▸</button>' +
       '<button class="menu-btn" id="mnGalG">SECTOR MAP</button>',
       { bg: 'defeat' }
     );
     document.getElementById('mnRetryP').addEventListener('click', () => {
       Snd.init(); Snd.click(); UI.closeScreen();
-      Game.startPlanetMission(wc.sysId, wc.planetIdx, wc.tierId);
+      if (story) Game.startStoryMission(story);
+      else Game.startPlanetMission(wc.sysId, wc.planetIdx, wc.tierId);
       UI.rebuildLog();
     });
     document.getElementById('mnGalG').addEventListener('click', () => UI.showGalaxy());
@@ -1005,13 +1063,22 @@ const UI = {
     const capitalBeat = w && w.taken && w.capital
       ? '<div class="warbeat">Voss: "' + DATA.faction(w.faction).short + ' capital taken. That\'s a throne off the board, Captain — they\'ll remember ' + U.esc(w.sysName) + '."</div>'
       : '';
-    const warBanner = w ? '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
-      (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
-        : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/4 taken') +
-      capitalBeat +
-      (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
-        w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
-      '</div>' : '';
+    // the wider war: enemy-vs-enemy systems that changed hands this turn
+    const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
+    let warBanner = '';
+    if (w && w.story) {
+      warBanner = '<div class="warbanner taken">◆ PRIORITY OPERATION COMPLETE — ' + U.esc(w.title || '') + '</div>';
+    } else if (w) {
+      warBanner = '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
+        (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
+          : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/4 taken') +
+        capitalBeat +
+        (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
+          w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
+        (elsewhere.length ? '<div class="warmoves">Elsewhere in the war — ' +
+          elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '</div>' : '') +
+        '</div>';
+    }
     UI.screen(
       (report
         ? '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div><div class="briefsub">HULLS REPAIRED · CREWS RESTED</div>'

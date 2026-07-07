@@ -382,10 +382,15 @@ const Game = {
 
   galaxyInit(save) {
     if (!save) return;
-    if (save.galaxy && save.galaxy.owner) return;
-    const owner = {};
-    DATA.GALAXY.systems.forEach(s => { owner[s.id] = s.owner; });
-    save.galaxy = { owner, cleared: {}, siege: {}, turn: 0 };
+    if (!save.galaxy || !save.galaxy.owner) {
+      const owner = {};
+      DATA.GALAXY.systems.forEach(s => { owner[s.id] = s.owner; });
+      save.galaxy = { owner, cleared: {}, siege: {}, siegeBy: {}, events: [], turn: 0 };
+    } else {
+      save.galaxy.siegeBy = save.galaxy.siegeBy || {};
+      save.galaxy.events = save.galaxy.events || [];
+    }
+    if (!save.story) save.story = { chapter: 0, done: [] };
   },
 
   systemOwner(sysId) { return Game.save && Game.save.galaxy ? Game.save.galaxy.owner[sysId] : DATA.system(sysId).owner; },
@@ -482,6 +487,26 @@ const Game = {
     });
   },
 
+  /* launch a story-beat mission (authored anchor or generated) */
+  startStoryMission(beat) {
+    Game.mode = 'war';
+    Game.curTier = beat.mission ? DATA.tier(beat.mission.tierId) : null;
+    Game.warContext = { story: beat.id, sysId: null, planetIdx: null, tierId: beat.mission ? beat.mission.tierId : 'medium' };
+    if (beat.anchor && DATA.MISSION_DEFS[beat.anchor]) {
+      const m = DATA.MISSION_DEFS[beat.anchor];
+      const ships = Game.fleetSpawn(m.playerSpawn, Game.save.fleet);
+      (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
+      m.enemies.forEach(e => {
+        const role = e.cls === 'hive' ? 'carrier' : e.role;
+        ships.push(Game.mkShip(e.cls, e.name, 'enemy', role, e.x, e.y, e.angle, { vip: e.vip }));
+      });
+      Game.beginBattle(m, ships, m.terrain);
+      return m;
+    }
+    const ctx = Object.assign({ playerFleetPts: Game.playerFleetPts(), seed: Game.hashSeed('story_' + beat.id) }, beat.mission || {});
+    return Game.startProceduralMission(ctx);
+  },
+
   /* apply the outcome of a war mission to the galaxy; returns a summary */
   applyWarResult(win) {
     const wc = Game.warContext;
@@ -502,42 +527,111 @@ const Game = {
         res.taken = true;
         res.capital = sys.type === 'capital';
       }
-      g.turn = (g.turn || 0) + 1;
-      res.lost = Game.enemyPressure();
+      const flips = Game.warTick(true);
+      res.flips = flips;
+      res.lost = flips.filter(f => f.from === 'terran');
     }
     res.status = Game.warStatus();
     Game.persist();
     return res;
   },
 
-  /* the enemy pushes back: each faction sieges a bordering Terran frontier system;
-     enough pressure flips it. The Terran capital is never lost this way. */
-  enemyPressure() {
+  /* ---- the living war ---- */
+  SYS_WEIGHT: { capital: 4, majorhub: 3, shipyard: 3, minorhub: 2, resource: 2, outpost: 1 },
+  sysWeight(type) { return Game.SYS_WEIGHT[type] || 1; },
+  /* how much siege it takes to flip a system — valuable systems hold out longer */
+  siegeThreshold(sysId) { return 3 + Game.sysWeight(DATA.system(sysId).type); },
+  /* a faction's power = the weighted value of the systems it holds */
+  factionStrength(fid) {
+    return DATA.GALAXY.systems.reduce((a, s) => a + (Game.systemOwner(s.id) === fid ? Game.sysWeight(s.type) : 0), 0);
+  },
+
+  /* Advance the war one turn: every enemy faction mounts an offensive against a
+     bordering rival — Terran OR another enemy — so the whole galaxy shifts, not
+     just the player's front. A player win pushes the enemy off Terran soil.
+     Returns the systems that changed hands this turn. */
+  warTick(playerWon) {
     const g = Game.save.galaxy;
-    const lost = [];
-    const diffMul = { easy: 0.5, normal: 1, hard: 1.5 }[Game.save.diff] || 1;
+    g.turn = (g.turn || 0) + 1;
+    const diffMul = { easy: 0.6, normal: 1, hard: 1.5 }[Game.save.diff] || 1;
+    const flips = [];
+    // momentum: winning shoves besiegers back off Terran frontier systems
+    if (playerWon) {
+      Object.keys(g.siege).forEach(sid => {
+        if (Game.systemOwner(sid) === 'terran') {
+          g.siege[sid] = Math.max(0, g.siege[sid] - 2);
+          if (g.siege[sid] <= 0) { delete g.siege[sid]; delete g.siegeBy[sid]; }
+        }
+      });
+    }
     DATA.enemyFactions().forEach(fid => {
-      const frontier = DATA.GALAXY.systems.filter(s =>
-        Game.systemOwner(s.id) === 'terran' && s.id !== DATA.TERRAN_CAPITAL &&
+      const targets = DATA.GALAXY.systems.filter(s =>
+        Game.systemOwner(s.id) !== fid && s.id !== DATA.TERRAN_CAPITAL &&
         s.links.some(l => Game.systemOwner(l) === fid));
-      if (!frontier.length) return;
-      const target = frontier[Game.hashSeed(fid + '_' + g.turn) % frontier.length];
+      if (!targets.length) return;
+      // prefer valuable, weakly-defended, already-softened targets
+      const scored = targets.map(s => {
+        const defStr = Game.factionStrength(Game.systemOwner(s.id));
+        const already = g.siegeBy[s.id] === fid ? g.siege[s.id] : 0;
+        return { s, sc: Game.sysWeight(s.type) * 2 + already - defStr * 0.12 + U.random() * 2.5 };
+      }).sort((a, z) => z.sc - a.sc);
+      const target = scored[0].s;
       const gain = (1 + Math.floor(U.random() * 2)) * diffMul;
       g.siege[target.id] = (g.siege[target.id] || 0) + gain;
-      if (g.siege[target.id] >= 4) {
+      g.siegeBy[target.id] = fid;
+      if (g.siege[target.id] >= Game.siegeThreshold(target.id)) {
+        const from = Game.systemOwner(target.id);
         g.owner[target.id] = fid;
-        g.siege[target.id] = 0;
+        delete g.siege[target.id]; delete g.siegeBy[target.id];
         g.cleared[target.id] = [];
-        lost.push({ sysId: target.id, name: target.name, faction: fid });
+        const ev = { turn: g.turn, faction: fid, from, sysId: target.id, name: target.name };
+        flips.push(ev);
+        g.events.unshift(ev);
       }
     });
-    return lost;
+    // stale sieges cool off
+    Object.keys(g.siege).forEach(sid => {
+      g.siege[sid] = Math.max(0, g.siege[sid] - 0.25);
+      if (g.siege[sid] <= 0) { delete g.siege[sid]; delete g.siegeBy[sid]; }
+    });
+    g.events = g.events.slice(0, 16);
+    return flips;
   },
+  /* legacy name kept for callers/tests */
+  enemyPressure() { return Game.warTick(false); },
 
   warStatus() {
     if (DATA.enemyCapitals().every(c => Game.systemOwner(c) === 'terran')) return 'win';
-    if (!Game.terranSystems().length) return 'lose';
+    if (Game.terranSystems().length <= 1) return 'lose';   // reduced to the capital alone
     return null;
+  },
+
+  /* a Voss line reacting to how the war is going (shown on the galaxy header) */
+  vossWarLine() {
+    const held = Game.terranSystems().length;
+    const total = DATA.GALAXY.systems.length;
+    const caps = DATA.enemyCapitals().filter(c => Game.systemOwner(c) === 'terran').length;
+    const rivals = DATA.enemyFactions().map(f => ({ f, s: Game.factionStrength(f) })).sort((a, z) => z.s - a.s);
+    const topRival = rivals[0];
+    if (held <= 2) return '"The front\'s collapsing, Captain. We hold here or the Verge is theirs."';
+    if (caps >= 2) return '"Two thrones down. One more and this war is over — don\'t slow up now."';
+    if (Game.factionStrength('terran') >= total * 0.55) return '"We\'ve got them reeling. Keep the pressure on."';
+    if (topRival && topRival.s >= total * 0.35) return '"The ' + DATA.faction(topRival.f).short + ' are gorging on this war. Blunt them before they\'re unstoppable."';
+    return '"The line holds. Pick your next target and make it count."';
+  },
+
+  /* ---- story-mission scaffolding (framework only; beats authored later) ---- */
+  storyBeatAvailable() {
+    if (!Game.save || !window.DATA || !DATA.STORY) return null;
+    const done = (Game.save.story && Game.save.story.done) || [];
+    return DATA.STORY.find(b => !done.includes(b.id) && (!b.trigger || b.trigger(Game.save))) || null;
+  },
+  completeStoryBeat(id) {
+    if (!Game.save.story) Game.save.story = { chapter: 0, done: [] };
+    if (!Game.save.story.done.includes(id)) Game.save.story.done.push(id);
+    const beat = DATA.STORY.find(b => b.id === id);
+    if (beat && beat.chapter > Game.save.story.chapter) Game.save.story.chapter = beat.chapter;
+    Game.persist();
   },
 
   beginBattle(mission, ships, terrainDensity) {

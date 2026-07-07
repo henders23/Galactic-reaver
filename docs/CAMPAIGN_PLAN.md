@@ -94,7 +94,21 @@ each faction's `flagship` is its capital).
   Secure → Control) is shown on the system screen, planets carry a system-intel
   line, boss ships name their commander in the briefing and inspector, and
   **taking an enemy capital triggers a Voss beat** in the debrief.
-- **P3 — Living war**: deepen the influence simulation — faction goals, smarter
-  offensives, war-state UI on the galaxy, Voss commentary, defeat/victory arcs.
-- **P4 — Narrative polish**: recurring nemeses (the flee-VIP escape hook),
-  template briefings, faction voice, intel dossiers.
+- **P3 — Living war** ✅ *(done)*
+  The galaxy now shifts on its own. `Game.warTick()` runs after every mission:
+  each enemy faction mounts an offensive against a bordering rival — **Terran OR
+  another enemy** — so factions gain and lose systems to each other, not just to
+  the player. Siege thresholds scale with a system's value (`Game.siegeThreshold`,
+  `factionStrength`); a player win relieves siege on the Terran frontier; stale
+  sieges cool off. The galaxy screen shows a **WAR REPORT** feed of recent
+  offensives, **trend arrows** on the influence bars, **siege markers** on
+  contested systems, and a **Voss line** reacting to the war state. Reachable
+  **victory** (hold all three enemy capitals) and **defeat** (reduced to the
+  Terran capital alone → `showCampaignDefeat`). Difficulty scales enemy pressure.
+- **Story missions (framework)** ✅ *scaffolded* — `DATA.STORY` (empty; documented
+  beat shape), `Game.storyBeatAvailable()` / `completeStoryBeat()`, a galaxy
+  **PRIORITY OPERATION** chip, and full launch → complete → advance-chapter
+  plumbing (`startStoryMission` / `afterStoryMission`). Drop beats into `DATA.STORY`
+  to add plot — the actual narrative is authored later.
+- **P4 — Narrative polish**: author the story beats, recurring nemeses (the
+  flee-VIP escape hook), template briefings, faction voice, intel dossiers.
