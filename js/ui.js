@@ -9,7 +9,7 @@ const UI = {
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
-      'btnMute', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
+      'btnMute', 'volSlider', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
       'hint', 'tip', 'inspector', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
       'oob', 'logtitle', 'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
 
@@ -62,11 +62,19 @@ const UI = {
       UI.el.btnSpeed.textContent = Game.cycleSpeed() + '×';
       Snd.click();
     });
+    // volume: mute button quick-toggles, slider sets the master level
+    Snd.loadVolume();
+    UI.syncVolumeUI();
     UI.el.btnMute.addEventListener('click', () => {
       Snd.init();
       const m = Snd.toggleMute();
-      UI.el.btnMute.classList.toggle('off', m);
       if (window.Music) Music.syncMute();
+      UI.syncVolumeUI();
+    });
+    UI.el.volSlider.addEventListener('input', () => {
+      Snd.init(); Snd.resume();
+      Snd.setVolume(Number(UI.el.volSlider.value) / 100);
+      UI.syncVolumeUI();
     });
     UI.el.btnHelp.addEventListener('click', () => UI.showHelp());
     UI.el.btnMenu.addEventListener('click', () => UI.confirmAbandon());
@@ -101,6 +109,21 @@ const UI = {
     });
 
     UI.showTitle();
+  },
+
+  /* keep the mute icon + slider in step with the current volume / mute state */
+  syncVolumeUI() {
+    const muted = Snd.muted || Snd.volume <= 0.0001;
+    const icon = muted ? '🔇' : Snd.volume < 0.34 ? '🔈' : Snd.volume < 0.67 ? '🔉' : '🔊';
+    if (UI.el.btnMute) {
+      UI.el.btnMute.textContent = icon;
+      UI.el.btnMute.classList.toggle('off', muted);
+    }
+    if (UI.el.volSlider) {
+      const pct = Math.round((muted ? 0 : Snd.volume) * 100);
+      UI.el.volSlider.value = pct;
+      UI.el.volSlider.style.backgroundSize = pct + '% 100%, 100% 100%';
+    }
   },
 
   /* ================= main action button ================= */
@@ -513,7 +536,7 @@ const UI = {
         UI.showCampaignVictory();
       } else {
         Game.persist();
-        UI.showDebrief(report, earned);
+        UI.showMissionComplete(report, earned, null);
       }
     } else {
       UI.showRetry();
@@ -577,35 +600,18 @@ const UI = {
     );
     const cont = document.getElementById('mnContinue');
     if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; Game.mode = 'war'; UI.showGalaxy(); });
-    document.getElementById('mnNew').addEventListener('click', () => { Snd.init(); UI.showDifficulty(); });
+    document.getElementById('mnNew').addEventListener('click', () => {
+      Snd.init();
+      Game.save = Game.freshSave();
+      Game.persist();
+      UI.showContext();
+    });
     document.getElementById('mnSkirmish').addEventListener('click', () => { Snd.init(); UI.showSkirmishSetup(); });
     document.getElementById('mnHelp').addEventListener('click', () => UI.showHelp());
   },
 
-  showDifficulty() {
-    UI.screen(
-      '<div class="brieftitle">SELECT DIFFICULTY</div>' +
-      '<div class="briefsub">HOW HARD WILL THE DRIFT FIGHT BACK?</div>' +
-      '<div class="pickrow">' + DATA.DIFFS.map(d =>
-        '<div class="pickcard" data-diff="' + d.id + '"><h4>' + d.name + '</h4>' +
-        '<div class="ds">' + d.desc + '</div></div>').join('') + '</div>' +
-      '<button class="menu-btn" id="mnBackT">BACK</button>',
-      { bg: 'start' }
-    );
-    UI.el.screenInner.querySelectorAll('[data-diff]').forEach(card => {
-      card.addEventListener('click', () => {
-        Snd.select();
-        Game.save = Game.freshSave();
-        Game.save.diff = card.dataset.diff;
-        Game.persist();
-        UI.showContext();
-      });
-    });
-    document.getElementById('mnBackT').addEventListener('click', () => UI.showTitle());
-  },
-
   /* ---------------- briefing dossier: who you are, who you fight ----------------
-     Shown once, after difficulty is chosen, before the sector map. Introduces the
+     Shown once when a new campaign opens, before the sector map. Introduces the
      Terran Alliance, the Dominion, and Admiral Voss (whose portrait rides here). */
   showContext() {
     UI.screen(
@@ -634,7 +640,7 @@ const UI = {
       { bg: 'starfield', wide: true, left: true }
     );
     document.getElementById('mnCtxGo').addEventListener('click', () => { Snd.select(); UI.showGalaxy(); });
-    document.getElementById('mnCtxBack').addEventListener('click', () => UI.showDifficulty());
+    document.getElementById('mnCtxBack').addEventListener('click', () => UI.showTitle());
   },
 
   /* ---------------- galaxy (sector) map ---------------- */
@@ -668,9 +674,13 @@ const UI = {
       let sub = '';
       if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
       else if (siege > 0 && by) sub = '<div class="gsub siege" style="color:' + DATA.faction(by).color + '">◎ ' + siege + '/' + Game.siegeThreshold(s.id) + '</div>';
+      // difficulty meter — a red dotted line, up to 5 dashes; hidden once the system is ours
+      const dlvl = (DATA.SYSTEM_TYPES[s.type] || {}).diff || 1;
+      const diffMeter = held ? '' : '<div class="gdiff" title="System difficulty ' + dlvl + '/5">' +
+        [1, 2, 3, 4, 5].map(n => '<i class="' + (n <= dlvl ? 'on' : '') + '"></i>').join('') + '</div>';
       return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
         '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt=""></div>' +
-        '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + '</div>';
+        '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + diffMeter + '</div>';
     }).join('');
     const inf = Game.factionInfluence();
     const total = sys.length;
@@ -749,7 +759,7 @@ const UI = {
       el.addEventListener('mouseenter', () => renderInfo(el.dataset.sys));
       if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
     });
-    document.getElementById('mnFleetG').addEventListener('click', () => UI.showDebrief(null, 0));
+    document.getElementById('mnFleetG').addEventListener('click', () => UI.showRefit(null, 0, null));
     document.getElementById('mnMenuG').addEventListener('click', () => UI.showTitle());
   },
 
@@ -896,7 +906,7 @@ const UI = {
         lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId),
         sysCount: Game.systemPlanetCount(res.sysId) };
       Game.warContext = null;
-      UI.showDebrief(res.report, res.earned);
+      UI.showMissionComplete(res.report, res.earned, res.sysId);
       return;
     }
     UI.showWarLoss(wc);
@@ -912,7 +922,7 @@ const UI = {
       Game.completeStoryBeat(wc.story);
       const beat = (DATA.STORY || []).find(b => b.id === wc.story);
       report.war = { story: true, title: beat ? beat.title : 'PRIORITY OPERATION' };
-      UI.showDebrief(report, earned);
+      UI.showMissionComplete(report, earned, null);
     } else {
       UI.showWarLoss(wc);
     }
@@ -1045,7 +1055,7 @@ const UI = {
     UI.el.screenInner.querySelectorAll('.secnode.open').forEach(el => {
       el.addEventListener('click', () => { Snd.select(); UI.showBriefing(el.dataset.node); });
     });
-    document.getElementById('mnFleetMgmt').addEventListener('click', () => UI.showDebrief(null, 0));
+    document.getElementById('mnFleetMgmt').addEventListener('click', () => UI.showRefit(null, 0, null));
     document.getElementById('mnTitleSec').addEventListener('click', () => UI.showTitle());
   },
 
@@ -1103,38 +1113,88 @@ const UI = {
     Game.b = null;
   },
 
-  /* ---------------- debrief + fleet management ---------------- */
-  showDebrief(report, earned) {
-    const sv = Game.save;
-    let reportHtml = '';
-    if (report) {
-      const rows = [];
-      report.gains.forEach(g => rows.push('<div class="row"><span>' + U.esc(g.name) + ' — +' + g.xp + ' XP' +
-        (g.kills ? ' · ' + g.kills + ' kill' + (g.kills > 1 ? 's' : '') : '') + '</span>' +
-        (g.rankUp ? '<span class="ok">▲ PROMOTED — ' + g.rankUp + '</span>' : '<span></span>') + '</div>'));
-      if (report.bonus) rows.push(report.bonus.done
-        ? '<div class="row"><span>★ SECONDARY COMPLETE — ' + U.esc(report.bonus.desc) + '</span><span class="ok">+' + report.bonus.reward + ' REQ</span></div>'
-        : '<div class="row"><span>SECONDARY FAILED — ' + U.esc(report.bonus.desc) + '</span><span class="bad">—</span></div>');
-      report.losses.forEach(n => rows.push('<div class="row dmg"><span>' + U.esc(n) + '</span><span class="bad">LOST WITH ALL HANDS</span></div>'));
-      if (report.replacement) rows.push('<div class="row"><span>' + report.replacement + ' commissioned to replace the fleet</span><span class="ok">NEW</span></div>');
-      if (report.salvage) rows.push('<div class="row"><span>Scavenger teams strip the drifting wrecks</span><span class="ok">+' + report.salvage + ' REQ</span></div>');
-      report.prizes.forEach((p, i) => {
-        const c = DATA.CLASSES[p.cls];
-        const full = sv.fleet.length >= DATA.MAX_FLEET;
-        rows.push('<div class="row prize"><span>' + UI.shipImg(p.cls, 22, 'vertical-align:middle;transform:rotate(90deg);margin-right:6px') +
-          '⚑ PRIZE — ' + U.esc(p.name) + ' (' + c.short + ')</span>' +
-          '<span><button class="pbtn" data-salv="' + i + '">SALVAGE +' + Math.round(p.pts * 0.6) + ' REQ</button> ' +
-          '<button class="pbtn" data-comm="' + i + '" ' + (full ? 'disabled' : '') + '>COMMISSION</button></span></div>');
-      });
-      reportHtml = '<div class="paneltitle" style="text-align:left">BATTLE REPORT · +' + earned + ' REQ EARNED</div>' +
-        '<div class="reportbox">' + (rows.join('') || '<div class="row"><span>No changes to report.</span></div>') + '</div>';
+  /* legacy entry point — kept so any old callers still resolve */
+  showDebrief(report, earned, sysId) {
+    if (report) UI.showMissionComplete(report, earned, sysId);
+    else UI.showRefit(null, 0, sysId);
+  },
+
+  /* ---------------- mission complete: experience, kills & the admiral's report ----------------
+     The first screen after a victory. Shows what the crews earned and a dispatch
+     from Admiral Voss (with his portrait). From here the player goes on to the
+     refit & requisition screen aboard the station. */
+  showMissionComplete(report, earned, sysId) {
+    Game.b = null;
+    const w = report && report.war;
+    const rows = [];
+    report.gains.forEach(g => rows.push('<div class="row"><span>' + U.esc(g.name) + ' — +' + g.xp + ' XP' +
+      (g.kills ? ' · ' + g.kills + ' kill' + (g.kills > 1 ? 's' : '') : '') + '</span>' +
+      (g.rankUp ? '<span class="ok">▲ PROMOTED — ' + g.rankUp + '</span>' : '<span></span>') + '</div>'));
+    if (report.bonus) rows.push(report.bonus.done
+      ? '<div class="row"><span>★ SECONDARY COMPLETE — ' + U.esc(report.bonus.desc) + '</span><span class="ok">+' + report.bonus.reward + ' REQ</span></div>'
+      : '<div class="row"><span>SECONDARY FAILED — ' + U.esc(report.bonus.desc) + '</span><span class="bad">—</span></div>');
+    report.losses.forEach(n => rows.push('<div class="row dmg"><span>' + U.esc(n) + '</span><span class="bad">LOST WITH ALL HANDS</span></div>'));
+    if (report.replacement) rows.push('<div class="row"><span>' + report.replacement + ' commissioned to replace the fleet</span><span class="ok">NEW</span></div>');
+    if (report.salvage) rows.push('<div class="row"><span>Scavenger teams strip the drifting wrecks</span><span class="ok">+' + report.salvage + ' REQ</span></div>');
+    if (report.prizes && report.prizes.length) rows.push('<div class="row prize"><span>⚑ ' + report.prizes.length +
+      ' enemy hull' + (report.prizes.length > 1 ? 's' : '') + ' taken as prize</span><span class="ok">AT REQUISITION</span></div>');
+
+    // the admiral's report — narrative dispatch assembled from the war outcome
+    const para = [];
+    if (w && w.story) {
+      para.push('Priority operation complete — ' + U.esc(w.title || '') + '. Well flown, Captain.');
+    } else if (w && w.taken) {
+      para.push('★ ' + U.esc(w.sysName) + ' is secured — the system flies Terran colours.');
+      if (w.capital) para.push('Their capital is taken. That\'s a throne off the board, Captain — they\'ll remember ' + U.esc(w.sysName) + '.');
+    } else if (w) {
+      para.push(U.esc(w.sysName) + ' — the planet is secured. That\'s ' + w.sysProgress + ' of ' + (w.sysCount || 4) + ' worlds in the system.');
+    } else {
+      para.push('The sector is clear, Captain. Log the kills and see to your crews.');
     }
+    if (w && w.lost && w.lost.length) para.push('⚠ But it is not all ours today — ' +
+      w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '.');
+    const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
+    if (elsewhere.length) para.push('Elsewhere the war grinds on — ' +
+      elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '.');
+    para.push('The 7th holds the line another day. The Verge keeps what it takes — see it keeps ours.');
+
+    UI.screen(
+      '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div>' +
+      '<div class="briefsub">' + (w && !w.story ? U.esc(w.sysName) + ' · ' : '') + 'EXPERIENCE · KILLS · ADMIRAL\'S REPORT</div>' +
+      '<div class="mc-cols">' +
+      '<div class="mc-main">' +
+      '<div class="reqbig">+' + earned + ' REQ EARNED</div>' +
+      '<div class="paneltitle" style="text-align:left">EXPERIENCE & KILLS</div>' +
+      '<div class="reportbox">' + (rows.join('') || '<div class="row"><span>No changes to report.</span></div>') + '</div>' +
+      '</div>' +
+      '<div class="mc-admiral">' +
+      '<img class="admiral-portrait" src="assets/portraits/admiral.png" alt="Admiral Kade Voss">' +
+      '<div class="contact">◆ ADMIRAL KADE VOSS</div>' +
+      '<div class="contact sub">7TH EXPEDITIONARY FLEET COMMAND</div>' +
+      '<div class="admiral-report">' + para.map(p => '<p>' + p + '</p>').join('') + '</div>' +
+      '</div>' +
+      '</div>' +
+      '<button class="menu-btn primary" id="mnToRefit">REFIT & REQUISITION ▸</button>',
+      { bg: 'victory', wide: true, left: true }
+    );
+    document.getElementById('mnToRefit').addEventListener('click', () => {
+      Snd.select();
+      UI.showRefit(report, earned, sysId);
+    });
+  },
+
+  /* ---------------- refit & requisition (station tender) ----------------
+     Aboard the station (bg-repair). Spend requisition on refits, new hulls and
+     upgrades, then head back out. After a mission this returns to the same system
+     map; opened straight from the sector map it returns there. */
+  showRefit(report, earned, sysId) {
+    const sv = Game.save;
     const fleetHtml = sv.fleet.map((f, i) => {
       const c = DATA.CLASSES[f.cls];
       const rank = DATA.RANKS[Game.rankOf(f.xp)];
       const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
       const cost = DATA.refitCost(f.cls);
-      return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 70) + '</div>' +
+      return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 112) + '</div>' +
         '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
@@ -1147,7 +1207,7 @@ const UI = {
       const c = DATA.CLASSES[st.cls];
       const full = sv.fleet.length >= DATA.MAX_FLEET;
       const afford = sv.req >= st.cost;
-      return '<div class="storecard"><div class="art">' + UI.shipImg(st.cls, 62) + '</div>' +
+      return '<div class="storecard"><div class="art">' + UI.shipImg(st.cls, 96) + '</div>' +
         '<h4>' + c.label + '</h4><div class="ds">' + c.desc +
         '<br>HULL ' + c.hull + ' · SPD ' + c.speed + ' · TURRETS ' + c.turrets + '</div>' +
         '<button data-buy="' + i + '" ' + (full || !afford ? 'disabled' : '') + '>' +
@@ -1160,43 +1220,36 @@ const UI = {
         '<button data-up="' + u.id + '" ' + (owned || !afford ? 'disabled' : '') + '>' +
         (owned ? 'INSTALLED ✓' : 'INSTALL — ' + u.cost + ' REQ') + '</button></div>';
     }).join('');
-    const w = report && report.war;
-    const capitalBeat = w && w.taken && w.capital
-      ? '<div class="warbeat">Voss: "' + DATA.faction(w.faction).short + ' capital taken. That\'s a throne off the board, Captain — they\'ll remember ' + U.esc(w.sysName) + '."</div>'
-      : '';
-    // the wider war: enemy-vs-enemy systems that changed hands this turn
-    const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
-    let warBanner = '';
-    if (w && w.story) {
-      warBanner = '<div class="warbanner taken">◆ PRIORITY OPERATION COMPLETE — ' + U.esc(w.title || '') + '</div>';
-    } else if (w) {
-      warBanner = '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
-        (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
-          : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/' + (w.sysCount || 4) + ' taken') +
-        capitalBeat +
-        (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
-          w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
-        (elsewhere.length ? '<div class="warmoves">Elsewhere in the war — ' +
-          elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '</div>' : '') +
-        '</div>';
+    // prizes: enemy hulls captured this battle, offered to salvage or commission
+    let prizeHtml = '';
+    if (report && report.prizes && report.prizes.length) {
+      const prows = report.prizes.map((p, i) => {
+        const c = DATA.CLASSES[p.cls];
+        const full = sv.fleet.length >= DATA.MAX_FLEET;
+        return '<div class="row prize"><span>' + UI.shipImg(p.cls, 22, 'vertical-align:middle;transform:rotate(90deg);margin-right:6px') +
+          '⚑ PRIZE — ' + U.esc(p.name) + ' (' + c.short + ')</span>' +
+          '<span><button class="pbtn" data-salv="' + i + '">SALVAGE +' + Math.round(p.pts * 0.6) + ' REQ</button> ' +
+          '<button class="pbtn" data-comm="' + i + '" ' + (full ? 'disabled' : '') + '>COMMISSION</button></span></div>';
+      }).join('');
+      prizeHtml = '<div class="paneltitle" style="text-align:left">PRIZE HULLS</div>' +
+        '<div class="reportbox">' + prows + '</div>';
     }
+    const backLabel = sysId ? 'RETURN TO SYSTEM MAP ▸' : 'SECTOR MAP ▸';
     UI.screen(
-      (report
-        ? '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div><div class="briefsub">HULLS REPAIRED · CREWS RESTED</div>'
-        : '<div class="brieftitle">FLEET COMMAND</div><div class="briefsub">TENDER & REQUISITION · VETERANS KEEP THEIR CREWS AS LONG AS THEY LIVE</div>') +
-      warBanner +
+      '<div class="brieftitle">REFIT & REQUISITION</div>' +
+      '<div class="briefsub">STATION TENDER · HULLS REPAIRED · CREWS RESTED · VETERANS KEEP THEIR CREWS AS LONG AS THEY LIVE</div>' +
       '<div class="reqbig">⬡ ' + sv.req + ' REQUISITION</div>' +
-      reportHtml +
+      prizeHtml +
       '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + DATA.MAX_FLEET + '</div>' +
       '<div class="storegrid">' + fleetHtml + '</div>' +
       '<div class="paneltitle" style="text-align:left">COMMISSION SHIPS</div>' +
       '<div class="storegrid">' + shipRows + '</div>' +
       '<div class="paneltitle" style="text-align:left">FLEET UPGRADES</div>' +
       '<div class="storegrid">' + upRows + '</div>' +
-      '<button class="menu-btn primary" id="mnToSector">SECTOR MAP ▸</button>',
-      { bg: report ? 'victory' : 'repair', wide: true }
+      '<button class="menu-btn primary" id="mnRefitDone">' + backLabel + '</button>',
+      { bg: 'repair', wide: true }
     );
-    const rerender = () => { Game.persist(); UI.showDebrief(report, earned); };
+    const rerender = () => { Game.persist(); UI.showRefit(report, earned, sysId); };
     UI.el.screenInner.querySelectorAll('[data-salv]').forEach(btn => {
       btn.addEventListener('click', () => {
         const p = report.prizes.splice(Number(btn.dataset.salv), 1)[0];
@@ -1247,7 +1300,11 @@ const UI = {
         rerender();
       });
     });
-    document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showGalaxy(); });
+    document.getElementById('mnRefitDone').addEventListener('click', () => {
+      Game.persist();
+      if (sysId && DATA.system(sysId)) UI.showSystem(sysId);
+      else UI.showGalaxy();
+    });
     Game.b = null;
   },
 
