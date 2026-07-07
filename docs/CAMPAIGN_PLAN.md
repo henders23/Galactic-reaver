@@ -113,11 +113,12 @@ each faction's `flagship` is its capital).
 - **P4 — Story (v1)** ✅ *(done)*
   The narrative is authored and wired (see `docs/STORY.md` for the full bible).
   Player canon: **Captain Cael Riven, "the Ghost of Meridian"**, flying the
-  corvette **TAS REAVER** (the flagship the game is named for). Six `DATA.STORY`
+  corvette **TAS REAVER** (the flagship the game is named for). Ten `DATA.STORY`
   beats deliver the arc as **PRIORITY OPERATIONS** on the galaxy, in strict
-  sequence: `sc_butcher` (op, Act I) → `sc_meridian` (interstitial) → `sc_dynasty`
-  (op, Act II) → `sc_gate` (interstitial) → `sc_swarm_stirs` (interstitial) →
-  `sc_breakout` (op, Act III), layered on the six authored anchors. New engine
+  sequence: **Act I** `sc_butcher` (op) → `sc_meridian` (int) → `sc_herald` (op) ·
+  **Act II** `sc_dynasty` (op) → `sc_reliquary` (op) → `sc_gate` (int) →
+  `sc_swarm_stirs` (int) · **Act III** `sc_breakout` (op) → `sc_skarr` (int) →
+  `sc_lastlight` (int), layered on the six authored anchors. New engine
   bits: an **interstitial** beat type (narrative screen, `UI.showStoryBeat`),
   story-op briefing/name overrides in `generateMission`, and the **Throne Gate
   endgame** (`UI.showEndgame`) — a three-way climax choice (sever / claim /

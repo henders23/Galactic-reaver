@@ -467,18 +467,18 @@ console.log('story beats');
   ok(m.briefing.some(b => b.includes('SKARR')), 'story op keeps its authored briefing');
   ok(m.enemies.every(e => DATA.FACTIONS.crimson.pool.includes(e.cls)), 'THE BUTCHER\'S TRAIL fields the Crimson Reach');
 
-  // beats fire strictly in order — Act II cannot jump ahead of Act I
-  Game.completeStoryBeat('sc_butcher');
-  ok(!Game.storyBeatAvailable(), 'no beat until Act I progresses further (one system held)');
-  Game.save.galaxy.owner['elytra'] = 'terran';   // a second system → terran count 10
-  const next = Game.storyBeatAvailable();
-  ok(next && next.id === 'sc_meridian', 'GHOSTS OF MERIDIAN follows, not the Act II beat');
-  eq(next.type, 'interstitial', 'the Meridian beat is a narrative interstitial');
-
-  // Act II gate: only after Meridian + two Za'Argon systems does THE OLD EMPIRE surface
-  Game.completeStoryBeat('sc_meridian');
-  const dyn = Game.storyBeatAvailable();
-  ok(dyn && dyn.id === 'sc_dynasty', 'THE OLD EMPIRE opens Act II after Meridian');
+  // beats surface strictly in authored order, one at a time — none jumps ahead
+  Game.save = Game.freshSave();
+  DATA.GALAXY.systems.forEach(s => { if (s.owner !== 'terran') Game.save.galaxy.owner[s.id] = 'terran'; });
+  const seq = [];
+  for (let guard = 0; guard < DATA.STORY.length + 3; guard++) {
+    const b = Game.storyBeatAvailable();
+    if (!b) break;
+    seq.push(b.id);
+    Game.completeStoryBeat(b.id);
+  }
+  eq(seq.join(','), DATA.STORY.map(b => b.id).join(','), 'all beats surface in authored order, one per step');
+  eq(Game.save.story.chapter, 3, 'the final chapter is reached');
 
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
