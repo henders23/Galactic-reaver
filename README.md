@@ -21,16 +21,15 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 - **Fleet management between missions** — commission frigates, light cruisers and
   escort carriers (fleet of up to 4), install fleet-wide upgrades, and buy
   per-ship **gunnery refits** (+1 die on every gun).
-- **Ship livery (Starbase paint)** — daub blue and yellow markings onto the nose,
-  spine, flanks or engines of each fleet ship to tell your hulls apart at a
-  glance. The paint follows the ship onto the battle map and into the
-  order-of-battle overlay, and is saved with the campaign.
 - **Per-ship veterancy** — named ships earn XP for kills, boarding actions and
   surviving missions: GREEN → SEASONED (+1 turret) → VETERAN (guns hit on −1)
   → ELITE (+1 shields, repairs on 4+). Ships lost in battle are gone for good,
   and their experience with them.
-- **Skirmish mode** — build a fleet from all four hulls, fight a points-matched
-  Dominion force on a random map.
+- **Skirmish mode** — build a fleet from all four hulls and fight a points-matched
+  force from any enemy faction — **Crimson Reach** pirates, the **Za'Argon
+  Dynasty** or **the Hive** — on a random map. (Powered by the same procedural
+  faction/mission engine that will drive the dynamic campaign; see
+  `docs/CAMPAIGN_PLAN.md`.)
 - **Dice-pool gunnery** — every gun throws a pool of D6: a light escort flicks
   3 dice, a capital broadside hurls 12. Lances hit on 3+ at any range; batteries
   hit on 4+, worse at long range, better point-blank. Orders, criticals, evasion
@@ -71,8 +70,8 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   toggle**, both persisted.
 - **Order-of-battle overlay** — a filterable roster of every hull on the field on
   the right of the command deck: toggle **ALLIES / HOSTILES**, see each ship drawn
-  as its sprite outline (with its livery), and click any contact to inspect its
-  weapons, systems and battle damage.
+  as its sprite outline, and click any contact to inspect its weapons, systems and
+  battle damage.
 - **Onboarding & briefing room** — a new campaign opens on **SELECT DIFFICULTY**
   and then a **commander's dossier** that introduces the Terran Alliance, the
   Dominion and Admiral Kade Voss before you take command.

@@ -123,6 +123,100 @@ DATA.CLASSES = {
       { name: 'MASS BATTERIES', type: 'battery', arc: 'side', range: 420, dice: 12, need: 4, dmgPer: 1 },
       { name: 'TORPEDO MAW', type: 'torp', arc: 'fore', range: 620, salvo: 3, reloadTime: 2 }
     ]
+  },
+  corsair: {
+    sprite: 'crimson-4', cls: 'corsair', shape: 'spine', label: 'CORSAIR-CLASS CRUISER', short: 'CRUISER',
+    w: 152, h: 60, hull: 44, sh: { F: 2, S: 2, A: 1 },
+    speed: 135, maxTurn: 40, turrets: 3, pts: 340,
+    desc: 'Crimson Reach cruiser — stolen hulls bolted into a broadside brawler.',
+    weapons: [
+      { name: 'PLUNDER GUNS', type: 'battery', arc: 'side', range: 410, dice: 9, need: 4, dmgPer: 1 },
+      { name: 'RAKING LANCE', type: 'lance', arc: 'fore', range: 440, dice: 3, need: 3, dmgPer: 2 },
+      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 620, salvo: 2, reloadTime: 2 }
+    ]
+  },
+  /* --- Za'Argon Dynasty: slow imperial battleline, heavy shields & lances --- */
+  zsentinel: {
+    sprite: 'zaargon-1', cls: 'zsentinel', shape: 'dart', label: 'SENTINEL-CLASS WARDEN', short: 'WARDEN',
+    w: 108, h: 46, hull: 20, sh: { F: 2, S: 1, A: 0 },
+    speed: 175, maxTurn: 55, turrets: 1, pts: 130,
+    desc: "Za'Argon picket. Disciplined escort of the Dynasty line.",
+    weapons: [
+      { name: 'HALLOWED LANCE', type: 'lance', arc: 'fore', range: 440, dice: 2, need: 3, dmgPer: 2 },
+      { name: 'WARD BATTERY', type: 'battery', arc: 'side', range: 340, dice: 4, need: 4, dmgPer: 1 }
+    ]
+  },
+  zpaladin: {
+    sprite: 'zaargon-3', cls: 'zpaladin', shape: 'spine', label: 'PALADIN-CLASS CRUISER', short: 'CRUISER',
+    w: 154, h: 60, hull: 50, sh: { F: 3, S: 2, A: 1 },
+    speed: 130, maxTurn: 38, turrets: 3, pts: 360,
+    desc: "Za'Argon cruiser. Lance decks and a wall of shields.",
+    weapons: [
+      { name: 'JUDGEMENT LANCES', type: 'lance', arc: 'side', range: 470, dice: 4, need: 3, dmgPer: 2 },
+      { name: 'CHOIR BATTERIES', type: 'battery', arc: 'side', range: 410, dice: 8, need: 4, dmgPer: 1 }
+    ]
+  },
+  zdominus: {
+    sprite: 'zaargon-4', cls: 'zdominus', shape: 'slab', label: 'DOMINUS-CLASS BATTLESHIP', short: 'BATTLESHIP',
+    w: 170, h: 66, hull: 60, sh: { F: 3, S: 3, A: 1 },
+    speed: 108, maxTurn: 28, turrets: 3, pts: 470,
+    desc: "Za'Argon battleship — a cathedral of guns that turns like a moon.",
+    weapons: [
+      { name: 'SPINE LANCES', type: 'lance', arc: 'side', range: 480, dice: 5, need: 3, dmgPer: 2 },
+      { name: 'MASS CHOIR', type: 'battery', arc: 'side', range: 420, dice: 10, need: 4, dmgPer: 1 },
+      { name: 'JUDGEMENT TUBES', type: 'torp', arc: 'fore', range: 620, salvo: 3, reloadTime: 2 }
+    ]
+  },
+  zthrone: {
+    sprite: 'zaargon-5', cls: 'zthrone', shape: 'spine', label: 'THRONE-CLASS DREADNOUGHT', short: 'DREADNOUGHT',
+    w: 182, h: 70, hull: 74, sh: { F: 4, S: 3, A: 2 },
+    speed: 92, maxTurn: 24, turrets: 4, pts: 600,
+    desc: "Flagship of a Za'Argon war-fleet. Ancient, sacred, and nearly unkillable head-on.",
+    weapons: [
+      { name: 'GRAND LANCE', type: 'lance', arc: 'side', range: 500, dice: 6, need: 3, dmgPer: 2 },
+      { name: 'MASS CATHEDRAL', type: 'battery', arc: 'side', range: 430, dice: 12, need: 4, dmgPer: 1 },
+      { name: 'RELIQUARY TUBES', type: 'torp', arc: 'fore', range: 620, salvo: 3, reloadTime: 2 }
+    ]
+  },
+  /* --- The Hive: swarming bio-hulls, little shielding, carriers & bombers --- */
+  hdrone: {
+    sprite: 'hive-1', cls: 'hdrone', shape: 'dart', label: 'HIVE DRONE', short: 'DRONE',
+    w: 84, h: 36, hull: 16, sh: { F: 0, S: 0, A: 0 },
+    speed: 215, maxTurn: 90, turrets: 1, pts: 90,
+    desc: 'Hive drone. Fragile alone, lethal in a swarm.',
+    weapons: [
+      { name: 'SPORE GUNS', type: 'battery', arc: 'fore', range: 300, dice: 3, need: 4, dmgPer: 1 }
+    ]
+  },
+  hstalker: {
+    sprite: 'hive-2', cls: 'hstalker', shape: 'dart', label: 'HIVE STALKER', short: 'STALKER',
+    w: 122, h: 50, hull: 26, sh: { F: 1, S: 0, A: 0 },
+    speed: 175, maxTurn: 48, turrets: 1, pts: 160,
+    desc: 'Hive raider. Closes fast and rakes with bio-cannon.',
+    weapons: [
+      { name: 'BIO-CANNON', type: 'battery', arc: 'fore', range: 400, dice: 5, need: 4, dmgPer: 1 }
+    ]
+  },
+  hwarrior: {
+    sprite: 'hive-3', cls: 'hwarrior', shape: 'spine', label: 'HIVE WARRIOR', short: 'WARRIOR',
+    w: 140, h: 56, hull: 42, sh: { F: 1, S: 1, A: 0 },
+    speed: 140, maxTurn: 42, turrets: 2, pts: 280,
+    desc: 'Hive warrior-form. Acid lances and a hull that shrugs off fire.',
+    weapons: [
+      { name: 'ACID LANCE', type: 'lance', arc: 'side', range: 450, dice: 3, need: 3, dmgPer: 2 },
+      { name: 'SPORE BATTERIES', type: 'battery', arc: 'side', range: 400, dice: 7, need: 4, dmgPer: 1 }
+    ]
+  },
+  hleviathan: {
+    sprite: 'hive-5', cls: 'hleviathan', shape: 'slab', label: 'HIVE LEVIATHAN', short: 'LEVIATHAN',
+    w: 184, h: 72, hull: 70, sh: { F: 2, S: 1, A: 1 },
+    speed: 100, maxTurn: 24, turrets: 3, pts: 560,
+    desc: 'Hive leviathan — a living carrier that births bomber-broods from beyond gun range.',
+    weapons: [
+      { name: 'BIO-LANCE', type: 'lance', arc: 'side', range: 460, dice: 4, need: 3, dmgPer: 2 },
+      { name: 'SPORE MASS', type: 'battery', arc: 'side', range: 420, dice: 10, need: 4, dmgPer: 1 },
+      { name: 'BROOD CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 }
+    ]
   }
 };
 
@@ -197,27 +291,141 @@ DATA.UPGRADES = [
 ];
 DATA.refitCost = (cls) => Math.round(DATA.CLASSES[cls].pts * 0.45 / 10) * 10;
 DATA.MAX_FLEET = 4;
-DATA.SHIP_NAMES = ['VSS TEMPEST', 'VSS RESOLUTE', 'VSS ARGUS', 'VSS ORION', 'VSS DAUNTLESS', 'VSS HARRIER', 'VSS VIGIL', 'VSS SOVEREIGN'];
+/* ---------------- ship name pools (per faction) ----------------
+   Terran Alliance ships carry the TAS pennant and stern, disciplined names.
+   The Crimson Reach are pirates — evocative, unprefixed hull names. The
+   Za'Argon Dynasty names its ships like relics of empire. The Hive does not
+   name individual ships; Terran intelligence assigns behavioural codenames. */
+DATA.NAME_POOLS = {
+  terran: [
+    'TAS VANGUARD', 'TAS INVINCIBLE', 'TAS DEFENDER', 'TAS SENTINEL', 'TAS DAUNTLESS',
+    'TAS INTREPID', 'TAS INDOMITABLE', 'TAS VALIANT', 'TAS ENDEAVOUR', 'TAS CONQUEROR',
+    'TAS LEVIATHAN', 'TAS PERSEVERANCE', 'TAS GIBRALTAR', 'TAS IRON DUKE', 'TAS VICTORY',
+    'TAS HORIZON', 'TAS ATLAS', 'TAS ASCENDANT', 'TAS RELIANT', 'TAS PATHFINDER',
+    'TAS LONGBOW', 'TAS GUARDIAN', 'TAS SOVEREIGN', 'TAS THUNDERCHILD', 'TAS PHOENIX',
+    'TAS ODYSSEY', 'TAS MARATHON', 'TAS BASTION', 'TAS TRIUMPH', 'TAS EXCALIBUR',
+    'TAS CONSTITUTION', 'TAS FEARLESS', 'TAS INVICTUS', 'TAS CONCORD', 'TAS ECLIPSE',
+    'TAS FRONTIER', 'TAS POLARIS', 'TAS CENTURION', 'TAS LIBERTY', 'TAS PIONEER',
+    'TAS COURAGE', 'TAS ENTERPRISE', 'TAS ASCENSION', 'TAS UNITY'
+  ],
+  crimson: [
+    'BLOOD PRICE', 'BLACK WIDOW', 'HELLHOUND', 'WIDOWMAKER', 'RUST DEVIL', 'DEAD RECKONING',
+    'BLACK FORTUNE', "KING'S RANSOM", 'LAST LAUGH', 'BONE COLLECTOR', 'RED KNIFE', 'MARAUDER',
+    'CUTLASS', 'GRAVE DIGGER', "HANGMAN'S SMILE", 'IRON JACKAL', 'NIGHT REAVER', 'BLACK TIDE',
+    'FIREBRAND', 'BROKEN PROMISE', 'WRAITH', 'COLD STEEL', 'SCOURGE', "DEVIL'S DUE",
+    'CRIMSON WOLF', 'GHOST CUTLASS', "WIDOW'S KISS", 'BUTCHER BIRD', 'BLACK FANG', 'BLOOD MOON',
+    'SILENT PROFIT', 'HELLFIRE', 'ROGUE TIDE', 'RUST CROWN', 'DARK FORTUNE', 'NO QUARTER',
+    'GRIM HARVEST', 'OUTLAW', 'BLACK HORIZON', 'RAVAGER', 'VULTURE KING', 'IRON COFFIN',
+    'RED SIREN', 'MERCILESS', 'CORSAIR QUEEN', 'CUTTHROAT', 'BLOOD OATH', 'CRIMSON FURY',
+    "REAPER'S WAKE"
+  ],
+  zaargon: [
+    'VOICE OF ETERNITY', 'SPEAR OF THE FIRST EMPEROR', 'HAMMER OF JUDGEMENT', 'THRONE OF STARS',
+    "LIGHT OF ZA'ARGON", 'CROWN OF AGES', 'HERALD OF SILENCE', 'EYE OF DOMINION', 'SWORD OF HEAVEN',
+    'TEMPLE OF FIRE', 'ORACLE OF STONE', 'ETERNAL VIGIL', 'GOLDEN MANDATE', 'HAND OF FATE',
+    'CELESTIAL SPEAR', 'CROWN OF DAWN', 'LAST ORACLE', 'VOICE OF THE ANCESTORS', 'PILLAR OF TRUTH',
+    'ETERNAL THRONE', 'HERALD OF UNITY', 'BEACON OF EMPIRE', 'SHIELD OF KINGS', 'FIRST ASCENDANT',
+    'KEEPER OF ETERNITY', 'CROWN OF WORLDS', 'DIVINE EDICT', 'EYE OF HEAVEN', 'PILLAR OF ORDER',
+    'SACRED DOMINION', 'FLAME OF THE DYNASTY', 'STAR CATHEDRAL', 'IMPERIAL COVENANT',
+    'RADIANT THRONE', 'ETERNAL CROWN', 'CELESTIAL MANDATE', 'IMPERIAL ORACLE', 'SACRED ASCENDANT',
+    'FIRST LIGHT', 'THRONE ETERNAL', 'GOLDEN SPEAR', 'LAST DOMINION'
+  ],
+  /* Hive: behavioural codename + the translated Hive designation, shown together */
+  hive: [
+    { code: 'DEVOURER', desig: "Xha'rith" }, { code: 'BROODMOTHER', desig: "Ul'khess" },
+    { code: 'HARVESTER', desig: "Kha'veth" }, { code: 'SPINEBREAKER', desig: 'Graxith' },
+    { code: 'LEVIATHAN', desig: "Vor'kaan" }, { code: 'FLESH TIDE', desig: "Zha'thul" },
+    { code: 'MAW', desig: "Kz'rakk" }, { code: 'BROOD CARRIER', desig: "Xhul'ra" },
+    { code: 'SEEDER', desig: "Vesh'karr" }, { code: 'HIVE HEART', desig: 'Xorrath' }
+  ]
+};
+/* commissioned Terran ships draw from the Terran pool */
+DATA.SHIP_NAMES = DATA.NAME_POOLS.terran;
 
-/* ---------------- ship livery (Starbase paint) ----------------
-   Players can daub blue or yellow markings onto parts of a hull to tell their
-   ships apart at a glance. Part geometry is in hull-fraction space shared by the
-   canvas renderer and the DOM silhouettes: x runs 0 (stern) → 1 (nose),
-   y runs 0 → 1 across the beam (0.5 = centreline). Each part is one or more
-   polygons so the paint appears in the same spot on the sprite and the outline. */
-DATA.LIVERY_PARTS = [
-  { id: 'nose', name: 'NOSE', polys: [[[0.80, 0.34], [1.0, 0.5], [0.80, 0.66]]] },
-  { id: 'spine', name: 'SPINE', polys: [[[0.18, 0.45], [0.74, 0.45], [0.74, 0.55], [0.18, 0.55]]] },
-  { id: 'flanks', name: 'FLANKS', polys: [
-    [[0.30, 0.10], [0.68, 0.10], [0.68, 0.23], [0.30, 0.23]],
-    [[0.30, 0.77], [0.68, 0.77], [0.68, 0.90], [0.30, 0.90]]
-  ] },
-  { id: 'engines', name: 'ENGINES', polys: [[[0.0, 0.34], [0.16, 0.34], [0.16, 0.66], [0.0, 0.66]]] }
+/* ---------------- factions ----------------
+   The powers contesting the Verge. Each fields a fleet built from its own sprite
+   row (escort → capital), names its ships from its pool, and leans on particular
+   AI roles. `pool` lists hull classes cheapest-first; `flagship` is its capital.
+   Colours match the sector-map legend. */
+DATA.FACTIONS = {
+  terran: {
+    id: 'terran', name: 'TERRAN ALLIANCE', short: 'TERRAN', adj: 'Terran', prefix: 'TAS',
+    color: '#4cd7ea', side: 'player', names: 'terran',
+    pool: ['corvette', 'frigate', 'lcruiser', 'argus'], flagship: 'lcruiser',
+    roles: ['brawler', 'sniper'],
+    blurb: 'The Terran Alliance holds the Verge for the worlds behind it. Disciplined line ships, the TAS pennant.'
+  },
+  crimson: {
+    id: 'crimson', name: 'CRIMSON REACH', short: 'CRIMSON REACH', adj: 'Crimson Reach', prefix: '',
+    color: '#ff6159', side: 'enemy', names: 'crimson',
+    pool: ['jackal', 'ravager', 'marauder', 'corsair', 'dreadmaw'], flagship: 'dreadmaw',
+    roles: ['raider', 'brawler', 'raider', 'sniper'],
+    blurb: 'A confederation of pirate fleets — fast, vicious, and everywhere the Alliance is weak.'
+  },
+  zaargon: {
+    id: 'zaargon', name: "ZA'ARGON DYNASTY", short: "ZA'ARGON", adj: "Za'Argon", prefix: '',
+    color: '#6fe0a8', side: 'enemy', names: 'zaargon',
+    pool: ['zsentinel', 'zpaladin', 'zdominus', 'zthrone'], flagship: 'zthrone',
+    roles: ['sniper', 'brawler', 'sniper'],
+    blurb: 'An ancient empire of the deep Verge. Slow, sacred battleships and an unbending line.'
+  },
+  hive: {
+    id: 'hive', name: 'THE HIVE', short: 'HIVE', adj: 'Hive', prefix: '',
+    color: '#b57ff0', side: 'enemy', names: 'hive',
+    pool: ['hdrone', 'hstalker', 'hwarrior', 'hive', 'hleviathan'], flagship: 'hleviathan',
+    roles: ['raider', 'raider', 'brawler', 'carrier'],
+    blurb: 'A spreading bio-swarm that does not negotiate. Drones, warrior-forms and brood-carriers.'
+  },
+  neutral: {
+    id: 'neutral', name: 'NEUTRAL', short: 'NEUTRAL', adj: 'Neutral', prefix: '',
+    color: '#ffd465', side: 'ally', names: null, noncombatant: true,
+    pool: ['freighter'], flagship: null, roles: ['convoy'],
+    blurb: 'Independent worlds and the haulers of the Verge. They fly for whoever keeps the lane open.'
+  }
+};
+DATA.faction = (id) => DATA.FACTIONS[id] || DATA.FACTIONS.crimson;
+DATA.enemyFactions = () => ['crimson', 'zaargon', 'hive'];
+
+/* Hive ships aren't named — Terran intel assigns a codename + translated designation */
+DATA.hiveName = (rng) => {
+  const h = DATA.NAME_POOLS.hive[Math.floor((rng ? rng() : Math.random()) * DATA.NAME_POOLS.hive.length)];
+  return h.code + " '" + h.desig + "'";
+};
+
+/* ---------------- per-mission difficulty tiers ----------------
+   Chosen when the player picks a planet's mission (planet map). Scales the enemy
+   fleet's points budget, the requisition paid, and the Verge's gunnery. */
+DATA.MISSION_TIERS = [
+  { id: 'easy', name: 'EASY', budgetMul: 0.75, reqMul: 0.8, enemyNeed: 1, color: '#6fe0a8', rec: 'Low enemy presence · all fleets' },
+  { id: 'medium', name: 'MEDIUM', budgetMul: 1.05, reqMul: 1.0, enemyNeed: 0, color: '#ffb454', rec: 'Moderate resistance · lvl 2+ fleets' },
+  { id: 'hard', name: 'HARD', budgetMul: 1.4, reqMul: 1.35, enemyNeed: 0, color: '#ff6159', rec: 'Heavy resistance · lvl 4+ fleets' },
+  { id: 'veryhard', name: 'VERY HARD', budgetMul: 1.85, reqMul: 1.8, enemyNeed: -1, color: '#b57ff0', rec: 'Extreme danger · elite fleets' }
 ];
-DATA.LIVERY_COLORS = { blue: '#4cd7ea', yellow: '#ffd465' };
-/* click cycle for the paint UI */
-DATA.LIVERY_CYCLE = { none: 'blue', blue: 'yellow', yellow: 'none' };
-DATA.liveryPart = (id) => DATA.LIVERY_PARTS.find(p => p.id === id);
+DATA.tier = (id) => DATA.MISSION_TIERS.find(t => t.id === id) || DATA.MISSION_TIERS[1];
+
+/* ---------------- mission archetypes ----------------
+   Templates the generator recombines. `build` flags shape the generated mission;
+   the win/lose logic is assembled in Game.generateMission from these flags. */
+DATA.MISSION_ARCHETYPES = [
+  { id: 'patrol', name: 'PATROL', obj: 'Destroy all hostile ships in the sector.',
+    terrain: 'light', budgetMul: 0.85, reward: 120, weight: 3 },
+  { id: 'assault', name: 'ASSAULT', obj: 'Break the fleet holding this world.',
+    terrain: 'medium', budgetMul: 1.15, reward: 170, weight: 3 },
+  { id: 'escort', name: 'CONVOY ESCORT', obj: 'The freighter must reach the far jump marker (right edge).',
+    terrain: 'light', budgetMul: 1.0, reward: 160, ally: 'convoy', weight: 2 },
+  { id: 'defense', name: 'ORBITAL DEFENSE', obj: 'Hold the line — keep the outpost alive and destroy the raiders.',
+    terrain: 'light', budgetMul: 1.05, reward: 160, ally: 'station', weight: 2 },
+  { id: 'decap', name: 'DECAPITATION', obj: 'Destroy the enemy flagship.',
+    terrain: 'medium', budgetMul: 1.1, reward: 190, vip: 'flagship', weight: 2 },
+  { id: 'interdict', name: 'INTERDICTION', obj: 'Destroy the courier before it jumps off the far edge.',
+    terrain: 'medium', budgetMul: 0.9, reward: 180, vip: 'courier', weight: 2 }
+];
+DATA.archetype = (id) => DATA.MISSION_ARCHETYPES.find(a => a.id === id) || DATA.MISSION_ARCHETYPES[0];
+
+/* planet dressing → battle terrain density (from the system/planet map) */
+DATA.PLANET_TYPES = {
+  Rocky: 'heavy', Desert: 'medium', Ice: 'medium', Ocean: 'light', Gas: 'light', Volcanic: 'heavy', Barren: 'light'
+};
 
 /* ---------------- missions ---------------- */
 DATA.MISSION_DEFS = {
@@ -252,7 +460,7 @@ DATA.MISSION_DEFS = {
       check: (b) => { const f = b.ships.find(s => s.role === 'convoy'); return !!(f && f.alive && f.hull === f.maxHull); } },
     terrain: 'light',
     playerSpawn: { x: 430, y: 800 },
-    allies: [{ cls: 'freighter', name: 'VSS PELICAN', role: 'convoy', x: 220, y: 600, angle: 0 }],
+    allies: [{ cls: 'freighter', name: 'TAS PELICAN', role: 'convoy', x: 220, y: 600, angle: 0 }],
     enemies: [
       { cls: 'jackal', name: 'DKV JACKAL', role: 'hunter', x: 1690, y: 260, angle: 170 },
       { cls: 'jackal', name: 'DKV HYENA', role: 'hunter', x: 1780, y: 900, angle: 180 },
