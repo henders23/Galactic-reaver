@@ -263,6 +263,47 @@ console.log('objectives');
   ok(!m4.bonus.check(b), 'SWIFT EXECUTION fails on turn 6');
 }
 
+/* ================= procedural mission generator (P0) ================= */
+console.log('generator');
+{
+  Game.save = Game.freshSave();
+  const ctx = { factionId: 'crimson', archetypeId: 'decap', tierId: 'hard',
+    planet: { name: 'Bloodmoon Hold', type: 'Rocky' }, system: { name: "REAVER'S LANDING" },
+    seed: 4242, playerFleetPts: 400 };
+  const a = Game.generateMission(ctx);
+  const b = Game.generateMission(ctx);
+  const sig = m => m.enemies.map(e => e.cls + ':' + e.name + ':' + e.vip).join('|');
+  eq(sig(a), sig(b), 'same seed → identical enemy order of battle');
+  eq(U._rng, null, 'generator restores unseeded RNG for the battle');
+  eq(a.terrain, 'heavy', 'Rocky planet → heavy terrain');
+
+  // every faction × archetype × tier yields a valid, launchable mission
+  let allValid = true, vipOk = true, allyOk = true;
+  let n = 0;
+  DATA.enemyFactions().forEach(fid => DATA.MISSION_ARCHETYPES.forEach(arch => DATA.MISSION_TIERS.forEach(t => {
+    const m = Game.generateMission({ factionId: fid, archetypeId: arch.id, tierId: t.id,
+      planet: { name: 'Testworld', type: 'Ice' }, system: { name: 'TEST' }, seed: ++n, playerFleetPts: 350 });
+    if (!m.enemies.length || typeof m.win !== 'function' || typeof m.lose !== 'function') allValid = false;
+    if (m.enemies.some(e => !DATA.CLASSES[e.cls])) allValid = false;
+    if (arch.vip && !m.enemies.some(e => e.vip)) vipOk = false;
+    if (arch.ally && !(m.allies && m.allies.length)) allyOk = false;
+  })));
+  ok(allValid, 'all ' + n + ' faction×archetype×tier missions are valid');
+  ok(vipOk, 'every VIP archetype spawns a priority target');
+  ok(allyOk, 'every ally archetype spawns a protected ship');
+
+  // tier scales the enemy fleet up
+  const pts = m => m.enemies.reduce((s, e) => s + DATA.CLASSES[e.cls].pts, 0);
+  const easy = Game.generateMission({ factionId: 'zaargon', archetypeId: 'assault', tierId: 'easy', seed: 9, playerFleetPts: 400 });
+  const vh = Game.generateMission({ factionId: 'zaargon', archetypeId: 'assault', tierId: 'veryhard', seed: 9, playerFleetPts: 400 });
+  ok(pts(vh) > pts(easy), 'VERY HARD fields more enemy points than EASY');
+
+  // faction fleets only draw from their own pool
+  const hive = Game.generateMission({ factionId: 'hive', archetypeId: 'patrol', tierId: 'medium', seed: 5, playerFleetPts: 500 });
+  ok(hive.enemies.every(e => DATA.FACTIONS.hive.pool.includes(e.cls)), 'Hive mission fields only Hive hulls');
+  Game.mode = 'skirmish'; Game.b = null;
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

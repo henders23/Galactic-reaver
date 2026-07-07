@@ -483,7 +483,7 @@ const UI = {
     if (!b || !b.banner) return;
     UI.el.banner.classList.add('hidden');
     const win = b.banner.win;
-    if (Game.mode === 'skirmish') {
+    if (Game.mode === 'skirmish' || Game.mode === 'war') {
       UI.showSkirmishResult(win);
       return;
     }
@@ -901,6 +901,7 @@ const UI = {
   showSkirmishSetup() {
     const picks = ['corvette'];
     let diffId = 'normal';
+    let factionId = 'crimson';
     const HULLS = ['corvette', 'frigate', 'lcruiser', 'argus'];
     const render = () => {
       const cards = HULLS.map(cls => {
@@ -913,18 +914,30 @@ const UI = {
           '<div class="pt">' + c.pts + ' PTS · HULL ' + c.hull + ' · SPD ' + c.speed + '</div></div>';
       }).join('');
       const pts = picks.reduce((a, p) => a + DATA.CLASSES[p].pts, 0);
+      const facChips = DATA.enemyFactions().map(fid => {
+        const F = DATA.faction(fid);
+        return '<div class="pickcard' + (factionId === fid ? ' sel' : '') + '" data-sfac="' + fid + '" style="width:200px">' +
+          '<h4 style="color:' + F.color + '">' + F.name + '</h4>' +
+          '<div class="ds">' + F.blurb + '</div></div>';
+      }).join('');
       const diffChips = DATA.DIFFS.map(d =>
         '<div class="pickcard' + (diffId === d.id ? ' sel' : '') + '" data-sdiff="' + d.id + '" style="width:150px"><h4>' + d.name + '</h4></div>').join('');
+      const enemyName = DATA.faction(factionId).name;
       UI.screen(
         '<div class="brieftitle">SKIRMISH</div>' +
         '<div class="briefsub">BUILD YOUR FLEET — CLICK TO ADD, RIGHT-CLICK TO REMOVE · MAX ' + DATA.MAX_FLEET + ' SHIPS</div>' +
         '<div class="pickrow">' + cards + '</div>' +
+        '<div class="picklabel">ENEMY FACTION</div>' +
+        '<div class="pickrow">' + facChips + '</div>' +
         '<div class="pickrow">' + diffChips + '</div>' +
-        '<div class="fleetline">FLEET: ' + picks.map(p => DATA.CLASSES[p].short).join(' · ') + ' — ' + pts + ' PTS · Dominion gets a matched force</div>' +
+        '<div class="fleetline">FLEET: ' + picks.map(p => DATA.CLASSES[p].short).join(' · ') + ' — ' + pts + ' PTS · the ' + enemyName + ' gets a matched force</div>' +
         '<button class="menu-btn primary" id="mnLaunch"' + (picks.length ? '' : ' disabled') + '>LAUNCH ▸</button>' +
         '<button class="menu-btn" id="mnTitleK">BACK</button>',
         { bg: 'starfield' }
       );
+      UI.el.screenInner.querySelectorAll('[data-sfac]').forEach(chip => {
+        chip.addEventListener('click', () => { factionId = chip.dataset.sfac; Snd.click(); render(); });
+      });
       UI.el.screenInner.querySelectorAll('[data-sdiff]').forEach(chip => {
         chip.addEventListener('click', () => { diffId = chip.dataset.sdiff; Snd.click(); render(); });
       });
@@ -942,7 +955,7 @@ const UI = {
         if (!picks.length) return;
         Snd.init(); Snd.click();
         UI.closeScreen();
-        Game.startSkirmish(picks, diffId);
+        Game.startSkirmish(picks, diffId, factionId);
         UI.rebuildLog();
       });
       document.getElementById('mnTitleK').addEventListener('click', () => UI.showTitle());

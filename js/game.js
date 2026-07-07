@@ -19,7 +19,12 @@ const Game = {
   },
 
   skirmishDiff: 'normal',
+  curTier: null,          // active per-mission difficulty tier (war mode)
   diff() {
+    if (Game.mode === 'war' && Game.curTier) {
+      const t = Game.curTier;
+      return { id: 'war', name: t.name, enemyNeed: t.enemyNeed, morale: 0.4, reqMul: t.reqMul };
+    }
     const id = Game.mode === 'campaign' ? (Game.save && Game.save.diff) : Game.skirmishDiff;
     return DATA.diffOf(id);
   },
@@ -149,34 +154,199 @@ const Game = {
     Game.beginBattle(m, ships, m.terrain);
   },
 
-  startSkirmish(fleetSel, diffId) {
+  startSkirmish(fleetSel, diffId, factionId) {
     Game.mode = 'skirmish';
     Game.skirmishDiff = diffId || 'normal';
+    Game.curTier = null;
+    factionId = factionId && DATA.FACTIONS[factionId] && DATA.FACTIONS[factionId].side === 'enemy' ? factionId : 'crimson';
+    const F = DATA.faction(factionId);
     const fleet = fleetSel.map((cls, i) => ({
       cls, name: i === 0 ? 'TAS VANGUARD' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
       xp: 0, refit: false
     }));
     const ships = Game.fleetSpawn({ x: 340, y: 650 }, fleet);
-    let budget = fleet.reduce((a, f) => a + DATA.CLASSES[f.cls].pts, 0) + 80;
-    const names = DATA.DKV_NAMES.slice();
-    let n = 0;
-    while (budget > 80 && n < 6) {
-      const affordable = DATA.SKIRMISH_POOL.filter(p => DATA.CLASSES[p.cls].pts <= budget);
-      if (!affordable.length) break;
-      const p = U.pick(affordable);
-      budget -= DATA.CLASSES[p.cls].pts;
-      const nm = names.length ? names.splice(Math.floor(U.random() * names.length), 1)[0] : 'DKV NULL';
-      const role = p.cls === 'hive' ? 'carrier' : p.role;
-      ships.push(Game.mkShip(p.cls, nm, 'enemy', role, U.frand(1450, 1850), U.frand(240, 1060), 180 + U.frand(-25, 25)));
-      n++;
-    }
+    const budget = fleet.reduce((a, f) => a + DATA.CLASSES[f.cls].pts, 0) + 80;
+    const specs = Game.rollFleet(factionId, { budget, max: 6 });
+    specs.forEach(s => ships.push(Game.mkShip(s.cls, s.name, 'enemy', s.role,
+      U.frand(1450, 1850), U.frand(240, 1060), 180 + U.frand(-25, 25), { vip: s.vip })));
     const m = {
-      name: 'SKIRMISH', sub: 'KESSEL DRIFT · CONTESTED VOLUME',
+      name: 'SKIRMISH', sub: 'KESSEL DRIFT · ' + F.short,
       reward: 0,
-      win: (b) => Game.sideDead(b, 'enemy') ? 'Hostiles destroyed. Sector clear.' : null,
+      win: (b) => Game.sideDead(b, 'enemy') ? F.short + ' force destroyed. Sector clear.' : null,
       lose: (b) => Game.sideDead(b, 'player') ? 'Escape pods away. The Verge keeps what it takes.' : null
     };
     Game.beginBattle(m, ships, U.pick(['light', 'medium', 'heavy']));
+  },
+
+  /* ================= procedural fleets & missions (P0) ================= */
+
+  /* allocate a faction-appropriate, unused ship name */
+  factionShipName(factionId, used, rng) {
+    if (factionId === 'hive') {
+      let n, guard = 0;
+      do { n = DATA.hiveName(rng); } while (used.has(n) && guard++ < 60);
+      used.add(n); return n;
+    }
+    const F = DATA.faction(factionId);
+    const pool = DATA.NAME_POOLS[F.names] || DATA.NAME_POOLS.crimson;
+    const avail = pool.filter(n => !used.has(n));
+    const src = avail.length ? avail : pool;
+    const name = src[Math.floor((rng ? rng() : Math.random()) * src.length)];
+    used.add(name);
+    return name;
+  },
+
+  /* is this hull a carrier (launches bombers)? → gets the 'carrier' AI role */
+  isCarrierClass(cls) {
+    const c = DATA.CLASSES[cls];
+    return !!(c && c.weapons.some(w => w.type === 'bay' && w.craft === 'bombers'));
+  },
+
+  /* Build a points-matched fleet for a faction. Returns specs [{cls,role,name,vip}].
+     opts: { budget, max, rng, used, flagship, vipFlagship, roles } */
+  rollFleet(factionId, opts) {
+    opts = opts || {};
+    const F = DATA.faction(factionId);
+    const rng = opts.rng;
+    const rand = () => (rng ? rng() : Math.random());
+    const used = opts.used || new Set();
+    const roles = opts.roles || F.roles || ['brawler'];
+    const max = opts.max || 6;
+    let remaining = opts.budget || 300;
+    const specs = [];
+    let ri = 0;
+    const roleFor = (cls) => Game.isCarrierClass(cls) ? 'carrier' : roles[ri++ % roles.length];
+    // a requested flagship (e.g. a decapitation target) is always present, even if
+    // it overruns the budget — only its escort screen scales with the tier
+    if (opts.flagship && F.flagship && DATA.CLASSES[F.flagship]) {
+      remaining -= DATA.CLASSES[F.flagship].pts;
+      specs.push({ cls: F.flagship, role: 'sniper', name: Game.factionShipName(factionId, used, rng), vip: !!opts.vipFlagship, flagship: true });
+    }
+    let guard = 0;
+    while (specs.length < max && guard++ < 60) {
+      const pool = F.pool.filter(c => { const p = DATA.CLASSES[c].pts; return p > 0 && p <= remaining; });
+      if (!pool.length) break;
+      const cls = pool[Math.floor(rand() * pool.length)];
+      remaining -= DATA.CLASSES[cls].pts;
+      specs.push({ cls, role: roleFor(cls), name: Game.factionShipName(factionId, used, rng) });
+    }
+    if (!specs.length) {
+      const cheapest = F.pool.slice().sort((a, z) => DATA.CLASSES[a].pts - DATA.CLASSES[z].pts)[0];
+      specs.push({ cls: cheapest, role: roles[0], name: Game.factionShipName(factionId, used, rng) });
+    }
+    return specs;
+  },
+
+  playerFleetPts() {
+    const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette' }];
+    return fleet.reduce((a, f) => a + (DATA.CLASSES[f.cls] ? DATA.CLASSES[f.cls].pts : 0), 0);
+  },
+
+  /* Generate a full mission from (faction, archetype, tier, planet, system, seed).
+     Deterministic under a given seed; the returned object matches DATA.MISSION_DEFS. */
+  generateMission(ctx) {
+    ctx = ctx || {};
+    if (ctx.seed != null) U.setSeed(ctx.seed >>> 0);
+    const rng = U.random;
+    const F = DATA.faction(ctx.factionId || 'crimson');
+    const arch = DATA.archetype(ctx.archetypeId);
+    const tier = DATA.tier(ctx.tierId);
+    const planet = ctx.planet || { name: 'CONTESTED WORLD', type: 'Barren' };
+    const system = ctx.system || { name: 'THE VERGE' };
+    const W = DATA.WORLD.w, H = DATA.WORLD.h;
+
+    const base = Math.max(ctx.playerFleetPts || Game.playerFleetPts() || 220, 200);
+    const budget = Math.round(base * tier.budgetMul * (arch.budgetMul || 1)) + 60;
+    const used = new Set();
+    const wantFlagship = arch.vip === 'flagship';
+    const wantCourier = arch.vip === 'courier';
+
+    // enemy order of battle
+    let roles = F.roles;
+    if (arch.id === 'escort') roles = ['hunter', 'raider', 'brawler'];
+    const specs = Game.rollFleet(F.id, {
+      budget: wantCourier ? Math.round(budget * 0.8) : budget,
+      rng, used, roles, max: 6,
+      flagship: wantFlagship, vipFlagship: wantFlagship
+    });
+    const enemies = specs.map((s, i) => {
+      const y = 260 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 520);
+      return { cls: s.cls, name: s.name, role: s.role, x: 1450 + rng() * 400, y, angle: 180, vip: !!s.vip };
+    });
+    // courier: a lone fast runner the escorts protect
+    if (wantCourier) {
+      const runner = F.pool[0];
+      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: 980, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
+    }
+
+    const allies = [];
+    if (arch.ally === 'convoy') {
+      allies.push({ cls: 'freighter', name: 'TAS PELICAN', role: 'convoy', x: 220, y: H / 2, angle: 0 });
+    } else if (arch.ally === 'station') {
+      allies.push({ cls: 'freighter', name: 'OUTPOST ' + planet.name.toUpperCase().split(' ')[0], role: 'guard', x: 480, y: H / 2, angle: 0 });
+    }
+
+    // win / lose logic assembled from archetype flags
+    const findVip = (b) => b.ships.find(s => s.vip);
+    const findAlly = (b) => b.ships.find(s => s.side === 'ally');
+    let win, lose;
+    if (arch.ally === 'convoy') {
+      win = (b) => { const f = findAlly(b); if (f && f.alive && f.exited) return 'The freighter makes the jump. The lane stays open.'; if (f && f.alive && Game.sideDead(b, 'enemy')) return F.short + ' fleet destroyed. The convoy is safe.'; return null; };
+      lose = (b) => { const f = findAlly(b); if (f && !f.alive) return 'The freighter breaks up. The lane is lost.'; return Game.sideDead(b, 'player') ? 'Escape pods away. The convoy is on its own.' : null; };
+    } else if (arch.ally === 'station') {
+      win = (b) => Game.sideDead(b, 'enemy') ? 'Raiders cleared. The outpost holds.' : null;
+      lose = (b) => { const f = findAlly(b); if (f && !f.alive) return 'The outpost is gone. We were too late.'; return Game.sideDead(b, 'player') ? 'The line breaks. The Verge keeps what it takes.' : null; };
+    } else if (arch.vip) {
+      win = (b) => { const v = findVip(b); return (v && !v.alive) ? (wantCourier ? 'The courier dies with her codes.' : 'The flagship folds in on her own fires — the line breaks.') : null; };
+      lose = (b) => { const v = findVip(b); if (wantCourier && v && v.alive && v.exited) return 'A jump flare — the courier is gone, and her codes with her.'; return Game.sideDead(b, 'player') ? 'Escape pods away. The Verge keeps what it takes.' : null; };
+    } else {
+      win = (b) => Game.sideDead(b, 'enemy') ? 'Sector clear. ' + F.short + ' transponders go dark.' : null;
+      lose = (b) => Game.sideDead(b, 'player') ? 'Escape pods away. The Verge keeps what it takes.' : null;
+    }
+
+    const contactName = enemies.find(e => e.vip) ? enemies.find(e => e.vip).name : (enemies[0] ? enemies[0].name : F.short);
+    const briefing = [
+      F.adj + ' forces contest ' + planet.name + ' in the ' + system.name + ' system. ' + F.blurb,
+      'Voss: "' + Game.briefLine(arch, F) + '"',
+      'OBJECTIVE — ' + arch.obj
+    ];
+
+    if (ctx.seed != null) U.clearSeed();
+
+    return {
+      name: arch.name, sub: system.name + ' · ' + planet.name.toUpperCase(),
+      generated: true, faction: F.id, tier: tier.id, archetype: arch.id,
+      briefing, reward: Math.round(arch.reward * tier.budgetMul), bonus: null,
+      terrain: DATA.PLANET_TYPES[planet.type] || arch.terrain || 'medium',
+      playerSpawn: { x: 340, y: H / 2 }, allies, enemies,
+      contact: contactName,
+      win, lose
+    };
+  },
+
+  briefLine(arch, F) {
+    const lines = {
+      patrol: 'Simple gunnery problem, Captain. Cross their bows and clear the sector.',
+      assault: 'Break that fleet and the world is ours. Keep your stern out of their teeth.',
+      escort: "She can't dodge and she can't shoot. That makes her yours — get her to the marker.",
+      defense: "Hold the line. If that outpost dies, so does our foothold here.",
+      decap: 'Take the flagship\'s spine off and the rest of them remember they\'re mortal.',
+      interdict: "If that courier jumps, every ambush for a year is already planned. Burn her."
+    };
+    return lines[arch.id] || 'Do your duty, Captain.';
+  },
+
+  /* Launch a generated mission as a one-off battle (P0 — no war persistence yet). */
+  startProceduralMission(ctx) {
+    Game.mode = 'war';
+    Game.curTier = DATA.tier(ctx.tierId);
+    const m = Game.generateMission(ctx);
+    const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }];
+    const ships = Game.fleetSpawn(m.playerSpawn, fleet);
+    (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
+    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip })));
+    Game.beginBattle(m, ships, m.terrain);
+    return m;
   },
 
   beginBattle(mission, ships, terrainDensity) {
@@ -629,7 +799,7 @@ const Game = {
         tp.count -= shot;
         Rend.fx.spark(tp.to.x, tp.to.y, '#9fe8ff', 12);
         Snd.cannon();
-        Game.log((f.side === 'player' ? 'TAS' : 'DKV') + ' fighter screen sweeps the torpedo salvo — ' + shot + ' torpedo' + (shot === 1 ? '' : 'es') + ' destroyed', '#7ce8f7');
+        Game.log((f.side === 'player' ? 'TAS' : 'Hostile') + ' fighter screen sweeps the torpedo salvo — ' + shot + ' torpedo' + (shot === 1 ? '' : 'es') + ' destroyed', '#7ce8f7');
         if (tp.count <= 0) { tp.expired = true; tp.strike = null; }
       } else {
         const bo = b.craft.find(c => c.id === iv.id);
@@ -1295,6 +1465,10 @@ const AI = {
       const pt = exits.sort((a, z) => U.dist(s, a) - U.dist(s, z))[0];
       return { pt, face: U.angleTo(s, pt) };
     }
+    if (s.role === 'guard') {
+      // a defended outpost holds station and keeps its bows to the enemy
+      return { pt: { x: s.x, y: s.y }, face: target ? U.angleTo(s, target) : s.angle };
+    }
     if (!target) return { pt: { x: s.x, y: s.y }, face: s.angle };
     const dToT = U.angleTo(s, target);
     const hasSide = s.weapons.some(w => w.arc === 'side' && w.type !== 'torp' && w.type !== 'bay');
@@ -1353,6 +1527,7 @@ const AI = {
     const orders = DATA.orders(s);
     const find = id => orders.find(o => o.id === id) || orders[0];
     if (s.role === 'convoy') return find('heading');
+    if (s.role === 'guard') return find('hold');
     if (s.role === 'flee' && b.turn >= 3) return find('full');
     if (s.role === 'rout') {
       const turnNeeded = Math.abs(U.norm180(U.angleTo(s, want.pt) - s.angle));

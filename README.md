@@ -25,8 +25,11 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   surviving missions: GREEN → SEASONED (+1 turret) → VETERAN (guns hit on −1)
   → ELITE (+1 shields, repairs on 4+). Ships lost in battle are gone for good,
   and their experience with them.
-- **Skirmish mode** — build a fleet from all four hulls, fight a points-matched
-  Dominion force on a random map.
+- **Skirmish mode** — build a fleet from all four hulls and fight a points-matched
+  force from any enemy faction — **Crimson Reach** pirates, the **Za'Argon
+  Dynasty** or **the Hive** — on a random map. (Powered by the same procedural
+  faction/mission engine that will drive the dynamic campaign; see
+  `docs/CAMPAIGN_PLAN.md`.)
 - **Dice-pool gunnery** — every gun throws a pool of D6: a light escort flicks
   3 dice, a capital broadside hurls 12. Lances hit on 3+ at any range; batteries
   hit on 4+, worse at long range, better point-blank. Orders, criticals, evasion

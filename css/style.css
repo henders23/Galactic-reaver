@@ -362,6 +362,8 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .storecard button:disabled { opacity: .35; cursor: default; }
 .storecard.owned { border-color: rgba(111, 224, 168, .4); }
 .storecard.owned h4 { color: #6fe0a8; }
+.picklabel { font: 700 10px Rajdhani, sans-serif; letter-spacing: 3px; color: #6c86a0; text-align: center; margin: 10px 0 -2px; }
+
 .reqbig {
   display: inline-block; font: 700 24px 'IBM Plex Mono', monospace; color: #ffd465; margin-bottom: 22px;
   padding: 12px 26px; border-radius: 12px; letter-spacing: 1px;
