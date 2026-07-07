@@ -483,7 +483,12 @@ const UI = {
     if (!b || !b.banner) return;
     UI.el.banner.classList.add('hidden');
     const win = b.banner.win;
-    if (Game.mode === 'skirmish' || Game.mode === 'war') {
+    if (Game.mode === 'war') {
+      if (Game.warContext) { UI.afterWarMission(win); return; }
+      UI.showSkirmishResult(win);   // standalone generated one-off
+      return;
+    }
+    if (Game.mode === 'skirmish') {
       UI.showSkirmishResult(win);
       return;
     }
@@ -559,7 +564,8 @@ const UI = {
       '<div class="title-big">GALACTIC<br><span>REAVER</span></div>' +
       '<div class="title-sub">BATTLE FOR THE KESSEL DRIFT</div>' +
       '<div class="hero-menu">' +
-      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN <span class="btn-note">' + save.completed.length + '/4 ENGAGEMENTS</span></button>' : '') +
+      (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN <span class="btn-note">' +
+        (save.galaxy ? Object.values(save.galaxy.owner).filter(o => o === 'terran').length + '/' + DATA.GALAXY.systems.length + ' SYSTEMS' : 'IN PROGRESS') + '</span></button>' : '') +
       '<button class="menu-btn' + (save && !save.done ? '' : ' primary') + '" id="mnNew">NEW CAMPAIGN</button>' +
       '<button class="menu-btn" id="mnSkirmish">SKIRMISH</button>' +
       '<button class="menu-btn" id="mnHelp">HOW TO PLAY</button>' +
@@ -569,7 +575,7 @@ const UI = {
       { bg: 'start', wide: true, left: true }
     );
     const cont = document.getElementById('mnContinue');
-    if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; UI.showSector(); });
+    if (cont) cont.addEventListener('click', () => { Snd.init(); Game.save = save; Game.mode = 'war'; UI.showGalaxy(); });
     document.getElementById('mnNew').addEventListener('click', () => { Snd.init(); UI.showDifficulty(); });
     document.getElementById('mnSkirmish').addEventListener('click', () => { Snd.init(); UI.showSkirmishSetup(); });
     document.getElementById('mnHelp').addEventListener('click', () => UI.showHelp());
@@ -626,12 +632,188 @@ const UI = {
       '</div>',
       { bg: 'starfield', wide: true, left: true }
     );
-    document.getElementById('mnCtxGo').addEventListener('click', () => { Snd.select(); UI.showSector(); });
+    document.getElementById('mnCtxGo').addEventListener('click', () => { Snd.select(); UI.showGalaxy(); });
     document.getElementById('mnCtxBack').addEventListener('click', () => UI.showDifficulty());
   },
 
+  /* ---------------- galaxy (sector) map ---------------- */
+  showGalaxy() {
+    Game.mode = 'war';
+    const sv = Game.save;
+    Game.galaxyInit(sv);
+    const g = sv.galaxy;
+    const sys = DATA.GALAXY.systems;
+    const pos = {}; sys.forEach(s => pos[s.id] = s);
+    const seen = new Set();
+    const lines = [];
+    sys.forEach(s => s.links.forEach(l => {
+      const key = [s.id, l].sort().join('|');
+      if (seen.has(key) || !pos[l]) return;
+      seen.add(key);
+      const b2 = pos[l];
+      const front = (Game.systemOwner(s.id) === 'terran') !== (Game.systemOwner(l) === 'terran');
+      lines.push('<line x1="' + s.x + '" y1="' + s.y + '" x2="' + b2.x + '" y2="' + b2.y + '" stroke="' +
+        (front ? 'rgba(255,180,84,.55)' : 'rgba(140,180,220,.16)') + '" stroke-width="' + (front ? 0.4 : 0.25) +
+        '"' + (front ? ' stroke-dasharray="1.3 1"' : '') + '/>');
+    }));
+    const nodeHtml = sys.map(s => {
+      const owner = Game.systemOwner(s.id);
+      const F = DATA.faction(owner);
+      const engage = Game.isEngageable(s.id);
+      const held = owner === 'terran';
+      const siege = Math.round(g.siege[s.id] || 0);
+      const cls = held ? 'held' : (engage ? 'engage' : 'locked');
+      return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
+        '<div class="gdot" style="--fc:' + F.color + '"></div>' +
+        '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' +
+        (engage ? '<div class="gsub">ENGAGE ▸</div>' : (siege > 0 && held ? '<div class="gsub siege">◎ SIEGE ' + siege + '/4</div>' : '')) +
+        '</div>';
+    }).join('');
+    const inf = Game.factionInfluence();
+    const total = sys.length;
+    const infBars = ['terran', 'crimson', 'zaargon', 'hive'].map(fid => {
+      const F = DATA.faction(fid);
+      const pct = Math.round(100 * (inf[fid] || 0) / total);
+      return '<div class="infrow"><span style="color:' + F.color + '">' + F.short + '</span>' +
+        '<div class="infbar"><i style="width:' + pct + '%;background:' + F.color + '"></i></div>' +
+        '<span class="infpct">' + pct + '%</span></div>';
+    }).join('');
+    UI.screen(
+      '<div class="galaxy-head"><div class="brieftitle">GALACTIC SECTOR MAP</div>' +
+      '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div></div>' +
+      '<div id="galaxymap">' +
+      '<div class="neb neb1"></div><div class="neb neb2"></div><div class="gcore"></div>' +
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines.join('') + '</svg>' +
+      nodeHtml +
+      '<div class="ginfo" id="ginfo"><div class="gi-empty">Hover a system for intel.</div></div>' +
+      '<div class="ginfl"><div class="gi-title">FACTION INFLUENCE</div>' + infBars + '</div>' +
+      '</div>' +
+      '<div class="sector-foot">' +
+      '<div class="reqpill"><span class="req">⬡ ' + sv.req + ' REQ</span><span class="sep">|</span>' +
+      '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('TAS ', ''))).join(' · ') + '</span></div>' +
+      '<div class="btnrow"><button class="menu-btn slim" id="mnFleetG">FLEET & REQUISITION</button>' +
+      '<button class="menu-btn slim" id="mnMenuG">BACK TO MENU</button></div></div>',
+      { bg: 'starfield', wide: true }
+    );
+    const infoEl = document.getElementById('ginfo');
+    const renderInfo = (sid) => {
+      const s = DATA.system(sid), owner = Game.systemOwner(sid), F = DATA.faction(owner);
+      const t = DATA.SYSTEM_TYPES[s.type];
+      const engage = Game.isEngageable(sid);
+      infoEl.innerHTML = '<div class="gi-name" style="color:' + F.color + '">' + s.name + '</div>' +
+        '<div class="gi-own">' + F.name + ' · ' + t.name + '</div>' +
+        '<div class="gi-row"><span>STRATEGIC VALUE</span><b>' + t.value + '</b></div>' +
+        (owner !== 'terran'
+          ? '<div class="gi-row"><span>PLANETS SECURED</span><b>' + Game.systemProgress(sid) + '/4</b></div>'
+          : '<div class="gi-row"><span>STATUS</span><b style="color:#6fe0a8">TERRAN-HELD</b></div>') +
+        (engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
+          : (owner === 'terran' ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
+    };
+    UI.el.screenInner.querySelectorAll('[data-sys]').forEach(el => {
+      el.addEventListener('mouseenter', () => renderInfo(el.dataset.sys));
+      if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
+    });
+    document.getElementById('mnFleetG').addEventListener('click', () => UI.showDebrief(null, 0));
+    document.getElementById('mnMenuG').addEventListener('click', () => UI.showTitle());
+  },
+
+  /* ---------------- system / planet map ---------------- */
+  showSystem(sysId) {
+    const sys = DATA.system(sysId), owner = Game.systemOwner(sysId), F = DATA.faction(owner);
+    const planets = Game.systemPlanets(sysId);
+    let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
+    if (selIdx < 0) selIdx = 0;
+    let tierId = 'medium';
+    const render = () => {
+      const quads = planets.map((p, i) => {
+        const cleared = Game.isPlanetCleared(sysId, i);
+        const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
+        return '<div class="planet' + (selIdx === i ? ' sel' : '') + (cleared ? ' done' : '') + '" data-planet="' + i + '">' +
+          '<div class="pl-n">' + (i + 1) + '. ' + U.esc(p.name) + '</div>' +
+          '<div class="pl-t">' + p.type.toUpperCase() + ' PLANET' + (p.anchor ? ' · ◆ SET-PIECE' : '') + '</div>' +
+          '<div class="pl-m">' + (cleared ? '<span class="ok">✓ SECURED</span>' : U.esc(mname)) + '</div></div>';
+      }).join('');
+      const p = planets[selIdx];
+      const cleared = Game.isPlanetCleared(sysId, selIdx);
+      const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
+      const obj = p.anchor
+        ? (DATA.MISSION_DEFS[p.anchor].briefing.find(x => x.startsWith('OBJECTIVE')) || '').replace('OBJECTIVE — ', '')
+        : DATA.archetype(p.archetype).obj;
+      const tierChips = DATA.MISSION_TIERS.map(t =>
+        '<div class="tierchip' + (tierId === t.id ? ' sel' : '') + '" data-tier="' + t.id + '" style="--tc:' + t.color + '">' +
+        '<h4>' + t.name + '</h4><div class="tr">' + t.rec + '</div></div>').join('');
+      const prog = Game.systemProgress(sysId);
+      UI.screen(
+        '<div class="sys-head"><div class="brieftitle" style="color:' + F.color + '">' + sys.name + '</div>' +
+        '<div class="briefsub">' + F.name + ' SPACE · ' + DATA.SYSTEM_TYPES[sys.type].name + ' · ' + prog + '/4 PLANETS SECURED</div></div>' +
+        '<div class="sys-cols"><div class="planetgrid">' + quads + '</div>' +
+        '<div class="misspanel">' +
+        '<div class="mp-title">' + (p.anchor ? '◆ ' : '') + U.esc(mname) + '</div>' +
+        '<div class="mp-sub">' + U.esc(p.name) + ' · ' + p.type.toUpperCase() + ' PLANET</div>' +
+        '<div class="mp-obj">' + U.esc(obj) + '</div>' +
+        (cleared ? '<div class="mp-done">✓ THIS PLANET IS SECURED</div>'
+          : (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
+            : '<div class="mp-tierlabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
+        (cleared ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
+        '</div></div>' +
+        '<div class="btnrow left"><button class="menu-btn slim" id="mnBackG">◂ SECTOR MAP</button></div>',
+        { bg: 'starfield', wide: true, left: true }
+      );
+      UI.el.screenInner.querySelectorAll('[data-planet]').forEach(el =>
+        el.addEventListener('click', () => { selIdx = Number(el.dataset.planet); Snd.click(); render(); }));
+      UI.el.screenInner.querySelectorAll('[data-tier]').forEach(el =>
+        el.addEventListener('click', () => { tierId = el.dataset.tier; Snd.click(); render(); }));
+      const lb = document.getElementById('mnLaunchP');
+      if (lb) lb.addEventListener('click', () => {
+        Snd.init(); Snd.click();
+        UI.closeScreen();
+        Game.startPlanetMission(sysId, selIdx, tierId);
+        UI.rebuildLog();
+      });
+      document.getElementById('mnBackG').addEventListener('click', () => UI.showGalaxy());
+    };
+    render();
+  },
+
+  /* ---------------- war-mission outcomes ---------------- */
+  afterWarMission(win) {
+    const wc = Game.warContext;
+    const res = Game.applyWarResult(win);
+    if (win) {
+      if (res.status === 'win') { Game.save.done = true; Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignVictory(); return; }
+      if (res.report) res.report.war = { taken: res.taken, lost: res.lost, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId) };
+      Game.warContext = null;
+      UI.showDebrief(res.report, res.earned);
+      return;
+    }
+    UI.showWarLoss(wc);
+  },
+
+  showWarLoss(wc) {
+    Game.warContext = null;
+    const sys = DATA.system(wc.sysId);
+    const planet = Game.systemPlanets(wc.sysId)[wc.planetIdx];
+    UI.screen(
+      '<div class="brieftitle" style="color:#ff6159">MISSION FAILED</div>' +
+      '<div class="briefsub">' + sys.name + ' · ' + U.esc(planet.name) + '</div>' +
+      '<div class="briefbody"><p>' + U.esc(Game.b && Game.b.banner ? Game.b.banner.msg : '') + '</p>' +
+      '<p>The Alliance pulls your fleet back to the tender. Hulls are patched, crews replaced. The system still stands against you.</p></div>' +
+      '<button class="menu-btn primary" id="mnRetryP">RETRY MISSION ▸</button>' +
+      '<button class="menu-btn" id="mnGalG">SECTOR MAP</button>',
+      { bg: 'defeat' }
+    );
+    document.getElementById('mnRetryP').addEventListener('click', () => {
+      Snd.init(); Snd.click(); UI.closeScreen();
+      Game.startPlanetMission(wc.sysId, wc.planetIdx, wc.tierId);
+      UI.rebuildLog();
+    });
+    document.getElementById('mnGalG').addEventListener('click', () => UI.showGalaxy());
+    Game.b = null;
+  },
+
   /* ---------------- sector map ---------------- */
-  showSector() {
+  showSector() { return UI.showGalaxy(); },   // superseded by the galaxy map
+  _showSectorLegacy() {
     const sv = Game.save;
     const avail = DATA.sectorNext(sv.node).filter(id => !sv.completed.includes(id));
     const nodes = DATA.SECTOR.nodes;
@@ -797,10 +979,18 @@ const UI = {
         '<button data-up="' + u.id + '" ' + (owned || !afford ? 'disabled' : '') + '>' +
         (owned ? 'INSTALLED ✓' : 'INSTALL — ' + u.cost + ' REQ') + '</button></div>';
     }).join('');
+    const w = report && report.war;
+    const warBanner = w ? '<div class="warbanner' + (w.taken ? ' taken' : '') + '">' +
+      (w.taken ? '★ ' + U.esc(w.sysName) + ' SECURED — the system flies Terran colours'
+        : U.esc(w.sysName) + ' — planet secured · ' + w.sysProgress + '/4 taken') +
+      (w.lost && w.lost.length ? '<div class="warlost">⚠ Enemy offensive — ' +
+        w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '</div>' : '') +
+      '</div>' : '';
     UI.screen(
       (report
         ? '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div><div class="briefsub">HULLS REPAIRED · CREWS RESTED</div>'
         : '<div class="brieftitle">FLEET COMMAND</div><div class="briefsub">TENDER & REQUISITION · VETERANS KEEP THEIR CREWS AS LONG AS THEY LIVE</div>') +
+      warBanner +
       '<div class="reqbig">⬡ ' + sv.req + ' REQUISITION</div>' +
       reportHtml +
       '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + DATA.MAX_FLEET + '</div>' +
@@ -863,7 +1053,7 @@ const UI = {
         rerender();
       });
     });
-    document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showSector(); });
+    document.getElementById('mnToSector').addEventListener('click', () => { Game.persist(); UI.showGalaxy(); });
     Game.b = null;
   },
 
@@ -879,7 +1069,7 @@ const UI = {
       { bg: 'victory' }
     );
     document.getElementById('mnAgain').addEventListener('click', () => {
-      Game.save = Game.freshSave(); Game.persist(); UI.showSector();
+      Game.save = Game.freshSave(); Game.persist(); UI.showGalaxy();
     });
     document.getElementById('mnSk2').addEventListener('click', () => UI.showSkirmishSetup());
     Game.b = null;

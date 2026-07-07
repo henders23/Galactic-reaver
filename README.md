@@ -13,11 +13,15 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 
 ## What's in the game
 
-- **Branching campaign on a sector map** — six engagements in the Kessel Drift, of
-  which each campaign fights four: after every victory you choose your route
-  (convoy escort or asteroid ambush; hunt a fleeing courier or kill a carrier)
-  before the final battle against the flagship DREADMAW. Progress, requisition
-  and crews are saved in `localStorage`.
+- **Dynamic galactic-war campaign** — a two-level galaxy map: choose any enemy
+  system **bordering your space**, drop into its **four planets** (one mission
+  each, at Easy/Medium/Hard/Very Hard), and take it planet by planet. Missions are
+  procedurally generated per faction, with the hand-built battles slotted in as
+  **set-piece anchors** (the DREADMAW finale, THE HIVE, and more). The four powers
+  — Terran Alliance, Crimson Reach, Za'Argon Dynasty and the Hive — hold the
+  systems, and the **front can be lost**: enemy offensives besiege and flip your
+  frontier systems back if you don't hold them. Progress, ownership, requisition
+  and crews are saved in `localStorage`. (See `docs/CAMPAIGN_PLAN.md`.)
 - **Fleet management between missions** — commission frigates, light cruisers and
   escort carriers (fleet of up to 4), install fleet-wide upgrades, and buy
   per-ship **gunnery refits** (+1 die on every gun).

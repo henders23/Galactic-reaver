@@ -17,11 +17,11 @@ row (escort → capital) and its own ship-name pool (`DATA.NAME_POOLS`):
 | **Crimson Reach** | red `#ff6159` | unprefixed pirate names, `jackal…dreadmaw` | fast, vicious raiders |
 | **Za'Argon Dynasty** | green `#6fe0a8` | imperial relic names, `zsentinel…zthrone` | slow, sacred battleline |
 | **The Hive** | purple `#b57ff0` | intel codenames + translated designation, `hdrone…hleviathan` | bio-swarm + carriers |
-| *Neutral* | amber `#ffd465` | independent haulers | fly for whoever holds the lane |
+| *Neutral* | amber `#ffd465` | independent haulers | non-territorial; fly for whoever holds the lane |
 
-> The sector-map mock-up legend showed Terran / Crimson / Hive / Neutral only.
-> Za'Argon is built into the data and can be included or omitted from the galaxy
-> layout without code changes.
+> The **Za'Argon Dynasty holds the central systems** (they replaced the mock-up's
+> "Neutral" owner on the galaxy). Neutral survives only as the allied-hauler
+> faction used by escort/defense missions, not as a system owner.
 
 ## Sector map (galaxy) — Phase 1
 
@@ -71,10 +71,22 @@ each faction's `flagship` is its capital).
   difficulty tiers, the procedural mission generator + launcher, and a
   faction-aware Skirmish (pick Crimson Reach / Za'Argon / Hive) as the live
   proving ground.
-- **P1 — Galaxy/System shell**: the two-level map UI above; planets launch
-  generated missions; static ownership first.
-- **P2 — Story anchors**: authored set-pieces + per-system boss finales.
-- **P3 — Living war**: influence simulation, systems change hands, war-state UI,
-  consequences, Voss commentary.
+- **P1 — Galaxy/System shell** ✅ *(done)*
+  Two-level map: `UI.showGalaxy()` (21 systems across four factions, faction
+  colours, front-line lanes, faction-influence bars, hover intel,
+  **border-adjacency** gating) → `UI.showSystem()` (4 planets, one mission each ×
+  4 difficulty tiers). Planets launch generated missions or authored anchors.
+  Full war state is persisted (`save.galaxy = {owner, cleared, siege, turn}`):
+  clearing all 4 planets **takes** a system, and a first-pass **enemy-pressure**
+  model can besiege and **flip a frontier Terran system back** (the front can be
+  lost; the Terran capital is protected). The six authored missions are slotted
+  as set-piece anchors (FIRST BLOOD, THE CONVOY, AMBUSH AT THE ANVIL, THE HUNT on
+  Crimson systems; THE DREADMAW finale on Dreadfall; THE HIVE on Ul'Vor
+  Broodworld). Global campaign difficulty now scales how hard the front pushes
+  back.
+- **P2 — Story anchors** *(partly seeded in P1)*: richer per-system finales and
+  narrative gating (anchors currently launch as-is; next is sequencing them).
+- **P3 — Living war**: deepen the influence simulation — faction goals, smarter
+  offensives, war-state UI on the galaxy, Voss commentary, defeat/victory arcs.
 - **P4 — Narrative polish**: recurring nemeses (the flee-VIP escape hook),
   template briefings, faction voice, intel dossiers.
