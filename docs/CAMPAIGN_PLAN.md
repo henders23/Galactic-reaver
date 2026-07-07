@@ -84,8 +84,16 @@ each faction's `flagship` is its capital).
   Crimson systems; THE DREADMAW finale on Dreadfall; THE HIVE on Ul'Vor
   Broodworld). Global campaign difficulty now scales how hard the front pushes
   back.
-- **P2 — Story anchors** *(partly seeded in P1)*: richer per-system finales and
-  narrative gating (anchors currently launch as-is; next is sequencing them).
+- **P2 — Story anchors & boss finales** ✅ *(done)*
+  Every system now ends in a gated **boss finale** — an authored boss anchor
+  (DREADMAW on Dreadfall, THE HIVE on Ul'Vor) or a generated **decapitation** vs
+  the owning faction's flagship, led by a **named commander** (`DATA.COMMANDERS`;
+  the Hive's flagship *is* the mind, so it has none). The finale is **locked until
+  the system's other three worlds are secured**, so each system reads as a short
+  arc. The mock-up's **System Progression** track (Intel → Foothold → Eliminate →
+  Secure → Control) is shown on the system screen, planets carry a system-intel
+  line, boss ships name their commander in the briefing and inspector, and
+  **taking an enemy capital triggers a Voss beat** in the debrief.
 - **P3 — Living war**: deepen the influence simulation — faction goals, smarter
   offensives, war-state UI on the galaxy, Voss commentary, defeat/victory arcs.
 - **P4 — Narrative polish**: recurring nemeses (the flee-VIP escape hook),
