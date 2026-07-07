@@ -3,8 +3,34 @@
 
 const Snd = {
   ctx: null, master: null, muted: false,
+  volume: 0.5,        // master level (0..1); the fully-open gain of the mix bus
   buffers: {},        // name → decoded AudioBuffer (sample pack)
   _loading: false,
+
+  /* effective gain applied to the mix bus (0 while muted) */
+  effGain() { return Snd.muted ? 0 : Snd.volume; },
+  /* the menu-music target volume, scaled off the master level */
+  musicVol() { return (Snd.muted || !Music.wanted) ? 0 : Snd.volume * 0.84; },
+
+  loadVolume() {
+    try {
+      const v = parseFloat(localStorage.getItem('gr_volume'));
+      if (!isNaN(v)) Snd.volume = U.clamp(v, 0, 1);
+      Snd.muted = localStorage.getItem('gr_muted') === '1';
+    } catch (e) { /* storage unavailable */ }
+  },
+
+  /* set the master level (0..1). A level of 0 reads as muted; raising it un-mutes. */
+  setVolume(v) {
+    Snd.volume = U.clamp(v, 0, 1);
+    Snd.muted = Snd.volume <= 0.0001;
+    if (Snd.master) Snd.master.gain.value = Snd.effGain();
+    if (typeof window !== 'undefined' && window.Music) Music.syncMute();
+    try {
+      localStorage.setItem('gr_volume', String(Snd.volume));
+      localStorage.setItem('gr_muted', Snd.muted ? '1' : '0');
+    } catch (e) { /* storage unavailable */ }
+  },
 
   /* mp3 sample pack — real recorded weapon / explosion audio. Falls back to the
      procedural synths below if a sample has not loaded (or fetch is unavailable). */
@@ -23,10 +49,11 @@ const Snd = {
 
   init() {
     if (Snd.ctx) return;
+    Snd.loadVolume();
     try {
       Snd.ctx = new (window.AudioContext || window.webkitAudioContext)();
       Snd.master = Snd.ctx.createGain();
-      Snd.master.gain.value = 0.5;
+      Snd.master.gain.value = Snd.effGain();
       Snd.master.connect(Snd.ctx.destination);
       Snd._loadSamples();
     } catch (e) { Snd.ctx = null; }
@@ -62,7 +89,8 @@ const Snd = {
 
   toggleMute() {
     Snd.muted = !Snd.muted;
-    if (Snd.master) Snd.master.gain.value = Snd.muted ? 0 : 0.5;
+    if (Snd.master) Snd.master.gain.value = Snd.effGain();
+    try { localStorage.setItem('gr_muted', Snd.muted ? '1' : '0'); } catch (e) { /* storage unavailable */ }
     return Snd.muted;
   },
 
@@ -189,7 +217,7 @@ const Music = {
     if (!Music.el) return;
     const p = Music.el.play();
     if (p && p.catch) p.catch(() => { /* blocked until a gesture — kick handles it */ });
-    Music._fadeTo(Snd.muted ? 0 : 0.42);
+    Music._fadeTo(Snd.musicVol());
   },
 
   _fadeTo(target) {
@@ -224,7 +252,8 @@ const Music = {
   /* keep music volume in step with the mute button */
   syncMute() {
     if (!Music.el) return;
-    Music.el.volume = (Snd.muted || !Music.wanted) ? 0 : 0.42;
+    // set directly (not a fade) so dragging the volume slider tracks instantly
+    Music.el.volume = Snd.musicVol();
   }
 };
 

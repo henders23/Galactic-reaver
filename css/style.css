@@ -49,6 +49,33 @@ button { font-family: inherit; }
 }
 .tbtn:hover { border-color: #6fd8ff; color: #6fd8ff; }
 .tbtn.off { color: #3a4a5e; text-decoration: line-through; }
+#btnMute { text-decoration: none; padding: 6px 9px; font-size: 13px; }
+
+/* volume: mute toggle + level slider — fixed to the corner so it stays reachable
+   above the full-screen menu/refit overlays (which sit at z-index 100) */
+#volwrap {
+  position: fixed; top: 9px; right: 12px; z-index: 101;
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(13, 20, 31, .92); border: 1px solid rgba(120, 180, 220, .25);
+  border-radius: 6px; padding: 3px 9px 3px 2px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+}
+/* reserve the corner so the combat header's own buttons never slide under it */
+#topRight { padding-right: 150px; }
+#volwrap #btnMute { background: none; border: none; }
+#volSlider {
+  -webkit-appearance: none; appearance: none; width: 74px; height: 4px; margin: 0;
+  background: linear-gradient(90deg, #6fd8ff, #6fd8ff) no-repeat, rgba(120, 180, 220, .22);
+  background-size: 50% 100%, 100% 100%; border-radius: 3px; cursor: pointer; outline: none;
+}
+#volSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: #6fd8ff; border: 2px solid #0c1420; box-shadow: 0 0 6px rgba(111, 216, 255, .6); cursor: pointer;
+}
+#volSlider::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 50%; background: #6fd8ff;
+  border: 2px solid #0c1420; box-shadow: 0 0 6px rgba(111, 216, 255, .6); cursor: pointer;
+}
 
 /* ---------- main row ---------- */
 #mainrow { display: flex; flex: 1; min-height: 0; }
@@ -341,6 +368,21 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .brief-art .contact { font: 600 11px 'IBM Plex Mono', monospace; color: #ff8a84; letter-spacing: 2px; margin-top: 20px; }
 .brief-art .contact.sub { font-weight: 400; font-size: 10px; color: #8a4a45; margin-top: 4px; }
 
+/* mission complete — report column + admiral dispatch column */
+.mc-cols { display: flex; gap: 40px; align-items: flex-start; margin-top: 18px; }
+.mc-main { flex: 1; min-width: 0; }
+.mc-admiral { flex: none; width: 340px; max-width: 100%; text-align: center; }
+.mc-admiral .admiral-portrait { max-width: 300px; }
+.mc-admiral .contact { font: 600 11px 'IBM Plex Mono', monospace; color: #ffd465; letter-spacing: 2px; margin-top: 14px; }
+.mc-admiral .contact.sub { font-weight: 400; font-size: 10px; color: #9a8a5a; margin-top: 4px; letter-spacing: 1px; }
+.admiral-report {
+  margin-top: 14px; text-align: left; padding: 14px 16px;
+  background: rgba(9, 14, 22, .66); border: 1px solid rgba(255, 212, 101, .22); border-radius: 10px;
+}
+.admiral-report p { font: 400 12px 'IBM Plex Mono', monospace; color: #b9c9dc; line-height: 1.62; margin: 0 0 10px; }
+.admiral-report p:last-child { margin-bottom: 0; color: #7ce8f7; }
+@media (max-width: 860px) { .mc-cols { flex-direction: column; } .mc-admiral { width: 100%; } }
+
 /* fleet management */
 .storegrid { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
 .storecard {
@@ -350,7 +392,8 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-radius: 14px; padding: 15px; display: flex; flex-direction: column;
 }
-.storecard .art { height: 76px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.storecard .art { min-height: 120px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.storecard .art img { max-width: 100%; }
 .storecard h4 { font: 700 14px Rajdhani, sans-serif; letter-spacing: 1.5px; color: #eaf6ff; }
 .storecard .ds { font: 400 9.5px 'IBM Plex Mono', monospace; color: #8ba0b8; margin: 6px 0 10px; line-height: 1.6; min-height: 42px; }
 .storecard button {
@@ -641,6 +684,12 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .gnode.engage:hover .gemblem img { transform: scale(1.12); }
 .gnode.engage:hover .glbl { text-decoration: underline; }
 .gnode .glbl { margin-top: 4px; }
+/* difficulty meter: a red dotted line under a system, up to 5 dashes */
+.gnode .gdiff { display: flex; justify-content: center; gap: 3px; margin-top: 3px; pointer-events: none; }
+.gnode .gdiff i {
+  width: 7px; height: 2px; border-radius: 1px; background: rgba(255, 90, 84, .22);
+}
+.gnode .gdiff i.on { background: #ff5a54; box-shadow: 0 0 4px rgba(255, 90, 84, .85); }
 
 /* ---- sector map: SYSTEM INFORMATION panel ---- */
 .ginfo { top: 30px; right: 30px; width: 300px; padding: 22px 24px;

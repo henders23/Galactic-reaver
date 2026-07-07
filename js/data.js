@@ -3,7 +3,7 @@
 
 const DATA = {};
 
-DATA.WORLD = { w: 2000, h: 1300 };
+DATA.WORLD = { w: 2600, h: 1720 };
 
 /* ---------------- weapon templates ----------------
    type: 'lance' (beam), 'battery' (shells), 'torp' (ordnance salvo),
@@ -434,13 +434,15 @@ DATA.PLANET_NUMERALS = ['II', 'III', 'IV', 'V'];
    x/y are percentages on the galaxy screen. `type` drives the system dossier and
    its strategic value. The front is wherever Terran space meets another power;
    the player may only engage a system that borders Terran-held space. */
+/* `diff` is the 1..5 difficulty rating drawn as the red dash meter under each
+   system on the sector map — outposts are soft, enemy capitals are the hardest. */
 DATA.SYSTEM_TYPES = {
-  capital: { name: 'CAPITAL', value: 'CRITICAL', planets: 4 },
-  majorhub: { name: 'MAJOR HUB', value: 'HIGH', planets: 4 },
-  minorhub: { name: 'MINOR HUB', value: 'MODERATE', planets: 4 },
-  shipyard: { name: 'SHIPYARD', value: 'HIGH', planets: 4 },
-  resource: { name: 'RESOURCE', value: 'MODERATE', planets: 4 },
-  outpost: { name: 'OUTPOST', value: 'LOW', planets: 4 }
+  capital: { name: 'CAPITAL', value: 'CRITICAL', planets: 4, diff: 5 },
+  majorhub: { name: 'MAJOR HUB', value: 'HIGH', planets: 4, diff: 4 },
+  minorhub: { name: 'MINOR HUB', value: 'MODERATE', planets: 4, diff: 2 },
+  shipyard: { name: 'SHIPYARD', value: 'HIGH', planets: 4, diff: 3 },
+  resource: { name: 'RESOURCE', value: 'MODERATE', planets: 4, diff: 2 },
+  outpost: { name: 'OUTPOST', value: 'LOW', planets: 4, diff: 1 }
 };
 DATA.GALAXY = {
   systems: [

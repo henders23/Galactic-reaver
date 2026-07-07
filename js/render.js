@@ -6,7 +6,7 @@ const Rend = {
   stars: [], fxList: [], shakeMag: 0,
   running: false,
   // camera: cx/cy are the world point at the viewport centre
-  cam: { cx: DATA.WORLD.w / 2, cy: DATA.WORLD.h / 2, z: 0.5, minZ: 0.3, maxZ: 1.8 },
+  cam: { cx: DATA.WORLD.w / 2, cy: DATA.WORLD.h / 2, z: 0.5, minZ: 0.22, maxZ: 1.8 },
   vw: 800, vh: 600, // viewport CSS size
 
   /* per-class hull silhouettes (normalized 0..1, nose at x=1) */

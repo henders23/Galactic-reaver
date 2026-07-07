@@ -169,11 +169,12 @@ const Game = {
       cls, name: i === 0 ? 'TAS REAVER' : DATA.SHIP_NAMES[(i - 1) % DATA.SHIP_NAMES.length],
       xp: 0, refit: false
     }));
-    const ships = Game.fleetSpawn({ x: 340, y: 650 }, fleet);
+    const W = DATA.WORLD.w, H = DATA.WORLD.h;
+    const ships = Game.fleetSpawn({ x: 340, y: H / 2 }, fleet);
     const budget = fleet.reduce((a, f) => a + DATA.CLASSES[f.cls].pts, 0) + 80;
     const specs = Game.rollFleet(factionId, { budget, max: 6 });
     specs.forEach(s => ships.push(Game.mkShip(s.cls, s.name, 'enemy', s.role,
-      U.frand(1450, 1850), U.frand(240, 1060), 180 + U.frand(-25, 25), { vip: s.vip })));
+      U.frand(W - 900, W - 480), U.frand(H * 0.16, H * 0.84), 180 + U.frand(-25, 25), { vip: s.vip })));
     const m = {
       name: 'SKIRMISH', sub: 'KESSEL DRIFT · ' + F.short,
       reward: 0,
@@ -275,13 +276,13 @@ const Game = {
       flagship: wantFlagship, vipFlagship: wantFlagship
     });
     const enemies = specs.map((s, i) => {
-      const y = 260 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 520);
-      return { cls: s.cls, name: s.name, role: s.role, x: 1450 + rng() * 400, y, angle: 180, vip: !!s.vip };
+      const y = 300 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 600);
+      return { cls: s.cls, name: s.name, role: s.role, x: W - 900 + rng() * 420, y, angle: 180, vip: !!s.vip };
     });
     // courier: a lone fast runner the escorts protect
     if (wantCourier) {
       const runner = F.pool[0];
-      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: 980, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
+      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: W * 0.44, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
     }
 
     const allies = [];
