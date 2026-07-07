@@ -1,0 +1,268 @@
+/* Galactic Reaver — rules-engine tests. Run: node tests/rules.test.js */
+'use strict';
+const fs = require('fs');
+const path = require('path');
+
+/* ---- minimal browser shims so the game scripts load in Node ---- */
+global.window = global;
+global.performance = global.performance || { now: () => Date.now() };
+global.localStorage = { getItem: () => null, setItem: () => { }, removeItem: () => { } };
+global.requestAnimationFrame = () => { };
+
+['js/util.js', 'js/data.js', 'js/sound.js', 'js/game.js', 'js/render.js'].forEach(f => {
+  (0, eval)(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'));
+});
+
+/* ---- tiny test harness ---- */
+let passed = 0, failed = 0;
+function ok(cond, name) {
+  if (cond) { passed++; }
+  else { failed++; console.error('  ✗ FAIL:', name); }
+}
+function eq(a, b, name) { ok(Object.is(a, b), name + ' (got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b) + ')'); }
+function near(a, b, tol, name) { ok(Math.abs(a - b) <= tol, name + ' (got ' + a + ', want ~' + b + ')'); }
+
+/* ---- battle scaffolding ---- */
+function freshBattle(ships) {
+  Game.mode = 'skirmish';
+  Game.skirmishDiff = 'normal';
+  Game.b = {
+    mission: { name: 'TEST', win: () => null, lose: () => null },
+    turn: 1, phase: 'fire',
+    ships, torps: [], craft: [], terrain: [],
+    sel: null, plotStep: 'order', curOrder: null, ghost: null,
+    armed: null, boardMode: null, hover: null, inspect: null,
+    log: [], banner: null, queue: [], nextShotAt: 0, anim: null,
+    killPts: 0,
+    stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
+  };
+  return Game.b;
+}
+function mk(cls, side, x, y, angle, opts) {
+  return Game.mkShip(cls, (side === 'player' ? 'VSS ' : 'DKV ') + 'TEST' + Math.floor(U.random() * 1e6), side, 'brawler', x, y, angle, opts);
+}
+
+/* ================= math ================= */
+console.log('math');
+eq(U.norm180(190), -170, 'norm180 wraps positive');
+eq(U.norm180(-190), 170, 'norm180 wraps negative');
+eq(U.norm180(180), -180, 'norm180 maps 180 to -180 (same heading)');
+eq(U.arcOf(0), 'fore', 'arcOf dead ahead');
+eq(U.arcOf(50), 'fore', 'arcOf fore edge');
+eq(U.arcOf(90), 'side', 'arcOf abeam');
+eq(U.arcOf(150), 'aft', 'arcOf astern');
+const tgt = { x: 0, y: 0, angle: 0 };
+eq(U.shieldArcHit(tgt, 100, 0), 'F', 'shield hit from ahead strikes fore');
+eq(U.shieldArcHit(tgt, -100, 0), 'A', 'shield hit from astern strikes aft');
+eq(U.shieldArcHit(tgt, 0, 100), 'S', 'shield hit from abeam strikes side');
+{
+  const start = { x: 0, y: 0 };
+  const face = U.clampFacing(120, 0, { x: 100, y: 0 }, 45, start);
+  ok(Math.abs(U.norm180(face - 0)) <= 45.001, 'clampFacing stays within ±45 of heading');
+}
+
+/* ================= movement curves ================= */
+console.log('curves');
+{
+  const from = { x: 0, y: 0, angle: 0 }, to = { x: 200, y: 120, angle: 60 };
+  const f = U.curveFn(from, to);
+  const p0 = f(0), p1 = f(1);
+  near(p0.x, 0, 0.01, 'curve starts at origin');
+  near(p1.x, 200, 0.01, 'curve ends at destination x');
+  near(p1.y, 120, 0.01, 'curve ends at destination y');
+  near(U.norm180(p0.angle - 0), 0, 1, 'curve tangent starts on heading');
+  near(U.norm180(p1.angle - 60), 0, 1, 'curve tangent ends on final facing');
+}
+
+/* ================= seeded RNG ================= */
+console.log('rng');
+{
+  U.setSeed(1234);
+  const a = [U.rand(1, 6), U.rand(1, 6), U.frand(0, 1)];
+  U.setSeed(1234);
+  const b = [U.rand(1, 6), U.rand(1, 6), U.frand(0, 1)];
+  ok(a[0] === b[0] && a[1] === b[1] && a[2] === b[2], 'same seed → same sequence');
+  U.setSeed(99);
+  const counts = [0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < 6000; i++) counts[U.rand(1, 6) - 1]++;
+  ok(counts.every(c => c > 800 && c < 1200), 'd6 roughly uniform (' + counts.join(',') + ')');
+  U.clearSeed();
+}
+
+/* ================= firing solutions ================= */
+console.log('solutions');
+{
+  U.setSeed(7);
+  const s = mk('corvette', 'player', 0, 0, 0);   // lance fore need 3, battery side need 4
+  const e = mk('jackal', 'enemy', 300, 0, 180);
+  freshBattle([s, e]);
+  const lance = s.weapons[0], battery = s.weapons[1], torp = s.weapons[2];
+
+  let sol = Game.solution(s, lance, e);
+  ok(sol.ok, 'lance ahead in arc');
+  eq(sol.need, 3, 'lance base to-hit 3+');
+
+  sol = Game.solution(s, battery, e);
+  ok(!sol.ok && sol.why === 'NOT IN SIDE ARC', 'side battery cannot fire ahead');
+
+  // move target abeam at 320 → side arc, long range for a 350 battery
+  e.x = 0; e.y = 320;
+  sol = Game.solution(s, battery, e);
+  ok(sol.ok, 'battery abeam in arc');
+  eq(sol.need, 5, 'battery long-range penalty (4+ → 5+)');
+
+  e.y = 100; // point-blank (< 0.35 * 350)
+  sol = Game.solution(s, battery, e);
+  eq(sol.need, 3, 'battery point-blank bonus (4+ → 3+)');
+
+  // orders shift the dice
+  e.y = 200;
+  s.order = { accShift: -1, dodgeShift: 0 };       // hold & lock
+  eq(Game.solution(s, battery, e).need, 3, 'HOLD & LOCK steadies guns');
+  s.order = null;
+  e.order = { accShift: 0, dodgeShift: 1 };        // target evading
+  eq(Game.solution(s, battery, e).need, 5, 'evasive target is harder');
+  e.order = null;
+
+  // nebula conceals the target
+  Game.b.terrain.push({ type: 'neb', x: e.x, y: e.y, r: 80 });
+  eq(Game.solution(s, battery, e).need, 5, 'nebula hides the target');
+  Game.b.terrain.length = 0;
+
+  // asteroids block line of fire
+  e.x = 400; e.y = 0;
+  Game.b.terrain.push({ type: 'ast', x: 200, y: 0, r: 60 });
+  ok(Game.solution(s, lance, e).why === 'LINE OF FIRE BLOCKED', 'asteroid blocks lances');
+  ok(Game.solution(s, torp, e).ok, 'torpedoes ignore the rocks at launch');
+  Game.b.terrain.length = 0;
+
+  // out of range
+  e.x = 5000;
+  ok(Game.solution(s, lance, e).why === 'OUT OF RANGE', 'range limit enforced');
+
+  // veterancy: VETERAN guns hit on −1
+  const v = mk('corvette', 'player', 0, 0, 0, { xp: 100 });
+  eq(v.rank, 2, 'xp 100 → VETERAN');
+  freshBattle([v, e]);
+  e.x = 300; e.y = 0;
+  eq(Game.solution(v, v.weapons[0], e).need, 2, 'veteran lance hits on 2+');
+
+  // difficulty: easy shifts enemy gunnery worse
+  const foe = mk('ravager', 'enemy', 0, 300, -90);
+  freshBattle([v, foe]);
+  Game.skirmishDiff = 'easy';
+  const easyNeed = Game.solution(foe, foe.weapons[0], v).need;
+  Game.skirmishDiff = 'hard';
+  const hardNeed = Game.solution(foe, foe.weapons[0], v).need;
+  eq(easyNeed - hardNeed, 2, 'easy vs hard shifts enemy to-hit by 2');
+  Game.skirmishDiff = 'normal';
+}
+
+/* ================= volley resolution ================= */
+console.log('volleys');
+{
+  U.setSeed(42);
+  const s = mk('lcruiser', 'player', 0, 0, 90);   // broadside ship facing "down"
+  const e = mk('marauder', 'enemy', 300, 0, 180); // abeam of s
+  freshBattle([s, e]);
+  const guns = s.weapons[1]; // 9d6 batteries
+  const sol = Game.solution(s, guns, e);
+  ok(sol.ok, 'broadside has solution');
+  const hull0 = e.hull, shF0 = e.sh.F;
+  guns.target = e.id;
+  Game.processShot({ shooterId: s.id, wIdx: 1, targetId: e.id });
+  const absorbed = shF0 - e.sh.F;
+  const dmg = hull0 - e.hull;
+  ok(absorbed >= 0 && absorbed <= shF0, 'shields absorbed within capacity');
+  ok(dmg >= 0, 'no negative damage');
+  ok(absorbed + dmg > 0, 'seeded 9d6 volley connects');
+  ok(Game.b.log.some(l => /9d6 \[/.test(l.t)), 'log shows the dice');
+
+  // brace halves damage
+  const braced = mk('marauder', 'enemy', 300, 0, 180);
+  freshBattle([mk('lcruiser', 'player', 0, 0, 90), braced]);
+  braced.order = { brace: true, accShift: 0, dodgeShift: 0 };
+  braced.sh = { F: 0, S: 0, A: 0 };
+  const h0 = braced.hull;
+  Game.applyDamage(braced, 8, { quiet: true, sol: {} });
+  eq(h0 - braced.hull, 4, 'brace halves an 8-damage volley');
+}
+
+/* ================= morale & routing ================= */
+console.log('morale');
+{
+  const p = mk('corvette', 'player', 0, 0, 0);
+  const e1 = mk('jackal', 'enemy', 500, 0, 180);
+  const e2 = mk('jackal', 'enemy', 600, 0, 180);
+  const b = freshBattle([p, e1, e2]);
+  Game.routShip(e1, 'test');
+  ok(e1.routing && e1.role === 'rout', 'routShip flags the ship');
+  ok(!Game.sideDead(b, 'enemy'), 'one standing enemy keeps the fight on');
+  Game.routShip(e2, 'test');
+  ok(Game.sideDead(b, 'enemy'), 'battle ends when every enemy routs');
+  // vip never routs
+  const vip = mk('dreadmaw', 'enemy', 700, 0, 180, { vip: true });
+  freshBattle([p, vip]);
+  Game.routShip(vip, 'test');
+  ok(!vip.routing, 'flagship refuses to rout');
+}
+
+/* ================= boarding ================= */
+console.log('boarding');
+{
+  // elite crew (+3) captures a hulk on any die ≥ 2 — find a seed that rolls one
+  let captured = false;
+  for (let seed = 1; seed <= 10 && !captured; seed++) {
+    U.setSeed(seed);
+    const p = mk('corvette', 'player', 0, 0, 0, { xp: 200 });
+    const h = mk('ravager', 'enemy', 80, 0, 0);
+    h.alive = false; h.hulked = true;
+    freshBattle([p, h]);
+    Game.tryBoard(p, h);
+    captured = h.captured;
+  }
+  ok(captured, 'elite crew captures a hulk within a few seeds');
+
+  // out of range refuses
+  U.setSeed(5);
+  const p2 = mk('corvette', 'player', 0, 0, 0);
+  const far = mk('ravager', 'enemy', 900, 0, 0);
+  freshBattle([p2, far]);
+  const before = p2.boarded;
+  Game.tryBoard(p2, far);
+  ok(!p2.boarded && !before, 'boarding out of range does not commit parties');
+}
+
+/* ================= magazine detonation ================= */
+console.log('magazine');
+{
+  U.setSeed(3);
+  const a = mk('marauder', 'enemy', 0, 0, 0);
+  const near1 = mk('jackal', 'enemy', 90, 0, 0);
+  const far1 = mk('jackal', 'enemy', 1200, 0, 0);
+  freshBattle([mk('corvette', 'player', 0, 900, 0), a, near1, far1]);
+  const h0 = near1.hull, f0 = far1.hull;
+  Game.magazineDetonation(a);
+  ok(near1.hull < h0, 'blast wave damages adjacent ship');
+  eq(far1.hull, f0, 'blast wave spares distant ship');
+}
+
+/* ================= end conditions & bonus objectives ================= */
+console.log('objectives');
+{
+  const m = DATA.MISSION_DEFS.m_anvil;
+  const p = mk('corvette', 'player', 0, 0, 0);
+  const b = freshBattle([p]);
+  ok(m.bonus.check(b), 'ROCK HOPPER passes with no transits');
+  b.stats.playerTransits = 1;
+  ok(!m.bonus.check(b), 'ROCK HOPPER fails after grinding the rocks');
+  const m4 = DATA.MISSION_DEFS.m_hunt;
+  b.stats.vipKillTurn = 4;
+  ok(m4.bonus.check(b), 'SWIFT EXECUTION passes on turn 4');
+  b.stats.vipKillTurn = 6;
+  ok(!m4.bonus.check(b), 'SWIFT EXECUTION fails on turn 6');
+}
+
+U.clearSeed();
+console.log('\n' + passed + ' passed, ' + failed + ' failed');
+process.exit(failed ? 1 : 0);

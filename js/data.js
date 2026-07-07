@@ -23,7 +23,7 @@ DATA.weapon = (over) => Object.assign({
 DATA.CLASSES = {
   /* --- player hulls --- */
   corvette: {
-    cls: 'corvette', label: 'KESTREL-CLASS CORVETTE', short: 'CORVETTE',
+    cls: 'corvette', shape: 'blade', label: 'KESTREL-CLASS CORVETTE', short: 'CORVETTE',
     w: 110, h: 44, hull: 26, sh: { F: 2, S: 1, A: 1 },
     speed: 190, maxTurn: 90, turrets: 1, pts: 160,
     desc: 'Fast, agile line ship. Fore lance, side batteries, one torpedo tube.',
@@ -34,7 +34,7 @@ DATA.CLASSES = {
     ]
   },
   frigate: {
-    cls: 'frigate', label: 'TEMPEST-CLASS FRIGATE', short: 'FRIGATE',
+    cls: 'frigate', shape: 'blade', label: 'TEMPEST-CLASS FRIGATE', short: 'FRIGATE',
     w: 122, h: 48, hull: 34, sh: { F: 2, S: 2, A: 1 },
     speed: 165, maxTurn: 60, turrets: 2, pts: 220,
     desc: 'Tough gun platform. Heavy broadsides, light fore lance.',
@@ -44,7 +44,7 @@ DATA.CLASSES = {
     ]
   },
   lcruiser: {
-    cls: 'lcruiser', label: 'RESOLUTE-CLASS LIGHT CRUISER', short: 'LT CRUISER',
+    cls: 'lcruiser', shape: 'spine', label: 'RESOLUTE-CLASS LIGHT CRUISER', short: 'LT CRUISER',
     w: 150, h: 58, hull: 48, sh: { F: 3, S: 2, A: 1 },
     speed: 140, maxTurn: 45, turrets: 3, pts: 340,
     desc: 'Ship of the line. Lance decks, massed batteries, triple torpedo tubes.',
@@ -55,7 +55,7 @@ DATA.CLASSES = {
     ]
   },
   argus: {
-    cls: 'argus', label: 'ARGUS-CLASS ESCORT CARRIER', short: 'CARRIER',
+    cls: 'argus', shape: 'slab', label: 'ARGUS-CLASS ESCORT CARRIER', short: 'CARRIER',
     w: 162, h: 64, hull: 42, sh: { F: 2, S: 2, A: 1 },
     speed: 120, maxTurn: 30, turrets: 3, pts: 380,
     desc: 'Flight decks for bomber strikes and fighter cover. Keep her out of the brawl.',
@@ -67,7 +67,7 @@ DATA.CLASSES = {
   },
   /* --- civilian --- */
   freighter: {
-    cls: 'freighter', label: 'PELICAN-CLASS FREIGHTER', short: 'FREIGHTER',
+    cls: 'freighter', shape: 'box', label: 'PELICAN-CLASS FREIGHTER', short: 'FREIGHTER',
     w: 130, h: 56, hull: 30, sh: { F: 1, S: 1, A: 1 },
     speed: 120, maxTurn: 30, turrets: 1, pts: 0,
     desc: 'Unarmed bulk hauler. Keep it alive.',
@@ -75,7 +75,7 @@ DATA.CLASSES = {
   },
   /* --- Dominion hulls --- */
   jackal: {
-    cls: 'jackal', label: 'JACKAL-CLASS ESCORT', short: 'ESCORT',
+    cls: 'jackal', shape: 'dart', label: 'JACKAL-CLASS ESCORT', short: 'ESCORT',
     w: 80, h: 34, hull: 13, sh: { F: 1, S: 0, A: 0 },
     speed: 230, maxTurn: 90, turrets: 1, pts: 90,
     desc: 'Fast attack craft. Weak alone, deadly in packs at your stern.',
@@ -84,7 +84,7 @@ DATA.CLASSES = {
     ]
   },
   ravager: {
-    cls: 'ravager', label: 'RAVAGER-CLASS RAIDER', short: 'RAIDER',
+    cls: 'ravager', shape: 'dart', label: 'RAVAGER-CLASS RAIDER', short: 'RAIDER',
     w: 120, h: 50, hull: 22, sh: { F: 1, S: 1, A: 0 },
     speed: 165, maxTurn: 45, turrets: 1, pts: 150,
     desc: 'Dominion raider. Closes fast and hammers with flak cannon.',
@@ -93,7 +93,7 @@ DATA.CLASSES = {
     ]
   },
   marauder: {
-    cls: 'marauder', label: 'MARAUDER-CLASS DESTROYER', short: 'DESTROYER',
+    cls: 'marauder', shape: 'spine', label: 'MARAUDER-CLASS DESTROYER', short: 'DESTROYER',
     w: 135, h: 54, hull: 32, sh: { F: 2, S: 1, A: 1 },
     speed: 145, maxTurn: 45, turrets: 2, pts: 250,
     desc: 'Destroyer with heavy broadsides and torpedo tubes.',
@@ -103,17 +103,18 @@ DATA.CLASSES = {
     ]
   },
   hive: {
-    cls: 'hive', label: 'HIVE-CLASS CARRIER', short: 'CARRIER',
+    cls: 'hive', shape: 'slab', label: 'HIVE-CLASS CARRIER', short: 'CARRIER',
     w: 168, h: 66, hull: 45, sh: { F: 2, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 3, pts: 420,
     desc: 'Dominion carrier. Her bomber waves will grind a fleet down from beyond gun range.',
     weapons: [
       { name: 'DEFENSE FLAK', type: 'battery', arc: 'side', range: 330, dice: 5, need: 4, dmgPer: 1 },
-      { name: 'BOMBER CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 }
+      { name: 'BOMBER CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 },
+      { name: 'FIGHTER CELLS', type: 'bay', craft: 'fighters', arc: 'any', range: 900, salvo: 3, reloadTime: 2 }
     ]
   },
   dreadmaw: {
-    cls: 'dreadmaw', label: 'DREADMAW-CLASS HEAVY CRUISER', short: 'HEAVY CRUISER',
+    cls: 'dreadmaw', shape: 'spine', label: 'DREADMAW-CLASS HEAVY CRUISER', short: 'HEAVY CRUISER',
     w: 175, h: 66, hull: 60, sh: { F: 3, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 4, pts: 500,
     desc: 'Dominion flagship of the Drift. Kill it and the line breaks.',
@@ -161,6 +162,17 @@ DATA.CRIT_TABLE = [
   { roll: 6, sys: 'BREACH' }
 ];
 
+/* ---------------- difficulty ---------------- */
+DATA.DIFFS = [
+  { id: 'easy', name: 'PATROL', enemyNeed: 1, morale: 0.5, reqMul: 1.25,
+    desc: 'Dominion guns hit on +1 \u00b7 their morale breaks early \u00b7 +25% requisition' },
+  { id: 'normal', name: 'LINE DUTY', enemyNeed: 0, morale: 0.4, reqMul: 1,
+    desc: 'The war as it is' },
+  { id: 'hard', name: 'FORLORN HOPE', enemyNeed: -1, morale: 0.3, reqMul: 0.8,
+    desc: 'Dominion guns hit on \u22121 \u00b7 they fight nearly to the last \u00b7 \u221220% requisition' }
+];
+DATA.diffOf = (id) => DATA.DIFFS.find(d => d.id === id) || DATA.DIFFS[1];
+
 /* ---------------- veterancy ---------------- */
 DATA.RANKS = [
   { xp: 0, name: 'GREEN', chev: '', desc: '' },
@@ -197,6 +209,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy all hostile ships.'
     ],
     reward: 140,
+    bonus: { desc: 'CLEAN SWEEP: end with every Coalition ship above half hull', reward: 60,
+      check: (b) => b.ships.filter(s => s.side === 'player').every(s => s.alive && s.hull > s.maxHull * 0.5) },
     terrain: 'light',
     playerSpawn: { x: 340, y: 680 },
     enemies: [
@@ -214,6 +228,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — The PELICAN must reach the far jump marker (right edge). If she dies, we lose the station.'
     ],
     reward: 190,
+    bonus: { desc: 'NOT A SCRATCH: the PELICAN takes no hull damage', reward: 80,
+      check: (b) => { const f = b.ships.find(s => s.role === 'convoy'); return !!(f && f.alive && f.hull === f.maxHull); } },
     terrain: 'light',
     playerSpawn: { x: 430, y: 800 },
     allies: [{ cls: 'freighter', name: 'VSS PELICAN', role: 'convoy', x: 220, y: 600, angle: 0 }],
@@ -244,6 +260,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy all hostile ships. Asteroids block line of fire and grind hulls that pass through.'
     ],
     reward: 230,
+    bonus: { desc: 'ROCK HOPPER: no Coalition hull grinds through the asteroids', reward: 70,
+      check: (b) => !b.stats.playerTransits },
     terrain: 'heavy',
     playerSpawn: { x: 340, y: 650 },
     enemies: [
@@ -263,6 +281,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy the VULTURE before she escapes off the far edge. Her escort will try to make you blink.'
     ],
     reward: 270,
+    bonus: { desc: 'SWIFT EXECUTION: the VULTURE dies before turn 5', reward: 90,
+      check: (b) => b.stats.vipKillTurn > 0 && b.stats.vipKillTurn < 5 },
     terrain: 'medium',
     playerSpawn: { x: 310, y: 650 },
     enemies: [
@@ -289,6 +309,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy the HIVE. Her escorts rout when she dies. Watch for bomber waves — point defense and fighter cover are your friends.'
     ],
     reward: 280,
+    bonus: { desc: 'CLEAR SKIES: no Coalition ship is struck by a bomber wave', reward: 90,
+      check: (b) => !b.stats.bomberHitsOnPlayer },
     terrain: 'medium',
     playerSpawn: { x: 340, y: 650 },
     enemies: [
@@ -311,6 +333,8 @@ DATA.MISSION_DEFS = {
       'OBJECTIVE — Destroy the DREADMAW. Break her and her escorts rout.'
     ],
     reward: 400,
+    bonus: { desc: 'LET NONE ESCAPE: no Dominion ship leaves the field', reward: 120,
+      check: (b) => !b.stats.enemyEscaped },
     terrain: 'medium',
     playerSpawn: { x: 320, y: 680 },
     enemies: [
@@ -365,4 +389,4 @@ DATA.SKIRMISH_POOL = [
 ];
 DATA.DKV_NAMES = ['DKV CARRION', 'DKV LOCUST', 'DKV GRIM', 'DKV HOWL', 'DKV KNIFE', 'DKV PYRE', 'DKV SHRIKE', 'DKV FANG', 'DKV OMEN', 'DKV RUIN', 'DKV WORM', 'DKV SPITE'];
 
-window.DATA = DATA;
+if (typeof window !== 'undefined') window.DATA = DATA;

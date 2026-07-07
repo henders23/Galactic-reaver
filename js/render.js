@@ -9,7 +9,14 @@ const Rend = {
   cam: { cx: DATA.WORLD.w / 2, cy: DATA.WORLD.h / 2, z: 0.5, minZ: 0.3, maxZ: 1.8 },
   vw: 800, vh: 600, // viewport CSS size
 
-  HULL_POLY: [[0, .35], [.55, .20], [.78, 0], [1, .42], [1, .58], [.78, 1], [.55, .80], [0, .65]],
+  /* per-class hull silhouettes (normalized 0..1, nose at x=1) */
+  SHAPES: {
+    blade: [[0, .35], [.55, .20], [.78, 0], [1, .42], [1, .58], [.78, 1], [.55, .80], [0, .65]],
+    dart: [[0, .28], [.5, .12], [1, .5], [.5, .88], [0, .72], [.2, .5]],
+    spine: [[0, .36], [.18, .22], [.48, .22], [.62, .06], [.82, .3], [1, .44], [1, .56], [.82, .7], [.62, .94], [.48, .78], [.18, .78], [0, .64]],
+    slab: [[0, .2], [.6, .1], [.86, .28], [1, .5], [.86, .72], [.6, .9], [0, .8], [.07, .5]],
+    box: [[0, .3], [.12, .16], [.72, .16], [1, .5], [.72, .84], [.12, .84], [0, .7]]
+  },
 
   init(canvas) {
     Rend.cv = canvas;
@@ -25,6 +32,7 @@ const Rend = {
   },
 
   syncSize() {
+    if (!Rend.cv) return;
     const r = Rend.cv.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return;
     Rend.vw = r.width; Rend.vh = r.height;
@@ -258,7 +266,7 @@ const Rend = {
     ctx.globalAlpha = 0.14;
     ctx.translate(DATA.WORLD.w * 0.72 + Math.sin(now / 5200) * 20, DATA.WORLD.h * 0.3 + Math.cos(now / 6100) * 14);
     ctx.rotate(0.4 + Math.sin(now / 9000) * 0.05);
-    Rend.tracePoly(ctx, 320, 128);
+    Rend.tracePoly(ctx, 320, 128, 'spine');
     ctx.fillStyle = '#17414f';
     ctx.strokeStyle = '#4cd7ea';
     ctx.lineWidth = 2;
@@ -342,9 +350,9 @@ const Rend = {
     return { x: s.x, y: s.y, angle: s.angle, moving: false };
   },
 
-  tracePoly(ctx, w, h) {
+  tracePoly(ctx, w, h, shape) {
     ctx.beginPath();
-    Rend.HULL_POLY.forEach((p, i) => {
+    (Rend.SHAPES[shape] || Rend.SHAPES.blade).forEach((p, i) => {
       const px = (p[0] - 0.5) * w, py = (p[1] - 0.5) * h;
       i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
     });
@@ -436,7 +444,7 @@ const Rend = {
     ctx.globalAlpha = alpha;
     ctx.translate(plot.x, plot.y);
     ctx.rotate(plot.angle * U.D2R);
-    Rend.tracePoly(ctx, ship.w, ship.h);
+    Rend.tracePoly(ctx, ship.w, ship.h, ship.shape);
     ctx.fillStyle = 'rgba(76,215,234,.13)';
     ctx.strokeStyle = 'rgba(76,215,234,.9)';
     ctx.setLineDash([4, 4]);
@@ -518,7 +526,7 @@ const Rend = {
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(s.angle * U.D2R);
-    Rend.tracePoly(ctx, s.w, s.h);
+    Rend.tracePoly(ctx, s.w, s.h, s.shape);
     ctx.fillStyle = '#181a1f';
     ctx.strokeStyle = s.captured ? 'rgba(255,212,101,.75)' : 'rgba(120,120,130,.5)';
     ctx.lineWidth = 1.2;
@@ -681,7 +689,7 @@ const Rend = {
       ctx.fillStyle = eg;
       ctx.fillRect(-s.w * 0.5 - 30, -s.h * 0.16, 30, s.h * 0.32);
     }
-    Rend.tracePoly(ctx, s.w, s.h);
+    Rend.tracePoly(ctx, s.w, s.h, s.shape);
     const grad = ctx.createLinearGradient(-s.w / 2, -s.h / 2, s.w / 2, s.h / 2);
     if (ally) { grad.addColorStop(0, '#17414f'); grad.addColorStop(1, '#0f2833'); }
     else { grad.addColorStop(0, '#35181c'); grad.addColorStop(1, '#22101a'); }
@@ -734,9 +742,11 @@ const Rend = {
     const nm = s.name.replace('VSS ', '').replace('DKV ', '');
     ctx.font = '600 ' + (10 * ls) + 'px "IBM Plex Mono", monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = ally ? (s.side === 'ally' ? '#8fd8a8' : '#4cd7ea') : '#ff6159';
+    ctx.fillStyle = s.routing ? '#c9a86a' : (ally ? (s.side === 'ally' ? '#8fd8a8' : '#4cd7ea') : '#ff6159');
     const ly = pos.y + s.h / 2 + 18 * ls;
-    ctx.fillText((chev ? chev + ' ' : '') + nm + (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
+    ctx.fillText((s.routing ? '⚑ ' : '') + (chev ? chev + ' ' : '') + nm +
+      (s.routing ? ' — FLEEING' : '') +
+      (b.phase === 'move' && s.side === 'player' && s.plotted ? ' ✓' : ''), pos.x, ly);
     // hull bar
     const bw = Math.max(44, s.w * 0.6);
     ctx.fillStyle = 'rgba(20,30,45,.8)';
@@ -845,4 +855,4 @@ const Rend = {
   }
 };
 
-window.Rend = Rend;
+if (typeof window !== 'undefined') window.Rend = Rend;
