@@ -868,7 +868,8 @@ const UI = {
 
       const p = planets[selIdx];
       const cleared = Game.isPlanetCleared(sysId, selIdx);
-      const locked = Game.isPlanetLocked(sysId, selIdx);
+      const lockReason = Game.planetLockReason(sysId, selIdx);
+      const locked = !!lockReason;
       const mname = p.anchor ? DATA.MISSION_DEFS[p.anchor].name : DATA.archetype(p.archetype).name;
       const obj = p.anchor
         ? (DATA.MISSION_DEFS[p.anchor].briefing.find(x => x.startsWith('OBJECTIVE')) || '').replace('OBJECTIVE — ', '')
@@ -898,7 +899,9 @@ const UI = {
         (commander ? '<div class="mp-cmd">◆ ENEMY COMMANDER — ' + U.esc(commander) + '</div>' : '') +
         '<div class="mp-obj">' + U.esc(obj) + '</div>' +
         (locked
-          ? '<div class="mp-lock">🔒 The system\'s capital is dug in. Secure the other worlds before you strike here.</div>'
+          ? '<div class="mp-lock">🔒 ' + (lockReason === 'story' && DATA.FINALE_GATES[sysId]
+              ? U.esc(DATA.FINALE_GATES[sysId].msg)
+              : 'The system\'s capital is dug in. Secure the other worlds before you strike here.') + '</div>'
           : cleared ? '<div class="mp-done">✓ THIS PLANET IS SECURED</div>'
             : '<div class="mp-threat">THREAT <span class="th ' + th.c + '">● ' + th.t + '</span></div>' +
               '<div class="mp-elabel">ENEMY FLEET</div><div class="mp-enemy">⚑ ' + enemyPresence + '</div>' +

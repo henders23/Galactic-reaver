@@ -279,10 +279,12 @@ const Game = {
       const y = 300 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 600);
       return { cls: s.cls, name: s.name, role: s.role, x: W - 900 + rng() * 420, y, angle: 180, vip: !!s.vip };
     });
-    // courier: a lone fast runner the escorts protect
+    // courier: a lone fast runner the escorts (far to the right) protect. It only
+    // breaks for the jump on turn 3, so it spawns just ahead of the player's line —
+    // close enough to be run down and killed in the opening exchange.
     if (wantCourier) {
       const runner = F.pool[0];
-      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: W * 0.44, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
+      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: 560 + rng() * 120, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
     }
 
     const allies = [];
@@ -454,12 +456,20 @@ const Game = {
     return out;
   },
 
-  /* the finale is locked until every other planet in the system is secured */
-  isPlanetLocked(sysId, idx) {
+  /* why a planet is locked, or null: 'planets' (other worlds not yet secured) or
+     'story' (a capital finale gated behind an unresolved act beat) */
+  planetLockReason(sysId, idx) {
     const planets = Game.systemPlanets(sysId);
-    if (!planets[idx].finale) return false;
-    return planets.some((q, i) => i !== idx && !Game.isPlanetCleared(sysId, i));
+    if (!planets[idx].finale) return null;
+    if (planets.some((q, i) => i !== idx && !Game.isPlanetCleared(sysId, i))) return 'planets';
+    const gate = DATA.FINALE_GATES[sysId];
+    if (gate && !(Game.save && Game.save.story && Game.save.story.done.includes(gate.beat))) return 'story';
+    return null;
   },
+
+  /* the finale is locked until every other planet is secured — and, at an enemy
+     capital, until that act's key story beat has been resolved */
+  isPlanetLocked(sysId, idx) { return !!Game.planetLockReason(sysId, idx); },
 
   clearedPlanets(sysId) { return (Game.save.galaxy.cleared[sysId] || []); },
   isPlanetCleared(sysId, idx) { return Game.clearedPlanets(sysId).includes(idx); },
@@ -684,7 +694,7 @@ const Game = {
       stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
     };
     Game.log('— TURN 01 · MOVEMENT —', '#4cd7ea');
-    if (window.Music) Music.stop();   // menu music ends when combat is joined
+    if (window.Music) Music.startCombat();   // crossfade menu → combat music
     Game.autoSelect();
     if (window.Rend) Rend.initBattle();
     if (window.UI) UI.refresh();

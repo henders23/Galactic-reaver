@@ -87,8 +87,9 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   enemies and Admiral Kade Voss before you take command.
 - **Presentation** — canvas renderer with starfield, engine wakes, lance beams,
   per-die tracer volleys, shield ripples, explosions, screen shake; fully
-  procedural WebAudio combat sound, plus a streamed **menu music track**
-  (`assets/music/`) that plays across the menus and cuts out when battle is joined.
+  procedural WebAudio combat sound, plus **two streamed music tracks**
+  (`assets/music/`) — a title theme across the menus and a combat theme in battle,
+  which crossfade as you enter and leave combat.
 
 ## Controls
 

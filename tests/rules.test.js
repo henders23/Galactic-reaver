@@ -373,7 +373,11 @@ console.log('finales & gating');
   Game.save.galaxy.cleared['centauri'] = others.slice(0, 2);
   ok(Game.isPlanetLocked('centauri', fi), 'finale still locked with planets remaining');
   Game.save.galaxy.cleared['centauri'] = others;
-  ok(!Game.isPlanetLocked('centauri', fi), 'finale unlocks once the other worlds are secured');
+  // Phase D: the capital finale is also story-gated — worlds secured is necessary
+  // but not sufficient; its act beat must resolve too
+  ok(Game.isPlanetLocked('centauri', fi), 'the capital finale stays story-locked after the worlds fall');
+  Game.save.story.done.push(DATA.FINALE_GATES['centauri'].beat);
+  ok(!Game.isPlanetLocked('centauri', fi), 'finale unlocks once the worlds are secured AND the gate beat resolves');
   ok(!Game.isPlanetLocked('centauri', others[0]), 'non-finale planets are never locked');
 
   // the generated finale mission actually fields the flagship + commander
@@ -538,6 +542,36 @@ console.log('capture events');
   ok(res.hiveSurge && Object.values(g2.siegeBy).includes('hive'), 'taking Elytra surges the Hive against the frontier');
 
   Game.b = null; Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
+/* ================= story gates on capital finales (P4 — Phase D) ================= */
+console.log('finale gates');
+{
+  Game.mode = 'war';
+  Game.save = Game.freshSave();
+
+  // secure every non-finale world of the Za'Argon capital
+  const planets = Game.systemPlanets('centauri');
+  const finaleIdx = planets.findIndex(p => p.finale);
+  ok(finaleIdx >= 0, 'the capital has a finale planet');
+  Game.save.galaxy.cleared['centauri'] = planets.map((p, i) => i).filter(i => i !== finaleIdx);
+
+  // the finale stays locked by its story gate even though the worlds are secured
+  eq(Game.planetLockReason('centauri', finaleIdx), 'story', 'a capital finale is story-locked after its worlds fall');
+  ok(Game.isPlanetLocked('centauri', finaleIdx), 'the story-gated finale reads as locked');
+
+  // resolving the gate beat opens the throne
+  Game.save.story.done.push(DATA.FINALE_GATES['centauri'].beat);
+  eq(Game.planetLockReason('centauri', finaleIdx), null, 'resolving the gate beat unlocks the finale');
+  ok(!Game.isPlanetLocked('centauri', finaleIdx), 'the unlocked finale reads as open');
+
+  // a non-capital system finale is never story-gated
+  const rp = Game.systemPlanets('reavers');
+  const rf = rp.findIndex(p => p.finale);
+  Game.save.galaxy.cleared['reavers'] = rp.map((p, i) => i).filter(i => i !== rf);
+  eq(Game.planetLockReason('reavers', rf), null, 'a non-capital finale carries no story gate');
+
+  Game.mode = 'skirmish'; Game.save = null;
 }
 
 U.clearSeed();
