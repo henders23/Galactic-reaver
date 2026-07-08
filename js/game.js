@@ -535,15 +535,23 @@ const Game = {
       const set = g.cleared[wc.sysId] || (g.cleared[wc.sysId] = []);
       if (!set.includes(wc.planetIdx)) set.push(wc.planetIdx);
       if (wc.anchor) Game.save.story.flags['done_' + wc.anchor] = true;
+      // capture flags drive reactive story beats (DATA.STORY capture triggers)
+      Game.save.story.flags['captured_' + wc.sysId + ':' + wc.planetIdx] = true;
       if (Game.isSystemTaken(wc.sysId)) {
         g.owner[wc.sysId] = 'terran';
         g.siege[wc.sysId] = 0;
         res.taken = true;
         res.capital = sys.type === 'capital';
+        Game.save.story.flags['systaken_' + wc.sysId] = true;
       }
       const flips = Game.warTick(true);
       res.flips = flips;
       res.lost = flips.filter(f => f.from === 'terran');
+      // villain reaction (applied AFTER warTick so its momentum sweep doesn't cancel
+      // it): taking a Drift-central system provokes the swarm — the Gate feeds it.
+      if (res.taken && DATA.CAPTURE_REACTIONS[wc.sysId] === 'hivesurge') {
+        res.hiveSurge = Game.hiveSurge();
+      }
     }
     res.status = Game.warStatus();
     Game.persist();
@@ -558,6 +566,21 @@ const Game = {
   /* a faction's power = the weighted value of the systems it holds */
   factionStrength(fid) {
     return DATA.GALAXY.systems.reduce((a, s) => a + (Game.systemOwner(s.id) === fid ? Game.sysWeight(s.type) : 0), 0);
+  },
+
+  /* the swarm surges: pile fresh Hive siege on a Terran system fronting Hive space
+     (or any Terran system if the front hasn't reached them). Returns that system's
+     name for the debrief, or null if there is nowhere to push. */
+  hiveSurge() {
+    const g = Game.save.galaxy;
+    const front = DATA.GALAXY.systems.filter(s => Game.systemOwner(s.id) === 'terran' &&
+      s.links.some(l => Game.systemOwner(l) === 'hive'));
+    const pool = front.length ? front : DATA.GALAXY.systems.filter(s => Game.systemOwner(s.id) === 'terran' && s.id !== DATA.TERRAN_CAPITAL);
+    if (!pool.length) return null;
+    const t = pool[Game.hashSeed('surge_' + (g.turn || 0) + '_' + pool.length) % pool.length];
+    g.siege[t.id] = (g.siege[t.id] || 0) + 2;
+    g.siegeBy[t.id] = 'hive';
+    return t.name;
   },
 
   /* Advance the war one turn: every enemy faction mounts an offensive against a

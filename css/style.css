@@ -295,9 +295,42 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 #screen.bg-repair::before { background: linear-gradient(180deg, rgba(3, 6, 12, .6), rgba(3, 6, 12, .86)); }
 #screen.bg-defeat { background: #04070d url('../assets/bg-starfield.jpg') center/cover fixed no-repeat; }
 #screen.bg-defeat::before { background: radial-gradient(ellipse at center, rgba(28, 8, 8, .62), rgba(10, 4, 4, .92)); }
+/* sector map — a plain black star field, no nebula art.
+   Two tiling layers of CSS stars: a dense fine layer (::before) and a sparser
+   brighter layer (::after) for depth. */
+#screen.bg-galaxy { background: #01030a; }
+#screen.bg-galaxy::before {
+  background-color: transparent;
+  background-image:
+    radial-gradient(1.5px 1.5px at 24px 40px, #ffffff, transparent),
+    radial-gradient(1.2px 1.2px at 96px 18px, rgba(200,222,255,.95), transparent),
+    radial-gradient(1.3px 1.3px at 168px 112px, #ffffff, transparent),
+    radial-gradient(1.6px 1.6px at 70px 168px, rgba(255,255,255,.98), transparent),
+    radial-gradient(1.1px 1.1px at 214px 72px, rgba(210,228,255,.9), transparent),
+    radial-gradient(1.4px 1.4px at 256px 200px, #ffffff, transparent),
+    radial-gradient(1.1px 1.1px at 128px 248px, rgba(224,234,255,.85), transparent),
+    radial-gradient(1.3px 1.3px at 288px 40px, rgba(255,255,255,.95), transparent),
+    radial-gradient(1px 1px at 40px 260px, rgba(220,230,255,.8), transparent),
+    radial-gradient(1.2px 1.2px at 200px 288px, #ffffff, transparent);
+  background-size: 300px 300px;
+  background-repeat: repeat;
+  opacity: 1;
+}
+#screen.bg-galaxy::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(2.4px 2.4px at 90px 130px, #ffffff, transparent),
+    radial-gradient(2.6px 2.6px at 420px 320px, rgba(210,228,255,.98), transparent),
+    radial-gradient(2.2px 2.2px at 250px 500px, #ffffff, transparent),
+    radial-gradient(2.4px 2.4px at 520px 90px, rgba(255,255,255,.95), transparent),
+    radial-gradient(2.5px 2.5px at 150px 400px, rgba(200,222,255,.95), transparent);
+  background-size: 600px 600px;
+  background-repeat: repeat;
+}
 
 #screenInner { max-width: 780px; width: 100%; padding: 48px 32px; text-align: center; position: relative; z-index: 1; margin: auto; }
 #screenInner.wide { max-width: 1560px; }
+#screenInner.full { max-width: none; width: 100%; padding: 16px 22px 14px; }
 #screenInner.align-left { text-align: left; }
 
 /* title hero */
@@ -409,11 +442,11 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 
 /* ---------- galaxy (sector) map ---------- */
 .galaxy-head { text-align: center; margin-bottom: 8px; }
-#galaxymap { position: relative; width: 100%; height: calc(100vh - 190px); min-height: 460px; border-radius: 14px; overflow: hidden;
+#galaxymap { position: relative; width: 100%; height: calc(100vh - 168px); min-height: 460px; border-radius: 14px; overflow: hidden;
   background: radial-gradient(ellipse at 50% 46%, rgba(40,30,60,.5), rgba(6,9,16,.9) 70%); border: 1px solid rgba(110,160,255,.14); }
+/* full-screen sector map: let the black star field show through the map area */
+#screenInner.full #galaxymap { height: calc(100vh - 214px); border: none; border-radius: 0; background: transparent; overflow: visible; }
 #galaxymap > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.gcore { position: absolute; left: 50%; top: 46%; width: 26%; height: 34%; transform: translate(-50%,-50%);
-  background: radial-gradient(ellipse, rgba(255,238,200,.5), rgba(255,190,120,.16) 40%, transparent 70%); filter: blur(6px); pointer-events: none; }
 .gnode { position: absolute; transform: translate(-50%,-50%); cursor: default; z-index: 2; text-align: center; width: 82px; pointer-events: none; }
 .gnode .gdot, .gnode .glbl, .gnode .gsub { pointer-events: none; }
 .gnode.engage { pointer-events: auto; z-index: 4; }
@@ -452,8 +485,39 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .trend.dn { color: #ff6159; }
 .trend.flat { color: #4a5a6c; }
 
-/* galaxy header — Voss commentary + priority operation */
+/* story surfacing on the sector map — active op target + set-piece anchors */
+.gnode.story { z-index: 6; pointer-events: auto; cursor: pointer; }
+.gnode.story .gemblem { animation: gpulse 1.3s ease-in-out infinite; border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255,212,101,.55), 0 0 20px 5px rgba(255,212,101,.35); }
+.gnode.story .gemblem img { width: 54px; }
+.gnode.story:hover .glbl { text-decoration: underline; }
+.gsub.story { color: #ffd465; font-weight: 700; text-shadow: 0 0 8px rgba(255,212,101,.6); }
+.ganchor { position: absolute; top: -3px; right: -3px; font-size: 11px; color: #ffd465;
+  text-shadow: 0 0 3px #000, 0 0 5px rgba(255,212,101,.7); pointer-events: none; }
+.gi-cta.story { color: #ffd465; }
+
+/* admiral-dispatch war-report ticker */
+.dispatch-news { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 20px;
+  padding: 9px 13px; background: rgba(9,14,24,.55); border: 1px solid rgba(120,180,220,.18);
+  border-radius: 8px; font: 500 10px 'IBM Plex Mono', monospace; color: #9fb4c8; }
+.dn-hd { color: #7ce8f7; font-weight: 700; letter-spacing: 1.5px; }
+.dn-item i { color: #6c7f96; font-style: normal; }
+.dn-item.empty { color: #6c7f96; }
+.dn-sep { color: #3a4a5e; }
+
+/* galaxy header — act badge + Voss commentary + priority operation */
+.act-badge { display: inline-block; font: 700 10px 'IBM Plex Mono', monospace; letter-spacing: 3px;
+  color: #ffd465; border: 1px solid rgba(255,212,101,.35); border-radius: 20px; padding: 4px 14px; margin-bottom: 10px; }
 .voss-line { font: 400 11px 'IBM Plex Mono', monospace; color: #7ce8f7; margin-top: 8px; letter-spacing: .3px; }
+
+/* act title card — full-screen chapter divider */
+.actcard { min-height: calc(100vh - 120px); display: flex; flex-direction: column; align-items: flex-start;
+  justify-content: center; text-align: left; }
+.act-kicker { font: 700 16px 'IBM Plex Mono', monospace; letter-spacing: 10px; color: #ffd465; margin-bottom: 14px; }
+.act-title { font: 700 clamp(46px, 8vw, 96px) Rajdhani, sans-serif; letter-spacing: 3px; line-height: .98; color: #eaf6ff;
+  text-shadow: 0 4px 40px rgba(0,0,0,.7); }
+.act-tag { font: 400 15px 'IBM Plex Mono', monospace; color: #9fb4c8; line-height: 1.6; margin: 22px 0 34px; max-width: 720px; }
+.actcard .menu-btn { margin: 0; }
 .storychip { display: inline-block; margin-top: 10px; padding: 8px 16px; border-radius: 8px; cursor: pointer;
   font: 700 11px Rajdhani, sans-serif; letter-spacing: 1.5px; color: #ffd465; background: rgba(255,212,101,.08);
   border: 1px solid rgba(255,212,101,.5); box-shadow: 0 0 16px rgba(255,212,101,.15); animation: gpulse 2s ease-in-out infinite; }
@@ -777,6 +841,10 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .mp-elabel { font: 700 9px Rajdhani, sans-serif; letter-spacing: 2px; color: #8ba0b8; margin-bottom: 8px; }
 .mp-enemy { font: 500 11px 'IBM Plex Mono', monospace; color: #d3b28a; padding: 10px 12px; margin-bottom: 16px;
   background: rgba(30,20,10,.4); border: 1px solid rgba(180,120,60,.25); border-radius: 8px; }
+/* read-only difficulty rating (set by the system, no longer player-selectable) */
+.mp-diff { font: 700 12px Rajdhani, sans-serif; letter-spacing: 2px; margin-bottom: 16px;
+  padding: 9px 12px; border-radius: 8px; background: rgba(12,18,28,.5);
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent); }
 
 @media (max-width: 1100px) {
   #sysmap .misspanel { width: 280px; right: 14px; }

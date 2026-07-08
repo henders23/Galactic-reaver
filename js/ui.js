@@ -557,8 +557,9 @@ const UI = {
   },
 
   /* ================= full screens ================= */
-  /* opts: bg = 'start' | 'starfield' | 'victory' | 'repair' | 'defeat'
-           wide = full-width layout · left = left-aligned hero layout */
+  /* opts: bg = 'start' | 'starfield' | 'galaxy' | 'victory' | 'repair' | 'defeat'
+           wide = full-width layout · left = left-aligned hero layout
+           full = edge-to-edge layout (no max-width, minimal padding) */
   screen(html, opts) {
     opts = opts || {};
     // menu music plays on every out-of-combat screen; it's stopped once a battle
@@ -567,7 +568,7 @@ const UI = {
     const scr = UI.el.screen;
     scr.className = '';
     if (opts.bg) scr.classList.add('bg-' + opts.bg);
-    UI.el.screenInner.className = (opts.wide ? 'wide' : '') + (opts.left ? ' align-left' : '');
+    UI.el.screenInner.className = (opts.wide ? 'wide' : '') + (opts.left ? ' align-left' : '') + (opts.full ? ' full' : '');
     UI.el.screenInner.innerHTML = html;
     scr.scrollTop = 0;
   },
@@ -648,6 +649,11 @@ const UI = {
     Game.mode = 'war';
     const sv = Game.save;
     Game.galaxyInit(sv);
+    // auto-present the next narrative beat (prologue, act card, admiral dispatch)
+    // before drawing the map. Ops are left for the pulsing chip so a battle never
+    // starts unprompted. Completing the beat re-enters showGalaxy → next beat/map.
+    const pend = Game.storyBeatAvailable();
+    if (pend && (pend.type === 'interstitial' || pend.type === 'actcard')) { UI.showStoryBeat(pend); return; }
     const g = sv.galaxy;
     const sys = DATA.GALAXY.systems;
     const pos = {}; sys.forEach(s => pos[s.id] = s);
@@ -663,6 +669,11 @@ const UI = {
         (front ? 'rgba(255,180,84,.55)' : 'rgba(140,180,220,.16)') + '" stroke-width="' + (front ? 0.4 : 0.25) +
         '"' + (front ? ' stroke-dasharray="1.3 1"' : '') + '/>');
     }));
+    // story surfacing: the active op's target system, and every system that holds
+    // an authored set-piece anchor, are flagged on the map.
+    const beat = Game.storyBeatAvailable();
+    const storyTarget = beat && beat.type === 'op' && beat.system ? beat.system : null;
+    const anchorSystems = new Set(Object.keys(DATA.ANCHORS).map(k => k.split(':')[0]));
     const nodeHtml = sys.map(s => {
       const owner = Game.systemOwner(s.id);
       const F = DATA.faction(owner);
@@ -670,16 +681,20 @@ const UI = {
       const held = owner === 'terran';
       const siege = g.siege[s.id] ? Math.round(g.siege[s.id]) : 0;
       const by = g.siegeBy[s.id];
+      const isTarget = s.id === storyTarget;
+      const isAnchor = anchorSystems.has(s.id) && !held;
       const cls = held ? 'held' : (engage ? 'engage' : 'locked');
       let sub = '';
-      if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
+      if (isTarget) sub = '<div class="gsub story">◆ PRIORITY OP</div>';
+      else if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
       else if (siege > 0 && by) sub = '<div class="gsub siege" style="color:' + DATA.faction(by).color + '">◎ ' + siege + '/' + Game.siegeThreshold(s.id) + '</div>';
       // difficulty meter — a red dotted line, up to 5 dashes; hidden once the system is ours
       const dlvl = (DATA.SYSTEM_TYPES[s.type] || {}).diff || 1;
       const diffMeter = held ? '' : '<div class="gdiff" title="System difficulty ' + dlvl + '/5">' +
         [1, 2, 3, 4, 5].map(n => '<i class="' + (n <= dlvl ? 'on' : '') + '"></i>').join('') + '</div>';
-      return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
-        '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt=""></div>' +
+      const anchorBadge = isAnchor ? '<div class="ganchor" title="Story set-piece">◆</div>' : '';
+      return '<div class="gnode ' + cls + (isTarget ? ' story' : '') + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
+        '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt="">' + anchorBadge + '</div>' +
         '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + diffMeter + '</div>';
     }).join('');
     const inf = Game.factionInfluence();
@@ -701,15 +716,17 @@ const UI = {
       return '<div class="wev"><span style="color:' + F.color + '">' + F.short + '</span> takes ' +
         U.esc(e.name) + ' <span class="wfrom">from ' + Fr.short + '</span></div>';
     }).join('') || '<div class="wev empty">The front is quiet… for now.</div>';
-    const beat = Game.storyBeatAvailable();
     const storyChip = beat ? '<button class="storychip" id="mnStory">◆ ' +
-      (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) + '</button>' : '';
+      (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) +
+      (storyTarget ? ' · ' + DATA.system(storyTarget).name : '') + '</button>' : '';
+    const actInfo = DATA.act(Math.max(1, (sv.story && sv.story.chapter) || 1));
     UI.screen(
-      '<div class="galaxy-head"><div class="brieftitle">GALACTIC SECTOR MAP</div>' +
+      '<div class="galaxy-head">' +
+      '<div class="act-badge">◆ ' + actInfo.name + ' · ' + actInfo.title + '</div>' +
+      '<div class="brieftitle">GALACTIC SECTOR MAP</div>' +
       '<div class="briefsub">ENGAGE A SYSTEM BORDERING YOUR SPACE · TAKE IT PLANET BY PLANET · HOLD THE FRONT</div>' +
       '<div class="voss-line">VOSS ' + U.esc(Game.vossWarLine()) + '</div>' + storyChip + '</div>' +
       '<div id="galaxymap">' +
-      '<div class="neb neb1"></div><div class="neb neb2"></div><div class="gcore"></div>' +
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines.join('') + '</svg>' +
       nodeHtml +
       '<div class="ginfo" id="ginfo"><div class="gi-empty">Hover a system for intel.</div></div>' +
@@ -721,7 +738,7 @@ const UI = {
       '<span>FLEET: ' + sv.fleet.map(f => U.esc(f.name.replace('TAS ', ''))).join(' · ') + '</span></div>' +
       '<div class="btnrow"><button class="menu-btn slim" id="mnFleetG">FLEET & REQUISITION</button>' +
       '<button class="menu-btn slim" id="mnMenuG">BACK TO MENU</button></div></div>',
-      { bg: 'starfield', wide: true }
+      { bg: 'galaxy', wide: true, full: true }
     );
     // remember the influence snapshot so the next visit can show the trend
     g.viewCounts = Object.assign({}, inf);
@@ -752,12 +769,18 @@ const UI = {
         '<div class="gi-row"><span>' + (held ? 'STATUS' : 'PLANETS') + '</span><b>' +
         (held ? '<span style="color:#6fe0a8">TERRAN-HELD</span>' : secured + ' / ' + count) + '</b></div>' +
         '<div class="gi-row"><span>THREAT</span><b class="th ' + threat.c + '">' + threat.t + '</b></div>' +
-        (engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
-          : (held ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
+        (sid === storyTarget ? '<div class="gi-cta story">◆ PRIORITY OPERATION — CLICK TO LAUNCH</div>'
+          : engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
+            : (held ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
     };
     UI.el.screenInner.querySelectorAll('[data-sys]').forEach(el => {
       el.addEventListener('mouseenter', () => renderInfo(el.dataset.sys));
-      if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
+      // the story target launches its priority op first (even if the system is also
+      // engageable); once the op is done the highlight clears and it engages normally
+      if (el.classList.contains('story') && beat) el.addEventListener('click', () => {
+        Snd.init(); Snd.click(); UI.closeScreen(); Game.startStoryMission(beat); UI.rebuildLog();
+      });
+      else if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
     });
     document.getElementById('mnFleetG').addEventListener('click', () => UI.showRefit(null, 0, null));
     document.getElementById('mnMenuG').addEventListener('click', () => UI.showTitle());
@@ -776,7 +799,17 @@ const UI = {
     let selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i) && !Game.isPlanetLocked(sysId, i));
     if (selIdx < 0) selIdx = planets.findIndex((p, i) => !Game.isPlanetCleared(sysId, i));
     if (selIdx < 0) selIdx = 0;
-    let tierId = 'medium';
+    // difficulty is no longer chosen by the player — it is set by the system's
+    // standing (the red dash rating on the sector map), with the finale world
+    // one tier harder than the rest of its system.
+    const sysDiff = (DATA.SYSTEM_TYPES[sys.type] || {}).diff || 2;
+    const TIER_BY_DIFF = { 1: 'easy', 2: 'medium', 3: 'medium', 4: 'hard', 5: 'hard' };
+    const planetTier = (p) => {
+      let idx = DATA.MISSION_TIERS.findIndex(t => t.id === (TIER_BY_DIFF[sysDiff] || 'medium'));
+      if (idx < 0) idx = 1;
+      if (p.finale) idx = Math.min(idx + 1, DATA.MISSION_TIERS.length - 1);
+      return DATA.MISSION_TIERS[idx].id;
+    };
 
     // seeded orbital layout — radius, angle, size and portrait per planet
     const cx = 40, cy = 52;
@@ -842,9 +875,7 @@ const UI = {
         : DATA.archetype(p.archetype).obj;
       const commander = p.finale && p.commander ? p.commander : null;
       const th = threatOf(p);
-      const tierChips = DATA.MISSION_TIERS.map(t =>
-        '<div class="tierchip' + (tierId === t.id ? ' sel' : '') + '" data-tier="' + t.id + '" style="--tc:' + t.color + '">' +
-        '<h4>' + t.name + '</h4><div class="tr">' + t.rec + '</div></div>').join('');
+      const pt = DATA.tier(planetTier(p));
       const enemyPresence = th.c === 'crit' ? 'Heavy enemy presence' : th.c === 'high' ? 'High enemy presence'
         : th.c === 'mod' ? 'Moderate enemy presence' : 'Light enemy presence';
 
@@ -872,7 +903,8 @@ const UI = {
             : '<div class="mp-threat">THREAT <span class="th ' + th.c + '">● ' + th.t + '</span></div>' +
               '<div class="mp-elabel">ENEMY FLEET</div><div class="mp-enemy">⚑ ' + enemyPresence + '</div>' +
               (p.anchor ? '<div class="mp-anchor">A hand-built engagement — fought at your standing difficulty.</div>'
-                : '<div class="mp-elabel">DIFFICULTY</div><div class="tierrow">' + tierChips + '</div>')) +
+                : '<div class="mp-elabel">DIFFICULTY</div><div class="mp-diff" style="color:' + pt.color + '">● ' + pt.name +
+                  (p.finale ? ' · SYSTEM FINALE' : '') + '</div>')) +
         (cleared || locked ? '' : '<button class="menu-btn primary" id="mnLaunchP">CONFIRM MISSION ▸</button>') +
         '</div>' +
         '</div>',
@@ -880,13 +912,11 @@ const UI = {
       );
       UI.el.screenInner.querySelectorAll('[data-planet]').forEach(el =>
         el.addEventListener('click', () => { selIdx = Number(el.dataset.planet); Snd.click(); render(); }));
-      UI.el.screenInner.querySelectorAll('[data-tier]').forEach(el =>
-        el.addEventListener('click', () => { tierId = el.dataset.tier; Snd.click(); render(); }));
       const lb = document.getElementById('mnLaunchP');
       if (lb) lb.addEventListener('click', () => {
         Snd.init(); Snd.click();
         UI.closeScreen();
-        Game.startPlanetMission(sysId, selIdx, tierId);
+        Game.startPlanetMission(sysId, selIdx, planetTier(planets[selIdx]));
         UI.rebuildLog();
       });
       document.getElementById('mnBackG').addEventListener('click', () => UI.showGalaxy());
@@ -904,7 +934,7 @@ const UI = {
       if (res.status === 'lose') { Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignDefeat(); return; }
       if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
         lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId),
-        sysCount: Game.systemPlanetCount(res.sysId) };
+        sysCount: Game.systemPlanetCount(res.sysId), hiveSurge: res.hiveSurge };
       Game.warContext = null;
       UI.showMissionComplete(res.report, res.earned, res.sysId);
       return;
@@ -928,15 +958,48 @@ const UI = {
     }
   },
 
-  /* narrative interstitial (no battle) — advances the chapter */
+  /* narrative beat (no battle) — an act title card or an admiral's dispatch.
+     Advances save.story.chapter, then hands back to the sector map (which will
+     auto-present the next narrative beat, if any). */
   showStoryBeat(beat) {
-    UI.screen(
-      '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
-      (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
-      '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
-      '<button class="menu-btn primary" id="mnBeatGo">CONTINUE ▸</button>',
-      { bg: beat.bg || 'starfield' }
-    );
+    if (beat.type === 'actcard') {
+      UI.screen(
+        '<div class="actcard">' +
+        '<div class="act-kicker">' + U.esc(beat.name || '') + '</div>' +
+        '<div class="act-title">' + U.esc(beat.title) + '</div>' +
+        (beat.tagline ? '<div class="act-tag">' + U.esc(beat.tagline) + '</div>' : '') +
+        '<button class="menu-btn primary" id="mnBeatGo">BEGIN ▸</button>' +
+        '</div>',
+        { bg: beat.bg || 'starfield', wide: true }
+      );
+    } else {
+      // admiral dispatches ride with Voss's portrait so they read as orders
+      const voss = beat.speaker && /VOSS/i.test(beat.speaker);
+      // a live war-report ticker from the galaxy events, so a dispatch reads as news
+      const evs = (((Game.save && Game.save.galaxy) || {}).events || []).slice(0, 4);
+      const ticker = '<div class="dispatch-news"><span class="dn-hd">◂ WAR REPORT ▸</span>' +
+        (evs.length ? evs.map(e => '<span class="dn-item"><b style="color:' + DATA.faction(e.faction).color + '">' +
+          DATA.faction(e.faction).short + '</b> takes ' + U.esc(e.name) + ' <i>from ' + DATA.faction(e.from).short +
+          '</i></span>').join('<span class="dn-sep">·</span>')
+          : '<span class="dn-item empty">The front is quiet — for now.</span>') + '</div>';
+      UI.screen(
+        '<div class="brief-cols">' +
+        '<div class="brief-main">' +
+        '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
+        (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
+        ticker +
+        '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
+        '<div class="btnrow left"><button class="menu-btn primary slim" id="mnBeatGo">CONTINUE ▸</button></div>' +
+        '</div>' +
+        (voss ? '<div class="brief-art dossier">' +
+          '<img class="admiral-portrait" src="assets/portraits/admiral.png" alt="Admiral Kade Voss">' +
+          '<div class="contact">◆ ADMIRAL KADE VOSS</div>' +
+          '<div class="contact sub">7TH EXPEDITIONARY FLEET COMMAND</div>' +
+          '</div>' : '') +
+        '</div>',
+        { bg: beat.bg || 'starfield', wide: true, left: true }
+      );
+    }
     document.getElementById('mnBeatGo').addEventListener('click', () => { Snd.click(); Game.completeStoryBeat(beat.id); UI.showGalaxy(); });
   },
 
@@ -1153,6 +1216,8 @@ const UI = {
     }
     if (w && w.lost && w.lost.length) para.push('⚠ But it is not all ours today — ' +
       w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '.');
+    if (w && w.hiveSurge) para.push('⚠ And we have woken something. The swarm surges against ' +
+      U.esc(w.hiveSurge) + ' — taking that system stirred the Hive, and it is coming for the front.');
     const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
     if (elsewhere.length) para.push('Elsewhere the war grinds on — ' +
       elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '.');

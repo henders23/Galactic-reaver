@@ -490,6 +490,11 @@ DATA.ANCHORS = {
 /* Authored anchors that ARE a system's boss finale (must be fought last). */
 DATA.BOSS_ANCHORS = ['m_dreadmaw', 'm_hive'];
 
+/* Villain reactions to specific captures. Taking one of these Drift-central systems
+   (each fronting the swarm) provokes a Hive surge against your frontier — the Gate
+   feeds it. Handled in Game.applyWarResult; keyed by system id. */
+DATA.CAPTURE_REACTIONS = { elytra: 'hivesurge', nexus: 'hivesurge', trinity: 'hivesurge' };
+
 /* Every system ends in a boss finale — a capital-ship command battle. Where there
    is no authored boss, one is generated against the owning faction's flagship,
    led by a named commander. The Hive has no commanders; its flagship IS the mind. */
@@ -523,14 +528,46 @@ DATA.SYSTEM_STAGES = ['INTEL GATHERING', 'ESTABLISH FOOTHOLD', 'ELIMINATE THREAT
 
    `trigger` receives the save and may call Game.* helpers.
    Types: 'op' (launches a battle) · 'interstitial' (narrative screen, no battle). */
+/* ---------------- acts ----------------
+   The three-act spine, surfaced as full-screen title cards (DATA.STORY beats of
+   type 'actcard') and as the act badge on the sector-map header. `chapter` maps
+   to save.story.chapter. */
+DATA.ACTS = [
+  { chapter: 1, name: 'ACT I', title: 'FIRST BLOOD',
+    tagline: 'The Crimson Reach is bleeding the Verge white — and the ship that broke Meridian is out here somewhere.' },
+  { chapter: 2, name: 'ACT II', title: 'THE OLD EMPIRE',
+    tagline: "The Za'Argon Dynasty stands between you and the heart of the Drift. Learn what they are dying to protect." },
+  { chapter: 3, name: 'ACT III', title: 'THE RECKONING',
+    tagline: 'The swarm breaks out, drawn by the waking Gate. Three thrones, one relic, and a debt owed since Meridian.' }
+];
+DATA.act = (chapter) => DATA.ACTS.find(a => a.chapter === chapter) || DATA.ACTS[0];
+
 DATA.STORY = [
+  {
+    id: 'sc_prologue', chapter: 1, act: 'I', type: 'interstitial', title: 'THE GHOST OF MERIDIAN',
+    brief: 'How you got here.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => true,   // the cold-open — always available, shown first thing
+    body: [
+      'MERIDIAN. Two years ago.',
+      'The Dominion flagship DREADMAW broke the Alliance line in ninety seconds, and Admiral Kade Voss gave the order every captain dreads — hold. You watched the fleet die holding a line that was already gone. Then you disobeyed, and cut your corvette through the enemy escorts to shield the civilian convoys running for the jump point.',
+      'Eleven thousand people lived. The fleet did not. You brought one ship out of the fire: the TAS REAVER.',
+      'The Alliance could not decide whether you were a hero or the coward who ran while the fleet burned — so they split the difference and sent you here. To the Verge, the dying frontier, with the ragtag 7th Expeditionary Fleet and the name they gave you in the wreckage of Meridian: the Ghost.',
+      'Voss came with you. He blames himself, not you. The Kessel Drift is his second chance — and yours.'
+    ]
+  },
+  {
+    id: 'act_1', chapter: 1, act: 'I', type: 'actcard', title: 'FIRST BLOOD', name: 'ACT I',
+    tagline: 'The Crimson Reach is bleeding the Verge white — and the ship that broke Meridian is out here somewhere.',
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_prologue')
+  },
   {
     id: 'sc_butcher', chapter: 1, act: 'I', type: 'op', title: "THE BUTCHER'S TRAIL",
     brief: 'A lead on the DREADMAW — the ship that broke Meridian.',
+    system: 'reavers',
     trigger: () => Game.terranSystems().length > 8,
     mission: {
       factionId: 'crimson', archetypeId: 'assault', tierId: 'medium',
-      planet: { name: 'Kessel Waystation', type: 'Barren' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Reaver anchorage', type: 'Barren' }, system: { name: "REAVER'S LANDING" },
       name: "THE BUTCHER'S TRAIL",
       briefing: [
         'A Crimson raiding pack is stripping a relay convoy in the Drift — and a prize you took last week carried a name in its logs you will never forget: SKARR.',
@@ -552,10 +589,11 @@ DATA.STORY = [
   {
     id: 'sc_herald', chapter: 1, act: 'I', type: 'op', title: "THE WOLF'S MESSAGE",
     brief: 'Skarr is watching. He wants you to know it.',
+    system: 'ravagers',
     trigger: () => Game.save.story.done.includes('sc_meridian') && Game.terranSystems().length > 10,
     mission: {
       factionId: 'crimson', archetypeId: 'interdict', tierId: 'medium',
-      planet: { name: 'Kessel Deep', type: 'Gas' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Gulf approaches', type: 'Gas' }, system: { name: "RAVAGER'S GULF" },
       name: "THE WOLF'S MESSAGE",
       briefing: [
         "A lone Crimson courier burns into the Drift under a sigil you have learned to hate — Skarr's wolf. It is not here to fight. It is here to be seen.",
@@ -565,13 +603,28 @@ DATA.STORY = [
     }
   },
   {
+    id: 'ev_first_blood', chapter: 1, act: 'I', type: 'interstitial', title: 'THE REACH BLEEDS',
+    brief: 'Reaver\'s Landing is yours.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_reavers:0'],
+    body: [
+      "Reaver's Landing runs red. The set-piece the Crimson Reach built to bleed our convoys is a debris field now, and the first true blood of your war in the Verge is theirs, not ours.",
+      'Voss: "That is the only language the Reach has ever understood, Captain — not treaties, not lines on a chart. Guns. You just taught the whole confederation that the Ghost of Meridian has teeth. Word of that travels faster than any courier."'
+    ]
+  },
+  {
+    id: 'act_2', chapter: 2, act: 'II', type: 'actcard', title: 'THE OLD EMPIRE', name: 'ACT II',
+    tagline: "The Za'Argon Dynasty stands between you and the heart of the Drift. Learn what they are dying to protect.",
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_herald')
+  },
+  {
     id: 'sc_dynasty', chapter: 2, act: 'II', type: 'op', title: 'THE OLD EMPIRE',
     brief: "The Za'Argon have noticed you.",
+    system: 'elytra',
     trigger: () => Game.save.story.done.includes('sc_herald') &&
       DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 2,
     mission: {
       factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
-      planet: { name: 'the Gate Approaches', type: 'Ice' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Junction reach', type: 'Ice' }, system: { name: 'ELYTRA JUNCTION' },
       name: 'THE OLD EMPIRE',
       briefing: [
         "You have pushed too close to something the Za'Argon call sacred. A Dynasty battle-line translates in-system, running silent, lances already glowing.",
@@ -584,11 +637,12 @@ DATA.STORY = [
   {
     id: 'sc_reliquary', chapter: 2, act: 'II', type: 'op', title: 'THE RELIQUARY',
     brief: 'Seize the star-charts the Dynasty would rather burn.',
+    system: 'pax',
     trigger: () => Game.save.story.done.includes('sc_dynasty') &&
       DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 3,
     mission: {
       factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
-      planet: { name: 'the Reliquary Anchorage', type: 'Rocky' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Reliquary Anchorage', type: 'Rocky' }, system: { name: 'PAX STATION' },
       name: 'THE RELIQUARY',
       briefing: [
         'A Za\'Argon shrine-ship rides at anchor over a dead moon, its holds heavy with star-charts older than the Alliance — and, Voss suspects, the truth about whatever the Dynasty is dying to protect out here.',
@@ -620,13 +674,19 @@ DATA.STORY = [
     ]
   },
   {
+    id: 'act_3', chapter: 3, act: 'III', type: 'actcard', title: 'THE RECKONING', name: 'ACT III',
+    tagline: 'The swarm breaks out, drawn by the waking Gate. Three thrones, one relic, and a debt owed since Meridian.',
+    bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_swarm_stirs')
+  },
+  {
     id: 'sc_breakout', chapter: 3, act: 'III', type: 'op', title: 'THE SWARM BREAKS',
     brief: 'The Hive is coming for everyone.',
+    system: 'churn',
     trigger: () => Game.save.story.done.includes('sc_swarm_stirs') &&
       (DATA.enemyCapitals().filter(c => Game.systemOwner(c) === 'terran').length >= 2 || Game.terranSystems().length >= 15),
     mission: {
       factionId: 'hive', archetypeId: 'defense', tierId: 'hard',
-      planet: { name: 'Kessel Station', type: 'Ocean' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Churn picket', type: 'Ocean' }, system: { name: 'THE CHURN' },
       name: 'THE SWARM BREAKS',
       briefing: [
         'It is happening. The thing in the Drift is awake, and the Hive is pouring out of the south in numbers the pickets cannot count. Kessel Station is directly in their path.',
@@ -653,6 +713,25 @@ DATA.STORY = [
       'The Drift has become a graveyard of fleets, and at its heart the Throne Gate burns brighter with every ship that dies near it — as if the war itself were pouring into that ancient light and waking it further.',
       'Voss finds you one last time before the end. "When the final throne falls, that Gate is yours to answer for. Command wants it. The Dynasty worshipped it. The swarm is drinking it. You will have to decide what it actually is."',
       '"Whatever you choose down there, Captain — you already did the hardest thing anyone ever asked of you, a long time ago, at Meridian. The rest of it is just gunnery."'
+    ]
+  },
+  {
+    id: 'ev_dreadmaw', chapter: 3, act: 'III', type: 'interstitial', title: 'MERIDIAN AVENGED',
+    brief: 'The DREADMAW burns.', bg: 'victory', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_dreadfall:0'],
+    body: [
+      'The DREADMAW — the ship that broke the Alliance line at Meridian, that put your fleet and Voss\'s command in the ground — comes apart over Dreadfall under your guns. Warlord Skarr dies with her, still firing to the last.',
+      'Voss watches the plot until the final trace of her signature is gone. For a long while he says nothing at all.',
+      '"Two years, Captain. Two years I have carried Meridian like a stone behind the ribs." His voice is not quite steady. "It is paid. Every crew we buried holding that broken line — it is paid. Whatever else this war takes from us before the end, we did this. You did this."'
+    ]
+  },
+  {
+    id: 'ev_hive_heart', chapter: 3, act: 'III', type: 'interstitial', title: 'THE MIND GOES DARK',
+    brief: 'The swarm\'s heart stops.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_ulvor:0'],
+    body: [
+      "At Ul'Vor Broodworld the Hive Heart — the single vast mind the whole swarm answered to — dies in a light that whites out every sensor in the fleet. Across the southern Drift, in the same heartbeat, ten thousand lesser things go suddenly and terribly still.",
+      'Voss: "That is it. That is the mind. Everything still twitching down there is just meat drifting without it now." He exhales slowly. "Let the Gate bleed all the light it wants — there is nothing left in the dark to drink it. Log it, Captain. We just killed a god."'
     ]
   }
 ];
