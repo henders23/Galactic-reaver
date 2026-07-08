@@ -228,8 +228,8 @@ DATA.orders = (ship) => {
   const spd = Game.effSpeed(ship);
   const brg = ship.sys['BRIDGE'];
   const all = [
-    { id: 'heading', name: 'NEW HEADING', range: spd, minMove: 30, maxTurn: ship.maxTurn,
-      desc: 'move · turn ≤' + ship.maxTurn + '°', accShift: 0, dodgeShift: 0 },
+    { id: 'heading', name: 'NEW HEADING', range: spd, minMove: Math.max(40, spd * 0.25), maxTurn: Math.min(45, ship.maxTurn),
+      desc: 'advance · turn ≤' + Math.min(45, ship.maxTurn) + '°', accShift: 0, dodgeShift: 0 },
     { id: 'full', name: 'ALL AHEAD FULL', range: spd * 1.55, minMove: spd * 0.75, maxTurn: Math.min(22.5, ship.maxTurn),
       desc: 'long move · shallow turn · own guns hit on +1', accShift: 1, dodgeShift: 0 },
     { id: 'about', name: 'COME ABOUT', range: spd * 0.55, minMove: 0, maxTurn: 180,

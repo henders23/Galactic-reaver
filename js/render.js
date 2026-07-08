@@ -424,6 +424,8 @@ const Rend = {
 
   weaponArc(ctx, ship, pos, w, fill) {
     if (w.arc === 'fore') Rend.sector(ctx, pos.x, pos.y, w.range, pos.angle, 50, fill);
+    else if (w.arc === 'port') Rend.sector(ctx, pos.x, pos.y, w.range, pos.angle - 90, 40, fill);
+    else if (w.arc === 'starboard') Rend.sector(ctx, pos.x, pos.y, w.range, pos.angle + 90, 40, fill);
     else Rend.sideSectors(ctx, pos.x, pos.y, w.range, pos.angle, fill);
   },
 
@@ -522,7 +524,23 @@ const Rend = {
       const w = s && s.weapons[b.armed.wIdx];
       if (s && w) {
         const pulse = 0.10 + 0.045 * Math.sin(now / 220);
-        Rend.weaponArc(ctx, s, s, w, 'rgba(255,180,84,' + pulse + ')');
+        if (w.type === 'torp') {
+          // torpedoes run along any bearing: full launch circle + an aim line to the cursor
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,180,84,' + (0.22 + pulse) + ')';
+          ctx.setLineDash([6, 8]);
+          ctx.beginPath(); ctx.arc(s.x, s.y, w.range, 0, U.TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          if (b.mouse) {
+            const rad = U.angleTo(s, b.mouse) * U.D2R;
+            ctx.strokeStyle = 'rgba(255,180,84,.6)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x + Math.cos(rad) * w.range, s.y + Math.sin(rad) * w.range); ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          Rend.weaponArc(ctx, s, s, w, 'rgba(255,180,84,' + pulse + ')');
+        }
       }
     } else if (b.phase === 'fire' && b.sel) {
       const s = Game.ship(b.sel);
@@ -537,6 +555,21 @@ const Rend = {
       if (s && s.alive) s.weapons.forEach(w => {
         Rend.weaponArc(ctx, s, s, w, s.side === 'enemy' ? 'rgba(255,97,89,.08)' : 'rgba(76,215,234,.06)');
       });
+    }
+    // committed free-aim torpedo bearings — dashed run + a reticle on the aim point
+    if (b.phase === 'fire') {
+      Game.playerShips(b).forEach(s => s.weapons.forEach(w => {
+        if (!w.target || typeof w.target !== 'object') return;
+        const rad = U.angleTo(s, w.target) * U.D2R;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,180,84,.5)'; ctx.setLineDash([4, 6]); ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x + Math.cos(rad) * w.range, s.y + Math.sin(rad) * w.range); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255,180,84,.85)';
+        ctx.beginPath(); ctx.arc(w.target.x, w.target.y, 10, 0, U.TAU); ctx.stroke();
+        ctx.restore();
+      }));
     }
   },
 

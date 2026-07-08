@@ -89,7 +89,18 @@ const Game = {
       sys: { 'WEAPONS': 0, 'ENGINES': 0, 'SHIELD EMITTER': 0, 'BRIDGE': 0 },
       fires: 0,
       speed: c.speed, maxTurn: c.maxTurn, turrets: c.turrets, pts: c.pts,
-      weapons: c.weapons.map(w => DATA.weapon(Object.assign({}, w))),
+      // a ship's broadside (a side battery) is split into independent PORT and
+      // STARBOARD batteries, so it can rake foes on both flanks in the same turn;
+      // each is uprated (+2 dice) to give the broadside real weight
+      weapons: c.weapons.flatMap(w => {
+        if (w.type === 'battery' && w.arc === 'side') {
+          return [
+            DATA.weapon(Object.assign({}, w, { name: w.name + ' — PORT', arc: 'port', dice: w.dice + 2 })),
+            DATA.weapon(Object.assign({}, w, { name: w.name + ' — STBD', arc: 'starboard', dice: w.dice + 2 }))
+          ];
+        }
+        return [DATA.weapon(Object.assign({}, w))];
+      }),
       alive: true, exited: false, hulked: false, captured: false, routing: false,
       order: null, plot: null, plotted: false,
       animFrom: null, animCurve: null,
@@ -98,7 +109,8 @@ const Game = {
       fleetRef: (opts.fleetRef !== undefined) ? opts.fleetRef : null,
       refit: !!opts.refit,
       vip: !!opts.vip,
-      commander: opts.commander || null
+      commander: opts.commander || null,
+      runTurn: opts.runTurn || null   // a fleeing ship breaks for the jump on this turn (default 3)
     };
     // weapon refit: +1 die on all direct-fire weapons
     if (s.refit) s.weapons.forEach(w => { if (w.type === 'lance' || w.type === 'battery') w.dice += 1; });
@@ -279,12 +291,12 @@ const Game = {
       const y = 300 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 600);
       return { cls: s.cls, name: s.name, role: s.role, x: W - 900 + rng() * 420, y, angle: 180, vip: !!s.vip };
     });
-    // courier: a lone fast runner the escorts (far to the right) protect. It only
-    // breaks for the jump on turn 3, so it spawns just ahead of the player's line —
-    // close enough to be run down and killed in the opening exchange.
+    // courier: a lone fast runner the escorts (far to the right) protect. It spawns
+    // just ahead of the player's line and breaks for the jump immediately (runTurn 1),
+    // so the player must run it down through the opening exchange.
     if (wantCourier) {
       const runner = F.pool[0];
-      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: 560 + rng() * 120, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
+      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', runTurn: 1, x: 560 + rng() * 120, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
     }
 
     const allies = [];
@@ -368,7 +380,7 @@ const Game = {
     const fleet = (Game.save && Game.save.fleet) || [{ cls: 'corvette', name: 'TAS REAVER', xp: 0, refit: false }];
     const ships = Game.fleetSpawn(m.playerSpawn, fleet);
     (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
-    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip, commander: e.commander })));
+    m.enemies.forEach(e => ships.push(Game.mkShip(e.cls, e.name, 'enemy', e.role, e.x, e.y, e.angle, { vip: e.vip, commander: e.commander, runTurn: e.runTurn })));
     Game.beginBattle(m, ships, m.terrain);
     return m;
   },
@@ -753,9 +765,16 @@ const Game = {
     if (shooter.sys['WEAPONS'] >= 2) return { ok: false, why: 'WEAPONS DESTROYED' };
     if (d > w.range) return { ok: false, why: 'OUT OF RANGE' };
     if (w.arc !== 'any') {
-      const arc = U.arcOf(U.bearingFrom(shooter, target.x, target.y));
+      const brg = U.bearingFrom(shooter, target.x, target.y);
+      const arc = U.arcOf(brg);
       if (w.arc === 'fore' && arc !== 'fore') return { ok: false, why: 'NOT IN FORE ARC' };
       if (w.arc === 'side' && arc !== 'side') return { ok: false, why: 'NOT IN SIDE ARC' };
+      // a broadside only bears on its own flank (bearing<0 = port, >0 = starboard)
+      if (w.arc === 'port' || w.arc === 'starboard') {
+        if (arc !== 'side') return { ok: false, why: 'NOT IN BROADSIDE ARC' };
+        const side = brg < 0 ? 'port' : 'starboard';
+        if (side !== w.arc) return { ok: false, why: 'TARGET TO ' + side.toUpperCase() };
+      }
     }
     if (w.type !== 'torp' && w.type !== 'bay' && Game.losBlocked(shooter, target)) return { ok: false, why: 'LINE OF FIRE BLOCKED' };
     if ((w.type === 'torp' || w.type === 'bay') && shooter.order && shooter.order.brace) return { ok: false, why: 'CREWS BRACED' };
@@ -885,21 +904,35 @@ const Game = {
         const s = Game.ship(b.boardMode);
         if (s && Game.tryBoard(s, hit)) return;
       }
-      if (b.armed && hit) {
+      if (b.armed) {
         const s = Game.ship(b.armed.shipId);
         const w = s && s.weapons[b.armed.wIdx];
-        if (s && w && !hit.hulked) {
-          const isFighters = w.type === 'bay' && w.craft === 'fighters';
-          const validSide = isFighters ? hit.side !== 'enemy' : hit.side === 'enemy';
-          if (validSide) {
-            const sol = isFighters ? { ok: true } : Game.solution(s, w, hit);
-            if (sol.ok) {
-              w.target = hit.id;
+        if (s && w && w.reload === 0) {
+          if (w.type === 'torp') {
+            // torpedoes run along any bearing: lock onto a clicked enemy, or
+            // free-aim the salvo at the clicked point in open space
+            if (s.order && s.order.brace) { Snd.deny(); }
+            else {
+              const lock = hit && !hit.hulked && hit.side === 'enemy';
+              w.target = lock ? hit.id : { x, y, free: true };
               b.armed = null; b.hover = null;
               Snd.lock();
               if (window.UI) UI.refresh();
               return;
-            } else { Snd.deny(); }
+            }
+          } else if (hit && !hit.hulked) {
+            const isFighters = w.type === 'bay' && w.craft === 'fighters';
+            const validSide = isFighters ? hit.side !== 'enemy' : hit.side === 'enemy';
+            if (validSide) {
+              const sol = isFighters ? { ok: true } : Game.solution(s, w, hit);
+              if (sol.ok) {
+                w.target = hit.id;
+                b.armed = null; b.hover = null;
+                Snd.lock();
+                if (window.UI) UI.refresh();
+                return;
+              } else { Snd.deny(); }
+            }
           }
         }
       }
@@ -1284,22 +1317,26 @@ const Game = {
       return;
     }
     const w = s.weapons[q.wIdx];
-    const target = Game.ship(q.targetId);
+    // a torpedo may be free-aimed at a bare point/bearing rather than locked to a ship
+    const freeAim = q.targetId && typeof q.targetId === 'object';
+    const target = freeAim ? null : Game.ship(q.targetId);
     w.target = null;
-    if (!target || !target.alive || target.exited) {
+    if (!freeAim && (!target || !target.alive || target.exited)) {
       Game.log(s.name + ' ' + w.name + ' — target lost', '#5c7089');
       return;
     }
+    if (freeAim && w.type !== 'torp') return;   // only torpedoes free-aim
     const isFighters = w.type === 'bay' && w.craft === 'fighters';
-    const sol = isFighters ? { ok: true } : Game.solution(s, w, target);
+    const sol = (freeAim || isFighters) ? { ok: true } : Game.solution(s, w, target);
     if (!sol.ok) {
       Game.log(s.name + ' ' + w.name + ' — no firing solution (' + sol.why + ')', '#5c7089');
       return;
     }
 
     if (w.type === 'torp') {
+      if (s.order && s.order.brace) { Game.log(s.name + ' ' + w.name + ' — crews braced, tubes cold', '#5c7089'); return; }
       w.reload = w.reloadTime + 1;
-      const ang = U.angleTo(s, target);
+      const ang = freeAim ? U.angleTo(s, q.targetId) : U.angleTo(s, target);
       const rad = ang * U.D2R;
       Game.b.torps.push({
         id: 'tp' + Math.floor(Math.random() * 1e9),
@@ -1311,7 +1348,7 @@ const Game = {
       });
       Snd.torp();
       Rend.fx.ring(s.x, s.y, 30, 'rgba(255,180,84,.6)');
-      Game.log(s.name + ' — TORPEDOES AWAY (' + w.salvo + ' fish, running toward ' + target.name + ')', '#ffb454');
+      Game.log(s.name + ' — TORPEDOES AWAY (' + w.salvo + ' fish, ' + (freeAim ? 'running along the plotted bearing' : 'running toward ' + target.name) + ')', '#ffb454');
       return;
     }
 
@@ -1790,7 +1827,7 @@ const AI = {
     if (s.role === 'convoy') {
       return { pt: { x: W + 120, y: s.y }, face: 0 };
     }
-    if (s.role === 'flee' && b.turn >= 3) {
+    if (s.role === 'flee' && b.turn >= (s.runTurn || 3)) {
       return { pt: { x: W + 160, y: s.y + U.frand(-40, 40) }, face: 0 };
     }
     if (s.role === 'rout') {
@@ -1806,7 +1843,7 @@ const AI = {
     }
     if (!target) return { pt: { x: s.x, y: s.y }, face: s.angle };
     const dToT = U.angleTo(s, target);
-    const hasSide = s.weapons.some(w => w.arc === 'side' && w.type !== 'torp' && w.type !== 'bay');
+    const hasSide = s.weapons.some(w => (w.arc === 'side' || w.arc === 'port' || w.arc === 'starboard') && w.type !== 'torp' && w.type !== 'bay');
     const gunRanges = s.weapons.filter(w => w.type === 'lance' || w.type === 'battery').map(w => w.range);
     const mainRange = Math.max(...(gunRanges.length ? gunRanges : [250]), 250);
     const d = U.dist(s, target);
@@ -1863,7 +1900,7 @@ const AI = {
     const find = id => orders.find(o => o.id === id) || orders[0];
     if (s.role === 'convoy') return find('heading');
     if (s.role === 'guard') return find('hold');
-    if (s.role === 'flee' && b.turn >= 3) return find('full');
+    if (s.role === 'flee' && b.turn >= (s.runTurn || 3)) return find('full');
     if (s.role === 'rout') {
       const turnNeeded = Math.abs(U.norm180(U.angleTo(s, want.pt) - s.angle));
       return turnNeeded < 25 ? find('full') : find('heading');
