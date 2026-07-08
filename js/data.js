@@ -558,7 +558,7 @@ DATA.act = (chapter) => DATA.ACTS.find(a => a.chapter === chapter) || DATA.ACTS[
 DATA.STORY = [
   {
     id: 'sc_prologue', chapter: 1, act: 'I', type: 'interstitial', title: 'THE GHOST OF MERIDIAN',
-    brief: 'How you got here.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    brief: 'How you got here.', bg: 'meridian', coldOpen: true,
     trigger: () => true,   // the cold-open — always available, shown first thing
     body: [
       'MERIDIAN. Two years ago.',
@@ -572,6 +572,19 @@ DATA.STORY = [
     id: 'act_1', chapter: 1, act: 'I', type: 'actcard', title: 'FIRST BLOOD', name: 'ACT I',
     tagline: 'The Crimson Reach is bleeding the Verge white — and the ship that broke Meridian is out here somewhere.',
     bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_prologue')
+  },
+  {
+    id: 'sc_orders', chapter: 1, act: 'I', type: 'interstitial', title: 'YOUR ORDERS',
+    brief: 'Find the ship that broke Meridian.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    smallPortrait: true,   // dossier rides here now, at a smaller scale
+    trigger: () => Game.save.story.done.includes('act_1'),
+    body: [
+      'Voss lays the sector chart across the table and puts one word at the centre of it: DREADMAW.',
+      '"This is the mission, Captain — everything else out here is just how we get to it. Warlord Skarr and the flagship that broke our line at Meridian went to ground somewhere in the Kessel Drift, and the Reach has been bleeding these convoys white to keep him fed and hidden."',
+      'WHY HER, AND NOT JUST ANY PIRATE: "The DREADMAW is not one more raider. She is the ship that killed a fleet in ninety seconds and taught the whole Verge that the Alliance can be broken. As long as she flies, every warlord and dynast in the Drift believes the same thing. Put her on the ocean floor and the Reach folds — the swarm and the Dynasty both start doing their own arithmetic. And Meridian gets its answer."',
+      'HOW WE FIND HER: "We do not go straight for the throat — we cannot, not yet. We take the Reach apart system by system and squeeze his raiding packs until one of them coughs up where the Butcher sleeps. Every world you take is a lead."',
+      'OBJECTIVE — Hunt the DREADMAW. Break the Crimson Reach until Skarr has nowhere left to hide.'
+    ]
   },
   {
     id: 'sc_butcher', chapter: 1, act: 'I', type: 'op', title: "THE BUTCHER'S TRAIL",
