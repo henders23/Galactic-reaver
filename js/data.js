@@ -558,10 +558,11 @@ DATA.STORY = [
   {
     id: 'sc_butcher', chapter: 1, act: 'I', type: 'op', title: "THE BUTCHER'S TRAIL",
     brief: 'A lead on the DREADMAW — the ship that broke Meridian.',
+    system: 'reavers',
     trigger: () => Game.terranSystems().length > 8,
     mission: {
       factionId: 'crimson', archetypeId: 'assault', tierId: 'medium',
-      planet: { name: 'Kessel Waystation', type: 'Barren' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Reaver anchorage', type: 'Barren' }, system: { name: "REAVER'S LANDING" },
       name: "THE BUTCHER'S TRAIL",
       briefing: [
         'A Crimson raiding pack is stripping a relay convoy in the Drift — and a prize you took last week carried a name in its logs you will never forget: SKARR.',
@@ -583,10 +584,11 @@ DATA.STORY = [
   {
     id: 'sc_herald', chapter: 1, act: 'I', type: 'op', title: "THE WOLF'S MESSAGE",
     brief: 'Skarr is watching. He wants you to know it.',
+    system: 'ravagers',
     trigger: () => Game.save.story.done.includes('sc_meridian') && Game.terranSystems().length > 10,
     mission: {
       factionId: 'crimson', archetypeId: 'interdict', tierId: 'medium',
-      planet: { name: 'Kessel Deep', type: 'Gas' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Gulf approaches', type: 'Gas' }, system: { name: "RAVAGER'S GULF" },
       name: "THE WOLF'S MESSAGE",
       briefing: [
         "A lone Crimson courier burns into the Drift under a sigil you have learned to hate — Skarr's wolf. It is not here to fight. It is here to be seen.",
@@ -603,11 +605,12 @@ DATA.STORY = [
   {
     id: 'sc_dynasty', chapter: 2, act: 'II', type: 'op', title: 'THE OLD EMPIRE',
     brief: "The Za'Argon have noticed you.",
+    system: 'elytra',
     trigger: () => Game.save.story.done.includes('sc_herald') &&
       DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 2,
     mission: {
       factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
-      planet: { name: 'the Gate Approaches', type: 'Ice' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Junction reach', type: 'Ice' }, system: { name: 'ELYTRA JUNCTION' },
       name: 'THE OLD EMPIRE',
       briefing: [
         "You have pushed too close to something the Za'Argon call sacred. A Dynasty battle-line translates in-system, running silent, lances already glowing.",
@@ -620,11 +623,12 @@ DATA.STORY = [
   {
     id: 'sc_reliquary', chapter: 2, act: 'II', type: 'op', title: 'THE RELIQUARY',
     brief: 'Seize the star-charts the Dynasty would rather burn.',
+    system: 'pax',
     trigger: () => Game.save.story.done.includes('sc_dynasty') &&
       DATA.GALAXY.systems.filter(s => s.owner === 'zaargon' && Game.systemOwner(s.id) === 'terran').length >= 3,
     mission: {
       factionId: 'zaargon', archetypeId: 'assault', tierId: 'hard',
-      planet: { name: 'the Reliquary Anchorage', type: 'Rocky' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Reliquary Anchorage', type: 'Rocky' }, system: { name: 'PAX STATION' },
       name: 'THE RELIQUARY',
       briefing: [
         'A Za\'Argon shrine-ship rides at anchor over a dead moon, its holds heavy with star-charts older than the Alliance — and, Voss suspects, the truth about whatever the Dynasty is dying to protect out here.',
@@ -663,11 +667,12 @@ DATA.STORY = [
   {
     id: 'sc_breakout', chapter: 3, act: 'III', type: 'op', title: 'THE SWARM BREAKS',
     brief: 'The Hive is coming for everyone.',
+    system: 'churn',
     trigger: () => Game.save.story.done.includes('sc_swarm_stirs') &&
       (DATA.enemyCapitals().filter(c => Game.systemOwner(c) === 'terran').length >= 2 || Game.terranSystems().length >= 15),
     mission: {
       factionId: 'hive', archetypeId: 'defense', tierId: 'hard',
-      planet: { name: 'Kessel Station', type: 'Ocean' }, system: { name: 'THE KESSEL DRIFT' },
+      planet: { name: 'the Churn picket', type: 'Ocean' }, system: { name: 'THE CHURN' },
       name: 'THE SWARM BREAKS',
       briefing: [
         'It is happening. The thing in the Drift is awake, and the Hive is pouring out of the south in numbers the pickets cannot count. Kessel Station is directly in their path.',

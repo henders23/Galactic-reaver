@@ -112,8 +112,8 @@ few new beats and two small engine hooks. Not a from-scratch story build.
 
 | Phase | Work | Payoff | Touchpoints |
 | --- | --- | --- | --- |
-| **A** | `sc_prologue` beat · `DATA.ACTS` + act cards (`actcard` type) · act badge in header · **auto-surface available beats** | Story visible from minute one; three-act shape felt | `data.js` (ACTS, prologue), `ui.js` (`showStoryBeat`, `showGalaxy`, auto-push after `showRefit`/on map entry), `game.js` (none / trivial) |
-| **B** | Dispatch styling (portrait + events ticker) · re-anchor ops to real systems · map highlight for story systems | Admiral reads as a character giving news + orders; plot moves across the map | `ui.js` (`showStoryBeat`, `showGalaxy`), `data.js` (`system` field on beats) |
+| **A ✅** | `sc_prologue` beat · `DATA.ACTS` + act cards (`actcard` type) · act badge in header · **auto-surface available beats** | Story visible from minute one; three-act shape felt | `data.js` (ACTS, prologue), `ui.js` (`showStoryBeat`, `showGalaxy`, auto-push after `showRefit`/on map entry), `game.js` (none / trivial) |
+| **B ✅** | Dispatch styling (portrait + events ticker) · re-anchor ops to real systems (`system` id) · map highlight for the active op's target + ◆ set-piece anchor badges · story target clickable to launch | Admiral reads as a character giving news + orders; plot moves across the map | `ui.js` (`showStoryBeat`, `showGalaxy`), `data.js` (`system` field on the 5 op beats) |
 | **C** | `CAPTURE_EVENTS` + `captured_*` flag write · capture-triggered beats · villain reactions | "Take this planet → this happens" cause-and-effect | `game.js` (`applyWarResult`), `data.js` (beats + table) |
 | **D** | Story-gate the act-capital finales / endgame | Story becomes the spine, not a side quest | `game.js` (`isPlanetLocked` / finale gating), `ui.js` (`showEndgame`) |
 

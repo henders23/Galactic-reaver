@@ -669,6 +669,11 @@ const UI = {
         (front ? 'rgba(255,180,84,.55)' : 'rgba(140,180,220,.16)') + '" stroke-width="' + (front ? 0.4 : 0.25) +
         '"' + (front ? ' stroke-dasharray="1.3 1"' : '') + '/>');
     }));
+    // story surfacing: the active op's target system, and every system that holds
+    // an authored set-piece anchor, are flagged on the map.
+    const beat = Game.storyBeatAvailable();
+    const storyTarget = beat && beat.type === 'op' && beat.system ? beat.system : null;
+    const anchorSystems = new Set(Object.keys(DATA.ANCHORS).map(k => k.split(':')[0]));
     const nodeHtml = sys.map(s => {
       const owner = Game.systemOwner(s.id);
       const F = DATA.faction(owner);
@@ -676,16 +681,20 @@ const UI = {
       const held = owner === 'terran';
       const siege = g.siege[s.id] ? Math.round(g.siege[s.id]) : 0;
       const by = g.siegeBy[s.id];
+      const isTarget = s.id === storyTarget;
+      const isAnchor = anchorSystems.has(s.id) && !held;
       const cls = held ? 'held' : (engage ? 'engage' : 'locked');
       let sub = '';
-      if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
+      if (isTarget) sub = '<div class="gsub story">◆ PRIORITY OP</div>';
+      else if (engage) sub = '<div class="gsub">ENGAGE ▸</div>';
       else if (siege > 0 && by) sub = '<div class="gsub siege" style="color:' + DATA.faction(by).color + '">◎ ' + siege + '/' + Game.siegeThreshold(s.id) + '</div>';
       // difficulty meter — a red dotted line, up to 5 dashes; hidden once the system is ours
       const dlvl = (DATA.SYSTEM_TYPES[s.type] || {}).diff || 1;
       const diffMeter = held ? '' : '<div class="gdiff" title="System difficulty ' + dlvl + '/5">' +
         [1, 2, 3, 4, 5].map(n => '<i class="' + (n <= dlvl ? 'on' : '') + '"></i>').join('') + '</div>';
-      return '<div class="gnode ' + cls + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
-        '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt=""></div>' +
+      const anchorBadge = isAnchor ? '<div class="ganchor" title="Story set-piece">◆</div>' : '';
+      return '<div class="gnode ' + cls + (isTarget ? ' story' : '') + '" data-sys="' + s.id + '" style="left:' + s.x + '%;top:' + s.y + '%">' +
+        '<div class="gemblem" style="--fc:' + F.color + '"><img src="' + ASSETS.emblemSrc(owner) + '" alt="">' + anchorBadge + '</div>' +
         '<div class="glbl" style="color:' + F.color + '">' + s.name + '</div>' + sub + diffMeter + '</div>';
     }).join('');
     const inf = Game.factionInfluence();
@@ -707,9 +716,9 @@ const UI = {
       return '<div class="wev"><span style="color:' + F.color + '">' + F.short + '</span> takes ' +
         U.esc(e.name) + ' <span class="wfrom">from ' + Fr.short + '</span></div>';
     }).join('') || '<div class="wev empty">The front is quiet… for now.</div>';
-    const beat = Game.storyBeatAvailable();
     const storyChip = beat ? '<button class="storychip" id="mnStory">◆ ' +
-      (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) + '</button>' : '';
+      (beat.type === 'interstitial' ? 'INCOMING DISPATCH' : 'PRIORITY OPERATION') + ' — ' + U.esc(beat.title) +
+      (storyTarget ? ' · ' + DATA.system(storyTarget).name : '') + '</button>' : '';
     const actInfo = DATA.act(Math.max(1, (sv.story && sv.story.chapter) || 1));
     UI.screen(
       '<div class="galaxy-head">' +
@@ -760,12 +769,18 @@ const UI = {
         '<div class="gi-row"><span>' + (held ? 'STATUS' : 'PLANETS') + '</span><b>' +
         (held ? '<span style="color:#6fe0a8">TERRAN-HELD</span>' : secured + ' / ' + count) + '</b></div>' +
         '<div class="gi-row"><span>THREAT</span><b class="th ' + threat.c + '">' + threat.t + '</b></div>' +
-        (engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
-          : (held ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
+        (sid === storyTarget ? '<div class="gi-cta story">◆ PRIORITY OPERATION — CLICK TO LAUNCH</div>'
+          : engage ? '<div class="gi-cta">▸ CLICK TO ENGAGE</div>'
+            : (held ? '' : '<div class="gi-lock">NO ROUTE — not bordering your space</div>'));
     };
     UI.el.screenInner.querySelectorAll('[data-sys]').forEach(el => {
       el.addEventListener('mouseenter', () => renderInfo(el.dataset.sys));
-      if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
+      // the story target launches its priority op first (even if the system is also
+      // engageable); once the op is done the highlight clears and it engages normally
+      if (el.classList.contains('story') && beat) el.addEventListener('click', () => {
+        Snd.init(); Snd.click(); UI.closeScreen(); Game.startStoryMission(beat); UI.rebuildLog();
+      });
+      else if (el.classList.contains('engage')) el.addEventListener('click', () => { Snd.select(); UI.showSystem(el.dataset.sys); });
     });
     document.getElementById('mnFleetG').addEventListener('click', () => UI.showRefit(null, 0, null));
     document.getElementById('mnMenuG').addEventListener('click', () => UI.showTitle());
@@ -960,11 +975,19 @@ const UI = {
     } else {
       // admiral dispatches ride with Voss's portrait so they read as orders
       const voss = beat.speaker && /VOSS/i.test(beat.speaker);
+      // a live war-report ticker from the galaxy events, so a dispatch reads as news
+      const evs = (((Game.save && Game.save.galaxy) || {}).events || []).slice(0, 4);
+      const ticker = '<div class="dispatch-news"><span class="dn-hd">◂ WAR REPORT ▸</span>' +
+        (evs.length ? evs.map(e => '<span class="dn-item"><b style="color:' + DATA.faction(e.faction).color + '">' +
+          DATA.faction(e.faction).short + '</b> takes ' + U.esc(e.name) + ' <i>from ' + DATA.faction(e.from).short +
+          '</i></span>').join('<span class="dn-sep">·</span>')
+          : '<span class="dn-item empty">The front is quiet — for now.</span>') + '</div>';
       UI.screen(
         '<div class="brief-cols">' +
         '<div class="brief-main">' +
         '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
         (beat.speaker ? '<div class="briefsub">' + U.esc(beat.speaker) + '</div>' : '') +
+        ticker +
         '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
         '<div class="btnrow left"><button class="menu-btn primary slim" id="mnBeatGo">CONTINUE ▸</button></div>' +
         '</div>' +
