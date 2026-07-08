@@ -295,15 +295,16 @@ const UI = {
         else if (braced) { ds = 'crews braced — decks sealed'; dsCls = 'cold'; }
         else if (charging) { ds = (w.type === 'bay' ? 'rearming' : 'reloading') + ' — ' + w.reload + ' turn' + (w.reload > 1 ? 's' : ''); dsCls = 'cold'; }
         else if (w.target) {
-          const t = Game.ship(w.target);
+          const free = typeof w.target === 'object';
+          const t = free ? null : Game.ship(w.target);
           const sol = (t && !isFighters) ? Game.solution(s, w, t) : null;
-          ds = '→ ' + (t ? t.name.replace('DKV ', '').replace('TAS ', '') : '?') +
+          ds = '→ ' + (free ? 'free bearing' : (t ? t.name.replace('DKV ', '').replace('TAS ', '') : '?')) +
             (sol && sol.ok && sol.dice ? ' · ' + sol.dice + 'd6 on ' + sol.need + '+' : '') + ' · click to clear';
           dsCls = 'hot';
         }
-        else if (armed) { ds = isFighters ? 'ARMED — click a FRIENDLY ship to cover' : 'ARMED — click a target on the map'; dsCls = 'hot'; }
+        else if (armed) { ds = isFighters ? 'ARMED — click a FRIENDLY ship to cover' : (w.type === 'torp' ? 'ARMED — click a target or open space to launch' : 'ARMED — click a target on the map'); dsCls = 'hot'; }
         else {
-          if (w.type === 'torp') ds = 'salvo of ' + w.salvo + ' · ignores shields · ' + w.arc + ' arc';
+          if (w.type === 'torp') ds = 'salvo of ' + w.salvo + ' · ignores shields · any bearing';
           else if (w.type === 'bay') ds = w.craft === 'bombers'
             ? 'wave of ' + w.salvo + ' · homes on target · flak & fighters can stop it'
             : 'screen of ' + w.salvo + ' · escorts a ship · intercepts ordnance';

@@ -96,16 +96,20 @@ console.log('solutions');
   const s = mk('corvette', 'player', 0, 0, 0);   // lance fore need 3, battery side need 4
   const e = mk('jackal', 'enemy', 300, 0, 180);
   freshBattle([s, e]);
-  const lance = s.weapons[0], battery = s.weapons[1], torp = s.weapons[2];
+  // the side battery is now split into PORT/STARBOARD broadsides; targets in this
+  // block sit off the ship's starboard beam (facing +x, target at +y)
+  const lance = s.weapons.find(w => w.type === 'lance');
+  const battery = s.weapons.find(w => w.type === 'battery' && w.arc === 'starboard');
+  const torp = s.weapons.find(w => w.type === 'torp');
 
   let sol = Game.solution(s, lance, e);
   ok(sol.ok, 'lance ahead in arc');
   eq(sol.need, 3, 'lance base to-hit 3+');
 
   sol = Game.solution(s, battery, e);
-  ok(!sol.ok && sol.why === 'NOT IN SIDE ARC', 'side battery cannot fire ahead');
+  ok(!sol.ok && sol.why === 'NOT IN BROADSIDE ARC', 'broadside cannot fire ahead');
 
-  // move target abeam at 320 → side arc, long range for a 350 battery
+  // move target abeam at 320 → starboard broadside arc, long range for a 350 battery
   e.x = 0; e.y = 320;
   sol = Game.solution(s, battery, e);
   ok(sol.ok, 'battery abeam in arc');
@@ -165,18 +169,21 @@ console.log('volleys');
   const s = mk('lcruiser', 'player', 0, 0, 90);   // broadside ship facing "down"
   const e = mk('marauder', 'enemy', 300, 0, 180); // abeam of s
   freshBattle([s, e]);
-  const guns = s.weapons[1]; // 9d6 batteries
+  // e is off the ship's port beam; 9d6 base batteries are split + uprated to 11d6
+  const gunsIdx = s.weapons.findIndex(w => w.type === 'battery' && w.arc === 'port');
+  const guns = s.weapons[gunsIdx];
   const sol = Game.solution(s, guns, e);
   ok(sol.ok, 'broadside has solution');
+  eq(guns.dice, 11, 'broadside uprated to 11d6 (9 base + 2)');
   const hull0 = e.hull, shF0 = e.sh.F;
   guns.target = e.id;
-  Game.processShot({ shooterId: s.id, wIdx: 1, targetId: e.id });
+  Game.processShot({ shooterId: s.id, wIdx: gunsIdx, targetId: e.id });
   const absorbed = shF0 - e.sh.F;
   const dmg = hull0 - e.hull;
   ok(absorbed >= 0 && absorbed <= shF0, 'shields absorbed within capacity');
   ok(dmg >= 0, 'no negative damage');
-  ok(absorbed + dmg > 0, 'seeded 9d6 volley connects');
-  ok(Game.b.log.some(l => /9d6 \[/.test(l.t)), 'log shows the dice');
+  ok(absorbed + dmg > 0, 'seeded 11d6 volley connects');
+  ok(Game.b.log.some(l => /11d6 \[/.test(l.t)), 'log shows the dice');
 
   // brace halves damage
   const braced = mk('marauder', 'enemy', 300, 0, 180);
@@ -186,6 +193,69 @@ console.log('volleys');
   const h0 = braced.hull;
   Game.applyDamage(braced, 8, { quiet: true, sol: {} });
   eq(h0 - braced.hull, 4, 'brace halves an 8-damage volley');
+}
+
+/* ================= broadsides: port + starboard ================= */
+console.log('broadsides');
+{
+  U.setSeed(11);
+  const s = mk('lcruiser', 'player', 0, 0, 0);        // facing +x
+  const portFoe = mk('jackal', 'enemy', 0, -300, 0);  // off the port beam (bearing -90)
+  const stbdFoe = mk('jackal', 'enemy', 0, 300, 0);   // off the starboard beam (bearing +90)
+  freshBattle([s, portFoe, stbdFoe]);
+  const port = s.weapons.find(w => w.type === 'battery' && w.arc === 'port');
+  const stbd = s.weapons.find(w => w.type === 'battery' && w.arc === 'starboard');
+  ok(port && stbd, 'a broadside ship carries both a port and a starboard battery');
+  ok(Game.solution(s, port, portFoe).ok, 'port broadside bears on the port foe');
+  ok(!Game.solution(s, port, stbdFoe).ok, 'port broadside cannot reach the starboard foe');
+  ok(Game.solution(s, stbd, stbdFoe).ok, 'starboard broadside bears on the starboard foe');
+  // both broadsides can be laid on a target in the same turn — one per flank
+  port.target = portFoe.id; stbd.target = stbdFoe.id;
+  ok(port.target && stbd.target && port.target !== stbd.target, 'both broadsides engage, one per flank');
+}
+
+/* ================= free-aim torpedoes ================= */
+console.log('free-aim torpedoes');
+{
+  const s = mk('corvette', 'player', 0, 0, 0);
+  const e = mk('jackal', 'enemy', 0, 400, 0);   // abeam — outside the torp's fore arc
+  freshBattle([s, e]);
+  const tIdx = s.weapons.findIndex(w => w.type === 'torp');
+  ok(!Game.solution(s, s.weapons[tIdx], e).ok, 'a locked torpedo shot abeam is refused (fore arc)');
+  const aim = { x: 0, y: 400, free: true };
+  s.weapons[tIdx].target = aim;
+  const n0 = Game.b.torps.length;
+  Game.processShot({ shooterId: s.id, wIdx: tIdx, targetId: aim });
+  eq(Game.b.torps.length, n0 + 1, 'a free-aimed torpedo launches along any bearing');
+  near(Game.b.torps[Game.b.torps.length - 1].angle, 90, 1, 'torpedo runs toward the free-aim point');
+}
+
+/* ================= helm orders ================= */
+console.log('helm orders');
+{
+  const fast = mk('corvette', 'player', 0, 0, 0);     // nimble hull, maxTurn 90
+  const orders = DATA.orders(fast);
+  eq(orders.find(o => o.id === 'heading').maxTurn, 45, 'NEW HEADING caps a nimble hull at 45°');
+  ok(orders.find(o => o.id === 'heading').minMove > 0, 'NEW HEADING forces some forward motion');
+  ok(orders.find(o => o.id === 'about').maxTurn > 45, 'COME ABOUT still allows the hard turn');
+}
+
+/* ================= courier breaks on turn 1 ================= */
+console.log('courier flees turn 1');
+{
+  const courier = Game.mkShip('jackal', 'DKV RUNNER', 'enemy', 'flee', 0, 0, 0, { vip: true, runTurn: 1 });
+  eq(courier.runTurn, 1, 'the courier carries runTurn 1');
+  const b = freshBattle([mk('corvette', 'player', 300, 0, 180), courier]);
+  b.turn = 1;
+  const want = AI.desired(courier, b, null);
+  ok(want.pt.x > DATA.WORLD.w, 'on turn 1 the courier already runs for the far jump edge');
+  eq(AI.chooseOrder(courier, b, want).id, 'full', 'courier goes ALL AHEAD FULL on turn 1');
+  // a courier with no runTurn still holds until turn 3 (preserves THE HUNT)
+  const vulture = Game.mkShip('marauder', 'DKV VULTURE', 'enemy', 'flee', 0, 0, 0, { vip: true });
+  ok(!vulture.runTurn, 'a courier without runTurn defaults to the turn-3 break');
+  const b2 = freshBattle([mk('corvette', 'player', 300, 0, 180), vulture]);
+  b2.turn = 1;
+  ok(AI.chooseOrder(vulture, b2, AI.desired(vulture, b2, null)).id !== 'full', 'default courier holds before turn 3');
 }
 
 /* ================= morale & routing ================= */
