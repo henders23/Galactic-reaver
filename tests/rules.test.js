@@ -464,9 +464,14 @@ console.log('story beats');
   const opener = Game.storyBeatAvailable();
   ok(opener && opener.id === 'sc_prologue', 'the prologue surfaces at campaign start');
 
-  // after the prologue + Act I card, taking the first system surfaces the Act I opener op
+  // after the prologue + Act I card, the explicit orders briefing surfaces next
   Game.completeStoryBeat('sc_prologue');
   Game.completeStoryBeat('act_1');
+  const orders = Game.storyBeatAvailable();
+  ok(orders && orders.id === 'sc_orders', 'the Act I orders briefing surfaces after the act card');
+
+  // then, with orders read, taking the first system surfaces the Act I opener op
+  Game.completeStoryBeat('sc_orders');
   Game.save.galaxy.owner['centauri'] = 'terran';
   const first = Game.storyBeatAvailable();
   ok(first && first.id === 'sc_butcher', 'taking a system surfaces THE BUTCHER\'S TRAIL');

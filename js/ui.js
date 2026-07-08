@@ -975,6 +975,17 @@ const UI = {
         '</div>',
         { bg: beat.bg || 'starfield', wide: true }
       );
+    } else if (beat.coldOpen) {
+      // cold-open — the narration rides in a panel across the bottom of a
+      // full-bleed scene (no portrait), so the art carries the moment
+      UI.screen(
+        '<div class="coldopen"><div class="coldopen-panel">' +
+        '<div class="brieftitle">' + U.esc(beat.title) + '</div>' +
+        '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
+        '<div class="btnrow"><button class="menu-btn primary slim" id="mnBeatGo">CONTINUE ▸</button></div>' +
+        '</div></div>',
+        { bg: beat.bg || 'starfield', wide: true }
+      );
     } else {
       // admiral dispatches ride with Voss's portrait so they read as orders
       const voss = beat.speaker && /VOSS/i.test(beat.speaker);
@@ -994,7 +1005,7 @@ const UI = {
         '<div class="briefbody storybody">' + beat.body.map(p => '<p>' + U.esc(p) + '</p>').join('') + '</div>' +
         '<div class="btnrow left"><button class="menu-btn primary slim" id="mnBeatGo">CONTINUE ▸</button></div>' +
         '</div>' +
-        (voss ? '<div class="brief-art dossier">' +
+        (voss ? '<div class="brief-art dossier' + (beat.smallPortrait ? ' small' : '') + '">' +
           '<img class="admiral-portrait" src="assets/portraits/admiral.png" alt="Admiral Kade Voss">' +
           '<div class="contact">◆ ADMIRAL KADE VOSS</div>' +
           '<div class="contact sub">7TH EXPEDITIONARY FLEET COMMAND</div>' +

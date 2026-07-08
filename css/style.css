@@ -295,6 +295,10 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 #screen.bg-repair::before { background: linear-gradient(180deg, rgba(3, 6, 12, .6), rgba(3, 6, 12, .86)); }
 #screen.bg-defeat { background: #04070d url('../assets/bg-starfield.jpg') center/cover fixed no-repeat; }
 #screen.bg-defeat::before { background: radial-gradient(ellipse at center, rgba(28, 8, 8, .62), rgba(10, 4, 4, .92)); }
+/* the Meridian cold-open — the burning fleet fills the frame; the wreck stays
+   readable up top while the bottom darkens under the narration panel */
+#screen.bg-meridian { background: #04070d url('../assets/bg-meridian.png') center 32%/cover fixed no-repeat; }
+#screen.bg-meridian::before { background: linear-gradient(180deg, rgba(3, 6, 12, .5) 0%, rgba(3, 6, 12, .2) 32%, rgba(3, 6, 12, .72) 74%, rgba(3, 6, 12, .95) 100%); }
 /* sector map — a plain black star field, no nebula art.
    Two tiling layers of CSS stars: a dense fine layer (::before) and a sparser
    brighter layer (::after) for depth. */
@@ -392,6 +396,15 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 }
 .brief-art.dossier .contact { color: #ffd465; }
 .brief-art.dossier .contact.sub { color: #9a8a5a; }
+/* a smaller dossier — used when the portrait shares the screen with orders */
+.brief-art.dossier.small { flex: none; max-width: 260px; }
+.brief-art.dossier.small .admiral-portrait { max-width: 230px; }
+
+/* cold-open — full-bleed scene with the narration panel across the bottom */
+.coldopen { min-height: calc(100vh - 96px); display: flex; align-items: flex-end; justify-content: center; }
+.coldopen-panel { width: 820px; max-width: 100%; margin-bottom: 5vh; text-align: center; }
+.coldopen-panel .brieftitle { font-size: 34px; letter-spacing: 7px; margin-bottom: 20px; }
+.coldopen-panel .briefbody { text-align: left; }
 
 /* briefing two-column layout */
 .brief-cols { display: flex; gap: 40px; align-items: center; min-height: calc(100vh - 96px); }
