@@ -454,12 +454,20 @@ const Game = {
     return out;
   },
 
-  /* the finale is locked until every other planet in the system is secured */
-  isPlanetLocked(sysId, idx) {
+  /* why a planet is locked, or null: 'planets' (other worlds not yet secured) or
+     'story' (a capital finale gated behind an unresolved act beat) */
+  planetLockReason(sysId, idx) {
     const planets = Game.systemPlanets(sysId);
-    if (!planets[idx].finale) return false;
-    return planets.some((q, i) => i !== idx && !Game.isPlanetCleared(sysId, i));
+    if (!planets[idx].finale) return null;
+    if (planets.some((q, i) => i !== idx && !Game.isPlanetCleared(sysId, i))) return 'planets';
+    const gate = DATA.FINALE_GATES[sysId];
+    if (gate && !(Game.save && Game.save.story && Game.save.story.done.includes(gate.beat))) return 'story';
+    return null;
   },
+
+  /* the finale is locked until every other planet is secured — and, at an enemy
+     capital, until that act's key story beat has been resolved */
+  isPlanetLocked(sysId, idx) { return !!Game.planetLockReason(sysId, idx); },
 
   clearedPlanets(sysId) { return (Game.save.galaxy.cleared[sysId] || []); },
   isPlanetCleared(sysId, idx) { return Game.clearedPlanets(sysId).includes(idx); },

@@ -495,6 +495,19 @@ DATA.BOSS_ANCHORS = ['m_dreadmaw', 'm_hive'];
    feeds it. Handled in Game.applyWarResult; keyed by system id. */
 DATA.CAPTURE_REACTIONS = { elytra: 'hivesurge', nexus: 'hivesurge', trinity: 'hivesurge' };
 
+/* Story gates on the enemy capitals: a capital's boss finale stays locked (even
+   after its other worlds are secured) until its act's key story beat is resolved,
+   so the narrative is load-bearing at each climax. Keyed by system id → the beat
+   that unlocks it, plus the message shown on the locked finale. */
+DATA.FINALE_GATES = {
+  centauri: { beat: 'sc_reliquary',
+    msg: "The Dynasty throne is sealed behind Exarch Vorun's honour fleet. Seize the reliquary and learn what they are dying to protect before you strike here." },
+  ulvor: { beat: 'sc_swarm_stirs',
+    msg: 'The Broodworld sleeps behind the swarm. It will not bare its heart until the Hive itself begins to stir — press the war on.' },
+  dreadfall: { beat: 'sc_skarr',
+    msg: "Skarr keeps the DREADMAW screened deep in the Reach. Blunt the swarm's breakout first — the Butcher's reckoning comes at the end." }
+};
+
 /* Every system ends in a boss finale — a capital-ship command battle. Where there
    is no authored boss, one is generated against the owning faction's flagship,
    led by a named commander. The Hive has no commanders; its flagship IS the mind. */
