@@ -9,8 +9,8 @@ const Snd = {
 
   /* effective gain applied to the mix bus (0 while muted) */
   effGain() { return Snd.muted ? 0 : Snd.volume; },
-  /* the menu-music target volume, scaled off the master level */
-  musicVol() { return (Snd.muted || !Music.wanted) ? 0 : Snd.volume * 0.84; },
+  /* the music target volume, scaled off the master level */
+  musicVol() { return (Snd.muted || !Music.current) ? 0 : Snd.volume * 0.84; },
 
   loadVolume() {
     try {
@@ -187,73 +187,102 @@ const Snd = {
 
 if (typeof window !== 'undefined') window.Snd = Snd;
 
-/* ---------------- menu music ----------------
-   Streamed MP3 that plays across the menus (title, difficulty, briefing room,
-   sector map, fleet command) and stops the moment a battle begins. Autoplay is
-   gated by the browser until the first user gesture, so we also arm a one-shot
-   gesture listener that kicks playback off. */
+/* ---------------- music (two crossfading tracks) ----------------
+   A 'menu' track plays across the title / sector map / fleet screens, and a
+   'combat' track plays during battle. Entering combat crossfades menu→combat;
+   returning to any out-of-combat screen crossfades combat→menu. Autoplay is
+   gated by the browser until the first user gesture, so we arm a one-shot
+   gesture listener that kicks the wanted track off. */
 const Music = {
-  el: null,
-  wanted: false,   // should music be playing right now (menus, not combat)?
+  tracks: {
+    menu:   { src: 'assets/music/title-theme.mp3',  el: null, gain: 1.0 },
+    combat: { src: 'assets/music/combat-theme.mp3', el: null, gain: 1.0 }
+  },
+  current: null,   // which track should be playing now: 'menu' | 'combat' | null
   armed: false,
 
   init() {
-    if (Music.el) return;
-    const a = new Audio('assets/music/ashes-over-orion.mp3');
-    a.loop = true;
-    a.volume = 0.0;
-    a.preload = 'auto';
-    Music.el = a;
-    // start playback on the first gesture if autoplay was blocked
+    if (Music.armed) return;
+    Object.values(Music.tracks).forEach(t => {
+      const a = new Audio(t.src);
+      a.loop = true;
+      a.volume = 0;
+      a.preload = 'auto';
+      t.el = a;
+    });
+    // if autoplay was blocked, resume the wanted track on the first user gesture
     const kick = () => {
-      if (Music.wanted && Music.el && Music.el.paused) Music._play();
+      const t = Music.current && Music.tracks[Music.current];
+      if (t && t.el && t.el.paused) Music._ensurePlaying(Music.current);
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
       window.addEventListener(ev, kick, { passive: true }));
     Music.armed = true;
   },
 
-  _play() {
-    if (!Music.el) return;
-    const p = Music.el.play();
+  _ensurePlaying(key) {
+    const t = Music.tracks[key];
+    if (!t || !t.el || !t.el.paused) return;
+    const p = t.el.play();
     if (p && p.catch) p.catch(() => { /* blocked until a gesture — kick handles it */ });
-    Music._fadeTo(Snd.musicVol());
   },
 
-  _fadeTo(target) {
-    const a = Music.el;
-    if (!a) return;
+  /* per-element fade with cancellation of any in-flight fade on that element */
+  _fadeEl(el, target, onDone) {
+    if (!el) return;
+    if (el._fadeTimer) { clearTimeout(el._fadeTimer); el._fadeTimer = null; }
     const step = () => {
-      const d = target - a.volume;
-      if (Math.abs(d) < 0.02) { a.volume = target; return; }
-      a.volume = Math.max(0, Math.min(1, a.volume + Math.sign(d) * 0.04));
-      setTimeout(step, 40);
+      const d = target - el.volume;
+      if (Math.abs(d) < 0.02) {
+        el.volume = Math.max(0, Math.min(1, target));
+        el._fadeTimer = null;
+        if (onDone) onDone();
+        return;
+      }
+      el.volume = Math.max(0, Math.min(1, el.volume + Math.sign(d) * 0.04));
+      el._fadeTimer = setTimeout(step, 40);
     };
     step();
   },
 
-  /* play the menu track (call from any out-of-combat screen) */
-  start() {
+  /* crossfade to the named track (fading every other track out) */
+  _switchTo(key) {
     Music.init();
-    Music.wanted = true;
-    Music._play();
+    Music.current = key;
+    Object.keys(Music.tracks).forEach(k => {
+      const t = Music.tracks[k];
+      if (!t.el) return;
+      if (k === key) {
+        Music._ensurePlaying(k);
+        Music._fadeEl(t.el, Snd.musicVol() * t.gain);
+      } else {
+        Music._fadeEl(t.el, 0, () => { if (Music.current !== k) t.el.pause(); });
+      }
+    });
   },
 
-  /* stop when combat is entered */
+  /* play the menu / title track (call from any out-of-combat screen) */
+  start() { Music._switchTo('menu'); },
+
+  /* play the combat track (call when a battle is joined) */
+  startCombat() { Music._switchTo('combat'); },
+
+  /* stop all music (fade out) */
   stop() {
-    Music.wanted = false;
-    if (Music.el && !Music.el.paused) {
-      Music._fadeTo(0);
-      const a = Music.el;
-      setTimeout(() => { if (!Music.wanted) a.pause(); }, 420);
-    }
+    Music.current = null;
+    Object.values(Music.tracks).forEach(t => {
+      if (t.el) Music._fadeEl(t.el, 0, () => { if (!Music.current) t.el.pause(); });
+    });
   },
 
-  /* keep music volume in step with the mute button */
+  /* keep the live track's volume in step with the mute button / volume slider */
   syncMute() {
-    if (!Music.el) return;
-    // set directly (not a fade) so dragging the volume slider tracks instantly
-    Music.el.volume = Snd.musicVol();
+    Object.keys(Music.tracks).forEach(k => {
+      const t = Music.tracks[k];
+      if (!t.el) return;
+      // set directly (not a fade) so dragging the volume slider tracks instantly
+      t.el.volume = (k === Music.current) ? Snd.musicVol() * t.gain : 0;
+    });
   }
 };
 

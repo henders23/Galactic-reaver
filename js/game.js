@@ -279,10 +279,12 @@ const Game = {
       const y = 300 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 600);
       return { cls: s.cls, name: s.name, role: s.role, x: W - 900 + rng() * 420, y, angle: 180, vip: !!s.vip };
     });
-    // courier: a lone fast runner the escorts protect
+    // courier: a lone fast runner the escorts (far to the right) protect. It only
+    // breaks for the jump on turn 3, so it spawns just ahead of the player's line —
+    // close enough to be run down and killed in the opening exchange.
     if (wantCourier) {
       const runner = F.pool[0];
-      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: W * 0.44, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
+      enemies.unshift({ cls: runner, name: Game.factionShipName(F.id, used, rng), role: 'flee', x: 560 + rng() * 120, y: H / 2 + (rng() * 120 - 60), angle: 0, vip: true });
     }
 
     const allies = [];
@@ -692,7 +694,7 @@ const Game = {
       stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
     };
     Game.log('— TURN 01 · MOVEMENT —', '#4cd7ea');
-    if (window.Music) Music.stop();   // menu music ends when combat is joined
+    if (window.Music) Music.startCombat();   // crossfade menu → combat music
     Game.autoSelect();
     if (window.Rend) Rend.initBattle();
     if (window.UI) UI.refresh();
