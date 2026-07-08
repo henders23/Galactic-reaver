@@ -295,20 +295,36 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 #screen.bg-repair::before { background: linear-gradient(180deg, rgba(3, 6, 12, .6), rgba(3, 6, 12, .86)); }
 #screen.bg-defeat { background: #04070d url('../assets/bg-starfield.jpg') center/cover fixed no-repeat; }
 #screen.bg-defeat::before { background: radial-gradient(ellipse at center, rgba(28, 8, 8, .62), rgba(10, 4, 4, .92)); }
-/* sector map — a plain black star field, no nebula art */
-#screen.bg-galaxy { background: #010308; }
+/* sector map — a plain black star field, no nebula art.
+   Two tiling layers of CSS stars: a dense fine layer (::before) and a sparser
+   brighter layer (::after) for depth. */
+#screen.bg-galaxy { background: #01030a; }
 #screen.bg-galaxy::before {
   background-color: transparent;
   background-image:
-    radial-gradient(1.4px 1.4px at 30px 50px, rgba(255,255,255,.95), transparent),
-    radial-gradient(1px 1px at 120px 20px, rgba(190,215,255,.8), transparent),
-    radial-gradient(1px 1px at 210px 140px, rgba(255,255,255,.7), transparent),
-    radial-gradient(1.6px 1.6px at 90px 210px, rgba(255,255,255,.9), transparent),
-    radial-gradient(1px 1px at 270px 90px, rgba(200,225,255,.7), transparent),
-    radial-gradient(1.2px 1.2px at 320px 250px, rgba(255,255,255,.8), transparent),
-    radial-gradient(1px 1px at 160px 310px, rgba(220,230,255,.6), transparent),
-    radial-gradient(2px 2px at 250px 30px, rgba(255,255,255,.95), transparent);
-  background-size: 360px 360px;
+    radial-gradient(1.5px 1.5px at 24px 40px, #ffffff, transparent),
+    radial-gradient(1.2px 1.2px at 96px 18px, rgba(200,222,255,.95), transparent),
+    radial-gradient(1.3px 1.3px at 168px 112px, #ffffff, transparent),
+    radial-gradient(1.6px 1.6px at 70px 168px, rgba(255,255,255,.98), transparent),
+    radial-gradient(1.1px 1.1px at 214px 72px, rgba(210,228,255,.9), transparent),
+    radial-gradient(1.4px 1.4px at 256px 200px, #ffffff, transparent),
+    radial-gradient(1.1px 1.1px at 128px 248px, rgba(224,234,255,.85), transparent),
+    radial-gradient(1.3px 1.3px at 288px 40px, rgba(255,255,255,.95), transparent),
+    radial-gradient(1px 1px at 40px 260px, rgba(220,230,255,.8), transparent),
+    radial-gradient(1.2px 1.2px at 200px 288px, #ffffff, transparent);
+  background-size: 300px 300px;
+  background-repeat: repeat;
+  opacity: 1;
+}
+#screen.bg-galaxy::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(2.4px 2.4px at 90px 130px, #ffffff, transparent),
+    radial-gradient(2.6px 2.6px at 420px 320px, rgba(210,228,255,.98), transparent),
+    radial-gradient(2.2px 2.2px at 250px 500px, #ffffff, transparent),
+    radial-gradient(2.4px 2.4px at 520px 90px, rgba(255,255,255,.95), transparent),
+    radial-gradient(2.5px 2.5px at 150px 400px, rgba(200,222,255,.95), transparent);
+  background-size: 600px 600px;
   background-repeat: repeat;
 }
 
@@ -431,8 +447,6 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 /* full-screen sector map: let the black star field show through the map area */
 #screenInner.full #galaxymap { height: calc(100vh - 214px); border: none; border-radius: 0; background: transparent; overflow: visible; }
 #galaxymap > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.gcore { position: absolute; left: 50%; top: 46%; width: 26%; height: 34%; transform: translate(-50%,-50%);
-  background: radial-gradient(ellipse, rgba(255,238,200,.5), rgba(255,190,120,.16) 40%, transparent 70%); filter: blur(6px); pointer-events: none; }
 .gnode { position: absolute; transform: translate(-50%,-50%); cursor: default; z-index: 2; text-align: center; width: 82px; pointer-events: none; }
 .gnode .gdot, .gnode .glbl, .gnode .gsub { pointer-events: none; }
 .gnode.engage { pointer-events: auto; z-index: 4; }
