@@ -934,7 +934,7 @@ const UI = {
       if (res.status === 'lose') { Game.persist(); Game.warContext = null; Game.b = null; UI.showCampaignDefeat(); return; }
       if (res.report) res.report.war = { taken: res.taken, capital: res.capital, faction: res.faction,
         lost: res.lost, flips: res.flips, sysName: res.sysName, sysProgress: Game.systemProgress(res.sysId),
-        sysCount: Game.systemPlanetCount(res.sysId) };
+        sysCount: Game.systemPlanetCount(res.sysId), hiveSurge: res.hiveSurge };
       Game.warContext = null;
       UI.showMissionComplete(res.report, res.earned, res.sysId);
       return;
@@ -1216,6 +1216,8 @@ const UI = {
     }
     if (w && w.lost && w.lost.length) para.push('⚠ But it is not all ours today — ' +
       w.lost.map(l => U.esc(l.name) + ' falls to the ' + DATA.faction(l.faction).short).join(' · ') + '.');
+    if (w && w.hiveSurge) para.push('⚠ And we have woken something. The swarm surges against ' +
+      U.esc(w.hiveSurge) + ' — taking that system stirred the Hive, and it is coming for the front.');
     const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
     if (elsewhere.length) para.push('Elsewhere the war grinds on — ' +
       elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '.');

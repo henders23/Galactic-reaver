@@ -476,6 +476,8 @@ console.log('story beats');
   // beats surface strictly in authored order, one at a time — none jumps ahead
   Game.save = Game.freshSave();
   DATA.GALAXY.systems.forEach(s => { if (s.owner !== 'terran') Game.save.galaxy.owner[s.id] = 'terran'; });
+  // set the capture flags too, so the reactive capture-triggered beats also surface
+  ['captured_reavers:0', 'captured_dreadfall:0', 'captured_ulvor:0'].forEach(f => Game.save.story.flags[f] = true);
   const seq = [];
   for (let guard = 0; guard < DATA.STORY.length + 3; guard++) {
     const b = Game.storyBeatAvailable();
@@ -487,6 +489,55 @@ console.log('story beats');
   eq(Game.save.story.chapter, 3, 'the final chapter is reached');
 
   Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
+}
+
+/* ================= capture events (P4 — Phase C) ================= */
+console.log('capture events');
+{
+  // a minimal won-battle stub so applyWarResult's earnings/results calls resolve
+  const stubWin = () => { Game.b = { banner: { win: true }, mission: { reward: 0 }, killPts: 0, ships: [] }; };
+
+  Game.mode = 'war';
+  Game.save = Game.freshSave();
+  stubWin();
+
+  // winning a planet writes a per-planet capture flag that a beat can trigger on
+  Game.warContext = { sysId: 'reavers', planetIdx: 0, tierId: 'medium', anchor: 'm_first' };
+  Game.applyWarResult(true);
+  ok(Game.save.story.flags['captured_reavers:0'], 'clearing a planet writes its capture flag');
+  const evb = DATA.STORY.find(b => b.id === 'ev_first_blood');
+  ok(evb && evb.trigger(Game.save), 'the FIRST BLOOD capture beat now triggers');
+
+  // taking every planet flips the system and writes the system-taken flag
+  const n = Game.systemPlanetCount('reavers');
+  for (let i = 1; i < n; i++) {
+    stubWin();
+    Game.warContext = { sysId: 'reavers', planetIdx: i, tierId: 'medium', anchor: null };
+    Game.applyWarResult(true);
+  }
+  eq(Game.systemOwner('reavers'), 'terran', 'clearing every planet flips the system to Terran');
+  ok(Game.save.story.flags['systaken_reavers'], 'taking a whole system writes its systaken flag');
+
+  // the boss-kill capture beats trigger on their anchor planet flags
+  Game.save.story.flags['captured_dreadfall:0'] = true;
+  Game.save.story.flags['captured_ulvor:0'] = true;
+  ok(DATA.STORY.find(b => b.id === 'ev_dreadmaw').trigger(Game.save), 'killing the DREADMAW triggers MERIDIAN AVENGED');
+  ok(DATA.STORY.find(b => b.id === 'ev_hive_heart').trigger(Game.save), 'killing the Hive Heart triggers THE MIND GOES DARK');
+
+  // a Hive-surge reaction fires when a Drift-central system is taken
+  Game.save = Game.freshSave();
+  const g2 = Game.save.galaxy;
+  const en = Game.systemPlanetCount('elytra');
+  let res;
+  for (let i = 0; i < en; i++) {
+    stubWin();
+    Game.warContext = { sysId: 'elytra', planetIdx: i, tierId: 'medium', anchor: null };
+    res = Game.applyWarResult(true);
+  }
+  eq(DATA.CAPTURE_REACTIONS['elytra'], 'hivesurge', 'Elytra Junction is flagged for a Hive surge');
+  ok(res.hiveSurge && Object.values(g2.siegeBy).includes('hive'), 'taking Elytra surges the Hive against the frontier');
+
+  Game.b = null; Game.mode = 'skirmish'; Game.save = null; Game.warContext = null;
 }
 
 U.clearSeed();

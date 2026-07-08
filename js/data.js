@@ -490,6 +490,11 @@ DATA.ANCHORS = {
 /* Authored anchors that ARE a system's boss finale (must be fought last). */
 DATA.BOSS_ANCHORS = ['m_dreadmaw', 'm_hive'];
 
+/* Villain reactions to specific captures. Taking one of these Drift-central systems
+   (each fronting the swarm) provokes a Hive surge against your frontier — the Gate
+   feeds it. Handled in Game.applyWarResult; keyed by system id. */
+DATA.CAPTURE_REACTIONS = { elytra: 'hivesurge', nexus: 'hivesurge', trinity: 'hivesurge' };
+
 /* Every system ends in a boss finale — a capital-ship command battle. Where there
    is no authored boss, one is generated against the owning faction's flagship,
    led by a named commander. The Hive has no commanders; its flagship IS the mind. */
@@ -598,6 +603,15 @@ DATA.STORY = [
     }
   },
   {
+    id: 'ev_first_blood', chapter: 1, act: 'I', type: 'interstitial', title: 'THE REACH BLEEDS',
+    brief: 'Reaver\'s Landing is yours.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_reavers:0'],
+    body: [
+      "Reaver's Landing runs red. The set-piece the Crimson Reach built to bleed our convoys is a debris field now, and the first true blood of your war in the Verge is theirs, not ours.",
+      'Voss: "That is the only language the Reach has ever understood, Captain — not treaties, not lines on a chart. Guns. You just taught the whole confederation that the Ghost of Meridian has teeth. Word of that travels faster than any courier."'
+    ]
+  },
+  {
     id: 'act_2', chapter: 2, act: 'II', type: 'actcard', title: 'THE OLD EMPIRE', name: 'ACT II',
     tagline: "The Za'Argon Dynasty stands between you and the heart of the Drift. Learn what they are dying to protect.",
     bg: 'starfield', trigger: () => Game.save.story.done.includes('sc_herald')
@@ -699,6 +713,25 @@ DATA.STORY = [
       'The Drift has become a graveyard of fleets, and at its heart the Throne Gate burns brighter with every ship that dies near it — as if the war itself were pouring into that ancient light and waking it further.',
       'Voss finds you one last time before the end. "When the final throne falls, that Gate is yours to answer for. Command wants it. The Dynasty worshipped it. The swarm is drinking it. You will have to decide what it actually is."',
       '"Whatever you choose down there, Captain — you already did the hardest thing anyone ever asked of you, a long time ago, at Meridian. The rest of it is just gunnery."'
+    ]
+  },
+  {
+    id: 'ev_dreadmaw', chapter: 3, act: 'III', type: 'interstitial', title: 'MERIDIAN AVENGED',
+    brief: 'The DREADMAW burns.', bg: 'victory', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_dreadfall:0'],
+    body: [
+      'The DREADMAW — the ship that broke the Alliance line at Meridian, that put your fleet and Voss\'s command in the ground — comes apart over Dreadfall under your guns. Warlord Skarr dies with her, still firing to the last.',
+      'Voss watches the plot until the final trace of her signature is gone. For a long while he says nothing at all.',
+      '"Two years, Captain. Two years I have carried Meridian like a stone behind the ribs." His voice is not quite steady. "It is paid. Every crew we buried holding that broken line — it is paid. Whatever else this war takes from us before the end, we did this. You did this."'
+    ]
+  },
+  {
+    id: 'ev_hive_heart', chapter: 3, act: 'III', type: 'interstitial', title: 'THE MIND GOES DARK',
+    brief: 'The swarm\'s heart stops.', bg: 'starfield', speaker: 'ADMIRAL KADE VOSS',
+    trigger: () => !!Game.save.story.flags['captured_ulvor:0'],
+    body: [
+      "At Ul'Vor Broodworld the Hive Heart — the single vast mind the whole swarm answered to — dies in a light that whites out every sensor in the fleet. Across the southern Drift, in the same heartbeat, ten thousand lesser things go suddenly and terribly still.",
+      'Voss: "That is it. That is the mind. Everything still twitching down there is just meat drifting without it now." He exhales slowly. "Let the Gate bleed all the light it wants — there is nothing left in the dark to drink it. Log it, Captain. We just killed a god."'
     ]
   }
 ];
