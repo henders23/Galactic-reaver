@@ -710,26 +710,32 @@ const Rend = {
       const hostile = c.side === 'enemy';
       const bombers = c.kind === 'bombers';
       const col = bombers ? (hostile ? '#ff8a5c' : '#ffd465') : '#7ce8f7';
+      // each craft is a tiny hull of its faction (bombers=corvette, fighters=frigate)
+      const img = (c.sprite && window.ASSETS) ? ASSETS.sprite(c.sprite) : null;
+      const len = bombers ? 22 : 18;   // extremely small
+      const gap = len * 0.72;
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(c.angle * U.D2R);
       for (let i = 0; i < c.count; i++) {
-        const oy = (i - (c.count - 1) / 2) * 10;
+        const oy = (i - (c.count - 1) / 2) * gap;
         const wob = Math.sin(now / 160 + i * 2.1) * 2;
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        if (bombers) {
-          ctx.moveTo(7, oy + wob);
-          ctx.lineTo(-4, oy + wob - 4);
-          ctx.lineTo(-1.5, oy + wob);
-          ctx.lineTo(-4, oy + wob + 4);
+        ctx.save();
+        ctx.translate(0, oy + wob);
+        if (img) {
+          ctx.shadowColor = col;
+          ctx.shadowBlur = 5;
+          Rend.paintSprite(ctx, img, len);
         } else {
-          ctx.moveTo(6, oy + wob);
-          ctx.lineTo(-4, oy + wob - 2.6);
-          ctx.lineTo(-4, oy + wob + 2.6);
+          // fallback marker while the sprite is still loading
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          if (bombers) { ctx.moveTo(7, 0); ctx.lineTo(-4, -4); ctx.lineTo(-1.5, 0); ctx.lineTo(-4, 4); }
+          else { ctx.moveTo(6, 0); ctx.lineTo(-4, -2.6); ctx.lineTo(-4, 2.6); }
+          ctx.closePath();
+          ctx.fill();
         }
-        ctx.closePath();
-        ctx.fill();
+        ctx.restore();
       }
       ctx.restore();
       ctx.fillStyle = col;
