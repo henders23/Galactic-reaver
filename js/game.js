@@ -1365,7 +1365,7 @@ const Game = {
         id: 'tp' + Math.floor(Math.random() * 1e9),
         x: s.x + Math.cos(rad) * (s.w * 0.55 + 14),
         y: s.y + Math.sin(rad) * (s.w * 0.55 + 14),
-        angle: ang, speed: 270, fuel: 3,
+        angle: ang, speed: 540, fuel: 3,
         count: w.salvo,
         side: s.side, launcher: s.id
       });
@@ -1379,9 +1379,13 @@ const Game = {
       w.reload = w.reloadTime + 1;
       const ang = U.angleTo(s, target);
       const rad = ang * U.D2R;
+      // attack craft fly as tiny hulls of the launcher's own faction: bombers are
+      // its corvette (sprite -2), fighters its frigate (-3)
+      const fp = (((DATA.CLASSES[s.cls] || {}).sprite) || 'terran-4').split('-')[0];
       Game.b.craft.push({
         id: 'cr' + Math.floor(Math.random() * 1e9),
         kind: w.craft, side: s.side,
+        sprite: fp + (w.craft === 'bombers' ? '-2' : '-3'),
         x: s.x + Math.cos(rad) * (s.w * 0.55 + 16),
         y: s.y + Math.sin(rad) * (s.w * 0.55 + 16),
         angle: ang, speed: 340, fuel: 4,
