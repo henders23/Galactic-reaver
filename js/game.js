@@ -716,6 +716,8 @@ const Game = {
       killPts: 0,
       stats: { playerTransits: 0, vipKillTurn: 0, bomberHitsOnPlayer: 0, enemyEscaped: 0 }
     };
+    // the ship readout (right panel) opens on the flagship and always shows a ship
+    Game.b.inspect = (Game.defaultInspect(Game.b) || {}).id || null;
     Game.log('— TURN 01 · MOVEMENT —', '#4cd7ea');
     if (window.Music) Music.startCombat();   // crossfade menu → combat music
     Game.autoSelect();
@@ -826,9 +828,19 @@ const Game = {
     b.plotStep = 'order'; b.curOrder = null; b.ghost = null;
   },
 
+  /* the ship the readout falls back to — the flagship, else any surviving
+     friendly, else any ship still on the field */
+  defaultInspect(b) {
+    b = b || Game.b;
+    if (!b) return null;
+    const live = (fn) => b.ships.filter(s => s.alive && !s.exited && fn(s));
+    return live(s => s.side === 'player')[0] || live(s => s.side !== 'enemy')[0] || live(() => true)[0] || null;
+  },
+
   selectShip(id) {
     const b = Game.b, s = Game.ship(id);
     if (!b || !s || !s.alive) return;
+    if (s.side === 'player') b.inspect = id;   // selecting a friendly also inspects it
     if (b.phase === 'move' && s.side === 'player') {
       if (s.plotted) { s.plotted = false; s.plot = null; s.order = null; }
       b.sel = id; b.plotStep = 'order'; b.curOrder = null; b.ghost = null;
@@ -879,7 +891,6 @@ const Game = {
   mapClick(x, y) {
     const b = Game.b;
     if (!b || b.banner) return;
-    if (b.inspect) { b.inspect = null; if (window.UI) UI.refresh(); return; }
     const hit = Game.shipAt(x, y, true);
 
     if (b.phase === 'move') {
@@ -903,7 +914,8 @@ const Game = {
         if (window.UI) UI.refresh();
       } else if (b.plotStep === 'angle' && b.ghost) {
         Game.commitPlot(s, b.ghost, b.curOrder);
-      } else if (hit && hit.side !== 'player') {
+      } else if (hit) {
+        // not mid-plot: clicking any hull (incl. the selected ship) inspects it
         b.inspect = hit.id; if (window.UI) UI.refresh();
       }
       return;
@@ -1520,7 +1532,7 @@ const Game = {
     }
     if (target.vip && b.stats) b.stats.vipKillTurn = b.turn;
     if (b.sel === target.id) b.sel = null;
-    if (b.inspect === target.id) b.inspect = null;
+    if (b.inspect === target.id) b.inspect = (Game.defaultInspect(b) || {}).id || null;
     // the flagship dying breaks the whole line
     if (target.vip && target.side === 'enemy') {
       b.ships.filter(x => x.side === 'enemy' && x.alive && !x.exited && !x.vip)
@@ -1716,7 +1728,8 @@ const Game = {
     if (Game.checkEnd()) return;
     b.turn++;
     b.phase = 'move';
-    b.armed = null; b.hover = null; b.inspect = null; b.boardMode = null;
+    b.armed = null; b.hover = null; b.boardMode = null;
+    b.inspect = (Game.defaultInspect(b) || {}).id || null;
     Game.log('— TURN ' + U.padTurn(b.turn) + ' · MOVEMENT —', '#4cd7ea');
     Game.autoSelect();
     Snd.click();

@@ -5,13 +5,13 @@ const UI = {
   el: {},
   panState: null,
   squelchClick: false,
-  oobSide: 'ally',   // ORDER OF BATTLE filter: 'ally' | 'enemy'
+  logOpen: false,   // engagement-log overlay visibility
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
       'btnMute', 'volSlider', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
-      'hint', 'tip', 'inspector', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
-      'oob', 'logtitle', 'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
+      'hint', 'tip', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
+      'readout', 'logToggle', 'logCount', 'logPanel', 'logClose', 'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
 
     Game.loadSpeed();
     UI.el.btnSpeed.textContent = Game.speed + '×';
@@ -79,6 +79,8 @@ const UI = {
     UI.el.btnHelp.addEventListener('click', () => UI.showHelp());
     UI.el.btnMenu.addEventListener('click', () => UI.confirmAbandon());
     UI.el.bannerBtn.addEventListener('click', () => UI.afterBattle());
+    UI.el.logToggle.addEventListener('click', () => { Snd.click(); UI.setLogOpen(!UI.logOpen); });
+    UI.el.logClose.addEventListener('click', () => { Snd.click(); UI.setLogOpen(false); });
 
     document.addEventListener('keydown', e => {
       if (!UI.el.screen.classList.contains('hidden')) return;
@@ -144,76 +146,173 @@ const UI = {
     UI.renderContext(b);
     UI.renderAction(b);
     UI.renderHint(b);
-    UI.renderInspector(b);
-    UI.renderOOB(b);
+    UI.renderReadout(b);
+    UI.updateLogCount(b);
   },
 
-  /* ================= order-of-battle overlay (right panel) =================
-     A filterable roster of every hull on the field, drawn as sprite outlines.
-     Toggle ALLIES / HOSTILES; click a ship to inspect its weapons and damage. */
-  shipSilhouette(shape, w, h, side, px) {
-    const pts = (Rend && Rend.SHAPES[shape]) || Rend.SHAPES.blade;
-    const W = px, H = Math.round(px * 0.5);
-    const map = (p) => (p[0] * (W - 4) + 2).toFixed(1) + ',' + (p[1] * (H - 4) + 2).toFixed(1);
-    const stroke = side === 'enemy' ? '#ff6159' : (side === 'ally' ? '#8fd8a8' : '#4cd7ea');
-    const fill = side === 'enemy' ? 'rgba(255,97,89,.10)' : (side === 'ally' ? 'rgba(143,216,168,.10)' : 'rgba(76,215,234,.12)');
-    return '<svg class="silo" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" preserveAspectRatio="xMidYMid meet">' +
-      '<polygon points="' + pts.map(map).join(' ') + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  /* ================= ship readout (right panel) =================
+     A single tactical readout of whichever ship is inspected (b.inspect —
+     defaults to the flagship). The hull is drawn nose-up with its shields,
+     weapons (grouped by firing arc), hull and system damage laid out around it.
+     Inspect any ship by clicking it on the map or, for your own ships, the
+     fleet list on the left. */
+  RO_EFFECT: {
+    'WEAPONS': ['', 'GUNS HIT AT +1', 'WEAPONS OFFLINE'],
+    'ENGINES': ['', '40% SLOWER', '70% SLOWER'],
+    'SHIELD EMITTER': ['', "SHIELDS WON'T RECHARGE", 'SHIELDS COLLAPSED'],
+    'BRIDGE': ['', 'ORDERS LIMITED', 'ORDERS LIMITED · GUNS +1']
+  },
+  roSide(s) {
+    if (s.side === 'enemy') return { color: '#ff6159', shield: '255,97,89' };
+    if (s.side === 'ally') return { color: '#8fd8a8', shield: '143,216,168' };
+    return { color: '#4cd7ea', shield: '76,215,234' };
+  },
+  roHullColor(hp) { return hp > 0.55 ? '#6fd8ff' : (hp > 0.25 ? '#ffb454' : '#ff6159'); },
+  roBarGrad(hp, ally) {
+    if (hp > 0.55) return ally ? 'linear-gradient(90deg,#3d8fd6,#6fd8ff)' : 'linear-gradient(90deg,#8a2f2b,#ff6159)';
+    if (hp > 0.25) return 'linear-gradient(90deg,#b98a3c,#ffb454)';
+    return 'linear-gradient(90deg,#b23c38,#ff6159)';
+  },
+  roWeaponName(w) { return w.name.replace(' — PORT', '').replace(' — STBD', ''); },
+  roWeaponStat(w) {
+    if (w.type === 'torp') return 'SALVO ' + w.salvo + ' · IGNORES SHIELDS';
+    if (w.type === 'bay') return (w.craft || 'CRAFT').toUpperCase() + ' ×' + w.salvo;
+    return w.dice + 'D6 · HIT ' + w.need + '+ · ' + w.dmgPer + ' DMG';
+  },
+  roDispH(s) { return U.clamp(Math.round(s.w * 1.15), 132, 214); },
+  roArcPath(cx, cy, r, a0, a1) {
+    const rad = d => d * Math.PI / 180;
+    const x0 = cx + r * Math.cos(rad(a0)), y0 = cy + r * Math.sin(rad(a0));
+    const x1 = cx + r * Math.cos(rad(a1)), y1 = cy + r * Math.sin(rad(a1));
+    const large = (a1 - a0) > 180 ? 1 : 0;
+    return 'M ' + x0.toFixed(1) + ' ' + y0.toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + x1.toFixed(1) + ' ' + y1.toFixed(1);
+  },
+  roShieldSvg(s, dispH) {
+    const sc = UI.roSide(s).shield;
+    const cx = 190, cy = 161, r = Math.round(dispH / 2 + 20);
+    const segs = [
+      { val: s.sh.F, max: s.shMax.F, a0: -146, a1: -34 },
+      { val: s.sh.A, max: s.shMax.A, a0: 38, a1: 142 },
+      { val: s.sh.S, max: s.shMax.S, a0: 150, a1: 210 },
+      { val: s.sh.S, max: s.shMax.S, a0: -30, a1: 30 }
+    ];
+    let paths = '';
+    segs.forEach(sg => {
+      if (sg.max <= 0) return;
+      paths += '<path d="' + UI.roArcPath(cx, cy, r, sg.a0, sg.a1) + '" stroke="rgba(' + sc + ',.12)" stroke-width="5" fill="none" stroke-linecap="round"/>';
+      if (sg.val > 0) {
+        const op = (0.34 + 0.16 * sg.val).toFixed(2);
+        paths += '<path d="' + UI.roArcPath(cx, cy, r, sg.a0, sg.a1) + '" stroke="rgba(' + sc + ',' + op + ')" stroke-width="5" fill="none" stroke-linecap="round"/>';
+      }
+    });
+    return '<svg class="ro-shieldsvg" viewBox="0 0 380 322">' + paths + '</svg>';
   },
 
-  renderOOB(b) {
-    const host = UI.el.oob;
+  renderReadout(b) {
+    const host = UI.el.readout;
     if (!host) return;
-    const side = UI.oobSide;
-    const list = b.ships.filter(s => {
-      if (s.exited) return false;
-      if (!s.alive && !s.hulked) return false;
-      return side === 'enemy' ? s.side === 'enemy' : s.side !== 'enemy';
-    });
-    const allies = b.ships.filter(s => s.side !== 'enemy' && !s.exited && (s.alive || s.hulked)).length;
-    const foes = b.ships.filter(s => s.side === 'enemy' && !s.exited && (s.alive || s.hulked)).length;
-    let html = '<div class="paneltitle oobtitle">ORDER OF BATTLE</div>' +
-      '<div class="oobtabs">' +
-      '<button class="oobtab' + (side === 'ally' ? ' on' : '') + '" data-oob="ally">ALLIES <span>' + allies + '</span></button>' +
-      '<button class="oobtab enemy' + (side === 'enemy' ? ' on' : '') + '" data-oob="enemy">HOSTILES <span>' + foes + '</span></button>' +
-      '</div><div class="ooblist">';
-    if (!list.length) {
-      html += '<div class="oobempty">No contacts.</div>';
-    } else {
-      list.forEach(s => {
-        const hp = Math.max(0, s.hull / s.maxHull);
-        const hclass = hp > 0.55 ? '' : (hp > 0.25 ? 'warn' : 'crit');
-        const dmgPct = Math.round((1 - hp) * 100);
-        let flag = '';
-        if (!s.alive && s.hulked) flag = '<span class="oobflag hulk">' + (s.captured ? 'PRIZE' : 'HULK') + '</span>';
-        else if (s.routing) flag = '<span class="oobflag rout">FLEEING</span>';
-        else if (s.vip) flag = '<span class="oobflag vip">◆ PRIORITY</span>';
-        const sysHit = DATA.SYS.filter(n => s.sys[n] > 0).length;
-        const meta = (s.alive ? 'HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + (dmgPct > 0 ? ' · −' + dmgPct + '%' : '') : 'DERELICT') +
-          (s.fires > 0 ? ' · FIRE×' + s.fires : '') + (sysHit ? ' · ' + sysHit + ' SYS' : '');
-        const sel = b.inspect === s.id ? ' sel' : '';
-        html += '<div class="oobcard' + sel + (s.hulked ? ' hulk' : '') + '" data-ship="' + s.id + '">' +
-          '<div class="oobsilo">' + UI.shipSilhouette(s.shape, s.w, s.h, s.side, 62) + '</div>' +
-          '<div class="oobbody">' +
-          '<div class="oobnm">' + U.esc(s.name) + flag + '</div>' +
-          '<div class="oobcls">' + U.esc(s.short) + '</div>' +
-          '<div class="hullbar"><i class="' + hclass + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
-          '<div class="oobmeta">' + meta + '</div>' +
-          '</div></div>';
-      });
+    let s = Game.ship(b.inspect);
+    if (!s) { s = Game.defaultInspect(b, true); if (s) b.inspect = s.id; }
+    if (!s) { host.innerHTML = ''; return; }
+
+    const sd = UI.roSide(s);
+    const hp = Math.max(0, s.hull / s.maxHull);
+    const dispH = UI.roDispH(s);
+    const sideCls = s.side === 'enemy' ? ' enemy' : (s.side === 'ally' ? ' ally' : '');
+    const sprite = (DATA.CLASSES[s.cls] || {}).sprite;
+
+    // header — ship name (class) · HULL x/y
+    let html = '<div class="ro-head' + sideCls + '"><div class="ro-headrow">' +
+      '<div class="ro-name" style="color:' + sd.color + '">' + U.esc(s.name) +
+      ' <span>(' + U.esc(s.short) + ')</span></div>' +
+      '<div class="ro-hull" style="color:' + UI.roHullColor(hp) + '">HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
+      '</div></div>';
+
+    // shield-strength badges pinned to the sprite edges (F top · A bottom · S left & right)
+    const badge = (pos, val) => {
+      const on = val > 0;
+      const style = 'position:absolute;' + pos + 'border:1.5px solid ' + (on ? 'rgba(' + sd.shield + ',.9)' : 'rgba(90,110,140,.5)') +
+        ';color:' + (on ? sd.color : '#5c7089') + ';box-shadow:' + (on ? '0 0 10px rgba(' + sd.shield + ',.4)' : 'none') + ';';
+      return '<div class="ro-badge" style="' + style + '">' + val + '</div>';
+    };
+    let badges = '';
+    if (s.shMax.F > 0) badges += badge('top:-14px;left:50%;transform:translateX(-50%);', s.sh.F);
+    if (s.shMax.A > 0) badges += badge('bottom:-14px;left:50%;transform:translateX(-50%);', s.sh.A);
+    if (s.shMax.S > 0) { badges += badge('left:-14px;top:50%;transform:translateY(-50%);', s.sh.S);
+      badges += badge('right:-14px;top:50%;transform:translateY(-50%);', s.sh.S); }
+
+    // fire markers scattered over the hull
+    let fires = '';
+    const fpos = [[-14, -8], [16, 4], [2, -20], [-6, 18], [20, -14]];
+    for (let i = 0; i < s.fires; i++) {
+      const p = fpos[i % fpos.length];
+      fires += '<div class="ro-fire" style="left:calc(50% + ' + p[0] + 'px);top:calc(50% + ' + p[1] + 'px);animation-delay:' + (i * 0.2) + 's"></div>';
     }
-    html += '</div>';
+
+    const spriteFilter = 'filter:drop-shadow(0 0 3px rgba(0,0,0,.85)) drop-shadow(0 0 11px rgba(' + sd.shield +
+      ',.32)) contrast(1.08) brightness(' + (s.side === 'enemy' ? 1.7 : 1.5) + ');';
+    const spriteImg = sprite
+      ? '<img src="assets/ships/' + sprite + '.png" alt="" style="height:' + dispH + 'px;' + spriteFilter + '">'
+      : '';
+
+    // weapons grouped by firing arc around the sprite
+    const groups = { fore: '', port: '', stbd: '', aft: '' };
+    const wpnDmg = s.sys['WEAPONS'] >= 2 ? 'red' : (s.sys['WEAPONS'] === 1 ? 'amber' : '');
+    const chip = (w) => {
+      const dmg = wpnDmg || (w.reload > 0 ? 'amber' : '');
+      return '<div class="ro-chip' + (dmg ? ' ' + dmg : '') + '">' +
+        '<div class="wn">' + U.esc(UI.roWeaponName(w)) + '</div>' +
+        '<div class="ws">' + U.esc(UI.roWeaponStat(w)) + '</div></div>';
+    };
+    s.weapons.forEach(w => {
+      if (w.arc === 'fore') groups.fore += chip(w);
+      else if (w.arc === 'any' || w.arc === 'aft') groups.aft += chip(w);
+      else if (w.arc === 'port') groups.port += chip(w);
+      else if (w.arc === 'starboard') groups.stbd += chip(w);
+      else if (w.arc === 'side') { groups.port += chip(w); groups.stbd += chip(w); }
+    });
+
+    html += '<div class="ro-stage">' + UI.roShieldSvg(s, dispH) +
+      '<div class="ro-center"><div class="ro-spr">' + spriteImg + badges + fires + '</div>' +
+      '<div class="ro-hbar"><i style="width:' + Math.round(hp * 100) + '%;background:' + UI.roBarGrad(hp, s.side !== 'enemy') + '"></i></div></div>' +
+      '<div class="ro-wg fore">' + groups.fore + '</div>' +
+      '<div class="ro-wg aft">' + groups.aft + '</div>' +
+      '<div class="ro-wg port">' + groups.port + '</div>' +
+      '<div class="ro-wg stbd">' + groups.stbd + '</div>' +
+      '</div>';
+
+    // systems grid — one box per system, coloured by damage level
+    let sys = '';
+    DATA.SYS.forEach(n => {
+      const lvl = s.sys[n];
+      const bg = lvl === 0 ? 'rgba(111,224,168,.10)' : (lvl === 1 ? 'rgba(255,180,84,.13)' : 'rgba(255,97,89,.15)');
+      const bd = lvl === 0 ? 'rgba(111,224,168,.45)' : (lvl === 1 ? 'rgba(255,180,84,.6)' : 'rgba(255,97,89,.65)');
+      const nc = lvl === 0 ? '#6fe0a8' : (lvl === 1 ? '#ffc06b' : '#ff7a72');
+      const glow = lvl === 0 ? '' : ';box-shadow:0 0 8px ' + (lvl === 1 ? 'rgba(255,180,84,.2)' : 'rgba(255,97,89,.25)');
+      const eff = UI.RO_EFFECT[n][lvl];
+      sys += '<div class="ro-sys" style="background:' + bg + ';border:1px solid ' + bd + glow + '">' +
+        '<div class="sn" style="color:' + nc + '">' + n.replace('SHIELD EMITTER', 'SHIELDS') + '</div>' +
+        (eff ? '<div class="se" style="color:' + nc + '">' + eff + '</div>' : '') + '</div>';
+    });
+    if (s.fires > 0) sys += '<div class="ro-sys" style="background:rgba(255,97,89,.15);border:1px solid rgba(255,97,89,.65);box-shadow:0 0 8px rgba(255,97,89,.25)">' +
+      '<div class="sn" style="color:#ff7a72">FIRES ×' + s.fires + '</div><div class="se" style="color:#ff7a72">BURNS · CAN SPREAD</div></div>';
+    html += '<div class="ro-sysgrid">' + sys + '</div>';
+
     host.innerHTML = html;
-    host.querySelectorAll('[data-oob]').forEach(btn => {
-      btn.addEventListener('click', () => { UI.oobSide = btn.dataset.oob; Snd.click(); UI.refresh(); });
-    });
-    host.querySelectorAll('[data-ship]').forEach(card => {
-      card.addEventListener('click', () => {
-        Game.b.inspect = card.dataset.ship;
-        Snd.select();
-        UI.refresh();
-      });
-    });
+  },
+
+  setLogOpen(open) {
+    UI.logOpen = open;
+    UI.el.logPanel.classList.toggle('hidden', !open);
+    UI.el.logToggle.classList.toggle('open', open);
+    UI.el.logToggle.querySelector('.lt-l').textContent = (open ? '▾' : '▸') + ' ENGAGEMENT LOG';
+    if (open && UI.el.log) UI.el.log.scrollTop = UI.el.log.scrollHeight;
+  },
+
+  updateLogCount(b) {
+    if (!UI.el.logCount) return;
+    const n = (b && b.log) ? b.log.length : 0;
+    UI.el.logCount.textContent = n + ' ENTRIES';
   },
 
   renderTopbar(b) {
@@ -241,13 +340,10 @@ const UI = {
       else if (s.exited) status = '<span class="st">JUMPED</span>';
       else if (b.phase === 'move' && s.side === 'player') status = s.plotted ? '<span class="st">PLOTTED ✓</span>' : '<span class="st" style="color:#ffb454">AWAITING</span>';
       const rank = DATA.RANKS[s.rank];
+      // shields / system-damage / fires now live on the right-hand ship readout;
+      // the fleet card keeps only its movement-relevant state (the helm order)
       const meta = [];
-      if (s.alive && !s.exited) {
-        meta.push('SHD F' + s.sh.F + ' S' + s.sh.S + ' A' + s.sh.A);
-        DATA.SYS.forEach(n => { if (s.sys[n] > 0) meta.push('<span class="bad">' + n.split(' ')[0] + (s.sys[n] >= 2 ? '✖' : '!') + '</span>'); });
-        if (s.fires > 0) meta.push('<span class="bad">FIRE×' + s.fires + '</span>');
-        if (s.order) meta.push('<span class="ord">' + s.order.name + '</span>');
-      }
+      if (s.alive && !s.exited && s.order) meta.push('<span class="ord">' + s.order.name + '</span>');
       card.innerHTML =
         '<div class="thumb">' + UI.shipImg(s.cls, 46) + '</div>' +
         '<div class="body">' +
@@ -419,58 +515,6 @@ const UI = {
     tip.classList.remove('hidden');
   },
 
-  renderInspector(b) {
-    const host = UI.el.inspector;
-    if (!b.inspect) { host.classList.add('hidden'); return; }
-    const s = Game.ship(b.inspect);
-    if (!s) { host.classList.add('hidden'); return; }
-    const enemy = s.side === 'enemy';
-    host.className = enemy ? 'enemy' : '';
-    const hp = Math.max(0, s.hull / s.maxHull);
-    const rank = DATA.RANKS[s.rank];
-    let html = '<div class="close" id="insClose">✕</div>' +
-      '<h3>' + U.esc(s.name) + '</h3>' +
-      '<div class="sub">' + U.esc(s.label) +
-      (s.hulked ? ' · DRIFTING HULK' : (enemy ? ' · HOSTILE' : (s.side === 'ally' ? ' · PROTECTED' : ' · YOUR SHIP'))) +
-      (s.routing ? ' · ⚑ DISENGAGING' : '') +
-      (s.vip ? ' · ◆ PRIORITY TARGET' : '') + '</div>';
-    if (s.commander) html += '<div class="row"><span>◆ ENEMY COMMANDER</span><span class="ok" style="color:#ffd465">' + U.esc(s.commander) + '</span></div>';
-    if (s.side === 'player' && rank.name !== 'GREEN') {
-      html += '<div class="row"><span>' + rank.chev + ' ' + rank.name + ' CREW</span><span class="ok">' + rank.desc + '</span></div>';
-    }
-    if (s.hulked) {
-      html += '<div class="sect">STATUS</div>' +
-        '<div class="row"><span>' + (s.captured ? '⚑ PRIZE SECURED — salvage or commission after battle' : 'Adrift and burning. Board her (within ' + DATA.BOARD_RANGE + ') to take a prize.') + '</span></div>';
-    } else {
-      html += '<div class="sect">HULL ' + Math.max(0, s.hull) + '/' + s.maxHull + '</div>' +
-        '<div class="hullbar" style="margin-bottom:4px"><i class="' + (hp > 0.55 ? '' : hp > 0.25 ? 'warn' : 'crit') + '" style="width:' + Math.round(hp * 100) + '%"></i></div>' +
-        '<div class="sect">SHIELDS</div>' +
-        '<div class="row"><span>FORE ' + '▮'.repeat(s.sh.F) + '▯'.repeat(Math.max(0, s.shMax.F - s.sh.F)) +
-        ' · SIDE ' + '▮'.repeat(s.sh.S) + '▯'.repeat(Math.max(0, s.shMax.S - s.sh.S)) +
-        ' · AFT ' + '▮'.repeat(s.sh.A) + '▯'.repeat(Math.max(0, s.shMax.A - s.sh.A)) + '</span></div>' +
-        '<div class="sect">INTERNAL SYSTEMS</div>';
-      DATA.SYS.forEach(n => {
-        const lvl = s.sys[n];
-        const st = lvl === 0 ? '<span class="ok">OK</span>' : (lvl === 1 ? '<span class="warn">DAMAGED</span>' : '<span class="bad">DESTROYED</span>');
-        html += '<div class="row' + (lvl > 0 ? ' dmg' : '') + '"><span>' + n + '</span>' + st + '</div>';
-      });
-      if (s.fires > 0) html += '<div class="row dmg"><span>FIRES BURNING</span><span class="bad">×' + s.fires + '</span></div>';
-      if (s.weapons.length) {
-        html += '<div class="sect">ARMAMENT</div>';
-        s.weapons.forEach(w => {
-          const st = w.reload > 0 ? '<span class="warn">RELOAD ' + w.reload + '</span>' : '<span class="ok">READY</span>';
-          const stat = w.type === 'torp' ? ' ×' + w.salvo : (w.type === 'bay' ? ' ' + w.craft.toUpperCase() + ' ×' + w.salvo : ' ' + w.dice + 'd6@' + w.need + '+');
-          html += '<div class="row"><span>' + w.name + ' · ' + w.arc.toUpperCase() + stat + '</span>' + st + '</div>';
-        });
-      }
-      html += '<div class="sect">SPEED ' + Math.round(Game.effSpeed(s)) + ' · TURN ±' + s.maxTurn + '° · TURRETS ' + s.turrets +
-        (s.side === 'player' ? ' · KILLS ' + s.kills : '') + '</div>';
-    }
-    host.innerHTML = html;
-    host.classList.remove('hidden');
-    document.getElementById('insClose').addEventListener('click', () => { Game.b.inspect = null; UI.refresh(); });
-  },
-
   /* ================= log ================= */
   pushLog(e) {
     const host = UI.el.log;
@@ -481,11 +525,13 @@ const UI = {
     host.appendChild(line);
     host.scrollTop = host.scrollHeight;
     while (host.children.length > 220) host.removeChild(host.firstChild);
+    UI.updateLogCount(Game.b);
   },
 
   rebuildLog() {
     UI.el.log.innerHTML = '';
     if (Game.b) Game.b.log.forEach(e => UI.pushLog(e));
+    UI.updateLogCount(Game.b);
   },
 
   /* ================= battle end / banner ================= */
