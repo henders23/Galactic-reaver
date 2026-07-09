@@ -13,7 +13,7 @@ const ASSETS = {
     'crimson-1', 'crimson-2', 'crimson-3', 'crimson-4', 'crimson-5'
   ],
   BG: {
-    start: 'assets/bg-start.jpg',
+    start: 'assets/vanguard.png',
     victory: 'assets/bg-victory.jpg',
     repair: 'assets/bg-repair.jpg',
     starfield: 'assets/bg-starfield.jpg'

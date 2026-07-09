@@ -248,7 +248,15 @@ const Music = {
   /* crossfade to the named track (fading every other track out) */
   _switchTo(key) {
     Music.init();
+    const prev = Music.current;
     Music.current = key;
+    // returning to the title/menu track after a battle restarts it from the top
+    // rather than resuming mid-track where combat interrupted it; moving between
+    // out-of-combat screens leaves it playing on (prev is already 'menu').
+    if (key === 'menu' && prev === 'combat') {
+      const menu = Music.tracks.menu;
+      if (menu && menu.el) { try { menu.el.currentTime = 0; } catch (e) { /* not yet seekable */ } }
+    }
     Object.keys(Music.tracks).forEach(k => {
       const t = Music.tracks[k];
       if (!t.el) return;
