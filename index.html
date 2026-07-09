@@ -47,7 +47,6 @@
       <canvas id="map"></canvas>
       <div id="hint"></div>
       <div id="tip" class="hidden"></div>
-      <div id="inspector" class="hidden"></div>
       <div id="banner" class="hidden">
         <div id="bannerText"></div>
         <div id="bannerSub"></div>
@@ -56,9 +55,12 @@
     </div>
 
     <aside id="right">
-      <div id="oob"></div>
-      <div class="paneltitle" id="logtitle">ENGAGEMENT LOG</div>
-      <div id="log"></div>
+      <div id="readout"></div>
+      <button id="logToggle"><span class="lt-l">▸ ENGAGEMENT LOG</span><span class="lt-r" id="logCount">0 ENTRIES</span></button>
+      <div id="logPanel" class="hidden">
+        <div class="lp-head"><span>ENGAGEMENT LOG</span><button id="logClose" aria-label="Close log">✕</button></div>
+        <div id="log"></div>
+      </div>
     </aside>
   </main>
 
