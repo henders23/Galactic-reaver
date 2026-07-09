@@ -1,4 +1,4 @@
-/* Reaverbane — procedural WebAudio sound */
+/* Vanguard — procedural WebAudio sound */
 'use strict';
 
 const Snd = {

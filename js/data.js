@@ -1,4 +1,4 @@
-/* Reaverbane — static game data: hulls, weapons, orders, sector map, store */
+/* Vanguard — static game data: hulls, weapons, orders, sector map, store */
 'use strict';
 
 const DATA = {};
@@ -563,7 +563,7 @@ DATA.STORY = [
     body: [
       'MERIDIAN. Two years ago.',
       'The DREADMAW — Warlord Skarr\'s heavy cruiser — broke the Alliance line in ninety seconds, and Admiral Kade Voss gave the order every captain dreads: hold. You watched the fleet die holding a line that was already gone. Then you disobeyed, and cut your corvette through the enemy escorts to shield the civilian convoys running for the jump point.',
-      'Eleven thousand people lived. The fleet did not. You brought one ship out of the fire: the TAS REAVER.',
+      'Eleven thousand people lived. The fleet did not. You brought one ship out of the fire: the TAS VANGUARD.',
       'The Alliance could not decide whether you were a hero or the coward who ran while the fleet burned — so they split the difference and sent you here. To the Verge, the dying frontier, with the ragtag 7th Expeditionary Fleet and the name they gave you in the wreckage of Meridian: the Ghost.',
       'Voss came with you. He blames himself, not you. The Kessel Drift is his second chance — and yours.'
     ]

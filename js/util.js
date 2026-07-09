@@ -1,4 +1,4 @@
-/* Reaverbane — math & misc helpers */
+/* Vanguard — math & misc helpers */
 'use strict';
 
 const U = {

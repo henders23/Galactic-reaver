@@ -1,4 +1,4 @@
-/* Reaverbane — image assets: faction ship sprites + backgrounds +
+/* Vanguard — image assets: faction ship sprites + backgrounds +
    planet portraits, weapon projectiles and animated explosion spritesheets. */
 'use strict';
 

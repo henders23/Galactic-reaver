@@ -1,4 +1,4 @@
-/* Reaverbane — boot */
+/* Vanguard — boot */
 'use strict';
 
 /* Fit-to-screen scaler.

@@ -1,4 +1,4 @@
-/* Reaverbane — DOM UI: panels, screens, sector map, campaign flow */
+/* Vanguard — DOM UI: panels, screens, sector map, campaign flow */
 'use strict';
 
 const UI = {
@@ -633,7 +633,7 @@ const UI = {
     UI.screen(
       '<div class="hero">' +
       '<div class="hero-kicker">▮ TERRAN ALLIANCE NAVAL COMMAND</div>' +
-      '<div class="title-big">REAVER<br><span>BANE</span></div>' +
+      '<div class="title-big">VAN<span>GUARD</span></div>' +
       '<div class="title-sub">THE MERIDIAN WAR</div>' +
       '<div class="hero-menu">' +
       (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN <span class="btn-note">' +

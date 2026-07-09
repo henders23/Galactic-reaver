@@ -1,4 +1,4 @@
-/* Reaverbane — canvas renderer + effects */
+/* Vanguard — canvas renderer + effects */
 'use strict';
 
 const Rend = {
