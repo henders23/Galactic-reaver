@@ -448,7 +448,7 @@ DATA.GALAXY = {
   systems: [
     // --- Terran Alliance (west) ---
     { id: 'aegis', name: 'AEGIS PRIME', type: 'capital', owner: 'terran', x: 12, y: 44, links: ['celestia', 'providence', 'horizon', 'vanguard'] },
-    { id: 'vanguard', name: 'VANGUARD', type: 'majorhub', owner: 'terran', x: 22, y: 22, links: ['aegis', 'northwatch', 'celestia'] },
+    { id: 'vanguard', name: 'BULWARK', type: 'majorhub', owner: 'terran', x: 22, y: 22, links: ['aegis', 'northwatch', 'celestia'] },
     { id: 'northwatch', name: 'NORTHWATCH', type: 'outpost', owner: 'terran', x: 12, y: 19, links: ['vanguard'] },
     { id: 'celestia', name: 'CELESTIA', type: 'minorhub', owner: 'terran', x: 23, y: 37, links: ['aegis', 'vanguard', 'horizon'] },
     { id: 'providence', name: 'PROVIDENCE', type: 'resource', owner: 'terran', x: 14, y: 58, links: ['aegis', 'valoris', 'fortitude'] },
