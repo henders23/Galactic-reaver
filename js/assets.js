@@ -22,13 +22,13 @@ const ASSETS = {
   /* planet portraits sliced from the planets pack, grouped by dressing type so the
      system map can pick a fitting world. Indices are files assets/planets/planet-NN.png */
   PLANET_IMAGES: {
-    Ocean: [0, 4, 9, 13, 17, 23],
-    Ice: [5, 21, 3],
-    Desert: [12, 19, 22, 8],
-    Rocky: [6, 8, 18],
-    Gas: [2, 10, 11, 14, 16, 20],
-    Volcanic: [1, 6],
-    Barren: [3, 7, 18]
+    Ocean: [0, 9, 14, 17, 21],
+    Ice: [4, 11, 21],
+    Desert: [1, 12, 18, 23],
+    Rocky: [7, 8, 19, 22],
+    Gas: [2, 3, 5, 13, 15, 20],
+    Volcanic: [1, 6, 10, 16],
+    Barren: [7, 8, 18, 22]
   },
 
   /* weapon projectile / impact sprites from the projectiles pack (nose-up) */
