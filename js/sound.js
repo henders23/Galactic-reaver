@@ -9,8 +9,14 @@ const Snd = {
 
   /* effective gain applied to the mix bus (0 while muted) */
   effGain() { return Snd.muted ? 0 : Snd.volume; },
-  /* the music target volume, scaled off the master level */
-  musicVol() { return (Snd.muted || !Music.current) ? 0 : Snd.volume * 0.84; },
+  /* the music target volume, scaled off the master level. Music is silenced
+     when the master is muted, when nothing is cued, or when the dedicated
+     music on/off toggle is off (SFX keep playing in that case). */
+  musicVol() {
+    if (Snd.muted || !Music.current) return 0;
+    if (typeof Music !== 'undefined' && !Music.enabled) return 0;
+    return Snd.volume * 0.84;
+  },
 
   loadVolume() {
     try {
@@ -44,7 +50,13 @@ const Snd = {
     explosionMedium: 'assets/sounds/explosion-medium.mp3',
     torpedoExplosion: 'assets/sounds/torpedo-explosion.mp3',
     shipDestroyedSmall: 'assets/sounds/ship-destroyed-small.mp3',
-    shipDestroyedMedium: 'assets/sounds/ship-destroyed-medium.mp3'
+    shipDestroyedMedium: 'assets/sounds/ship-destroyed-medium.mp3',
+    // UI clicks + spoken callouts (all routed through the SFX bus, so they
+    // follow the master mute/volume — not the music on/off toggle)
+    targetShip: 'assets/sounds/target-ship.mp3',
+    selectShip: 'assets/sounds/select-ship.mp3',
+    weGotThem: 'assets/sounds/we-got-them.mp3',
+    enemyInRange: 'assets/sounds/enemy-in-range.mp3'
   },
 
   init() {
@@ -142,6 +154,15 @@ const Snd = {
   deny() { Snd._osc('square', 220, 140, 0.12, 0.12); },
   lock() { Snd._osc('sine', 640, 640, 0.05, 0.14); Snd._osc('sine', 960, 960, 0.06, 0.12, 0.06); },
 
+  // recorded ship-selection clicks (fall back to the procedural blips):
+  // selectShip — picking any friendly ship or a movement order
+  selectShip() { if (Snd._sample('selectShip', 0.7)) return; Snd.select(); },
+  // targetShip — locking a weapon onto an enemy ship to fire on
+  targetShip() { if (Snd._sample('targetShip', 0.7)) return; Snd.lock(); },
+  // spoken callouts
+  weGotThem() { Snd._sample('weGotThem', 0.9); },
+  enemyInRange() { Snd._sample('enemyInRange', 0.9); },
+
   // lance / beam weapons — recorded laser with a procedural fallback
   laser() { if (Snd._sample('laserCannon', 0.5)) return; Snd._osc('sawtooth', 880, 130, 0.22, 0.16); Snd._osc('sawtooth', 1240, 180, 0.16, 0.08); },
   // enemy / generic gun batteries — blaster report
@@ -199,9 +220,16 @@ const Music = {
     combat: { src: 'assets/music/combat-theme.mp3', el: null, gain: 1.0 }
   },
   current: null,   // which track should be playing now: 'menu' | 'combat' | null
+  enabled: true,   // dedicated music on/off toggle (independent of SFX mute)
   armed: false,
 
+  /* read the persisted music on/off preference (call before first use) */
+  loadEnabled() {
+    try { Music.enabled = localStorage.getItem('gr_music') !== '0'; } catch (e) { /* storage unavailable */ }
+  },
+
   init() {
+    Music.loadEnabled();
     if (Music.armed) return;
     Object.values(Music.tracks).forEach(t => {
       const a = new Audio(t.src);
@@ -221,6 +249,7 @@ const Music = {
   },
 
   _ensurePlaying(key) {
+    if (!Music.enabled) return;
     const t = Music.tracks[key];
     if (!t || !t.el || !t.el.paused) return;
     const p = t.el.play();
@@ -250,12 +279,14 @@ const Music = {
     Music.init();
     const prev = Music.current;
     Music.current = key;
-    // returning to the title/menu track after a battle restarts it from the top
-    // rather than resuming mid-track where combat interrupted it; moving between
-    // out-of-combat screens leaves it playing on (prev is already 'menu').
-    if (key === 'menu' && prev === 'combat') {
-      const menu = Music.tracks.menu;
-      if (menu && menu.el) { try { menu.el.currentTime = 0; } catch (e) { /* not yet seekable */ } }
+    // A track restarts from the top when we first switch onto it, not when it's
+    // already playing: the menu track rewinds when we come back from a battle
+    // (moving between out-of-combat screens leaves it playing on, since prev is
+    // already 'menu'), and the combat track rewinds at the start of each new
+    // engagement rather than resuming where the last fight left off.
+    if ((key === 'menu' && prev === 'combat') || (key === 'combat' && prev !== 'combat')) {
+      const t = Music.tracks[key];
+      if (t && t.el) { try { t.el.currentTime = 0; } catch (e) { /* not yet seekable */ } }
     }
     Object.keys(Music.tracks).forEach(k => {
       const t = Music.tracks[k];
@@ -282,6 +313,26 @@ const Music = {
       if (t.el) Music._fadeEl(t.el, 0, () => { if (!Music.current) t.el.pause(); });
     });
   },
+
+  /* turn the music on or off (independent of the SFX mute). Off fades every
+     track out and pauses it; On resumes whatever track is currently cued. */
+  setEnabled(on) {
+    Music.enabled = !!on;
+    try { localStorage.setItem('gr_music', Music.enabled ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+    if (Music.enabled) {
+      if (Music.current) Music._ensurePlaying(Music.current);
+      Object.keys(Music.tracks).forEach(k => {
+        const t = Music.tracks[k];
+        if (t.el) Music._fadeEl(t.el, k === Music.current ? Snd.musicVol() * t.gain : 0);
+      });
+    } else {
+      Object.values(Music.tracks).forEach(t => {
+        if (t.el) Music._fadeEl(t.el, 0, () => { if (!Music.enabled) t.el.pause(); });
+      });
+    }
+    return Music.enabled;
+  },
+  toggleEnabled() { return Music.setEnabled(!Music.enabled); },
 
   /* keep the live track's volume in step with the mute button / volume slider */
   syncMute() {

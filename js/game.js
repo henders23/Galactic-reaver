@@ -844,10 +844,10 @@ const Game = {
     if (b.phase === 'move' && s.side === 'player') {
       if (s.plotted) { s.plotted = false; s.plot = null; s.order = null; }
       b.sel = id; b.plotStep = 'order'; b.curOrder = null; b.ghost = null;
-      Snd.select();
+      Snd.selectShip();
     } else if (b.phase === 'fire' && s.side === 'player') {
       b.sel = id; b.armed = null; b.boardMode = null;
-      Snd.select();
+      Snd.selectShip();
     }
     if (window.UI) UI.refresh();
   },
@@ -857,7 +857,7 @@ const Game = {
     const s = Game.ship(b.sel);
     if (!b || b.phase !== 'move' || !s) return;
     b.curOrder = o;
-    Snd.click();
+    Snd.selectShip();
     if (o.range === 0) {
       Game.commitPlot(s, { x: s.x, y: s.y, angle: s.angle }, o);
     } else {
@@ -939,7 +939,7 @@ const Game = {
               const lock = hit && !hit.hulked && hit.side === 'enemy';
               w.target = lock ? hit.id : { x, y, free: true };
               b.armed = null; b.hover = null;
-              Snd.lock();
+              if (lock) Snd.targetShip(); else Snd.lock();  // enemy lock vs free-aim salvo
               if (window.UI) UI.refresh();
               return;
             }
@@ -951,7 +951,7 @@ const Game = {
               if (sol.ok) {
                 w.target = hit.id;
                 b.armed = null; b.hover = null;
-                Snd.lock();
+                if (isFighters) Snd.lock(); else Snd.targetShip();  // enemy fire-target gets the target callout
                 if (window.UI) UI.refresh();
                 return;
               } else { Snd.deny(); }
@@ -1249,9 +1249,19 @@ const Game = {
     if ((w.type === 'torp' || w.type === 'bay') && s.order && s.order.brace) { Snd.deny(); return; }
     b.boardMode = null;
     if (w.target) { w.target = null; b.armed = null; Snd.click(); if (window.UI) UI.refresh(); return; }
-    if (b.armed && b.armed.shipId === shipId && b.armed.wIdx === wIdx) b.armed = null;
+    const wasArmed = b.armed && b.armed.shipId === shipId && b.armed.wIdx === wIdx;
+    if (wasArmed) b.armed = null;
     else b.armed = { shipId, wIdx };
     Snd.select();
+    // the first time this turn the player arms a weapon that can bear on an
+    // enemy, the deck calls the contact out ("enemy in range")
+    if (!wasArmed && !b.rangeVoiceDone) {
+      const isFighters = w.type === 'bay' && w.craft === 'fighters';
+      if (!isFighters && Game.enemyShips(b).some(f => Game.solution(s, w, f).ok)) {
+        b.rangeVoiceDone = true;
+        Snd.enemyInRange();
+      }
+    }
     if (window.UI) UI.refresh();
   },
 
@@ -1509,6 +1519,8 @@ const Game = {
     if (!target.alive) return;
     target.alive = false; target.hull = 0;
     target.weapons.forEach(w => { w.target = null; });
+    // spoken "we got them" callout on ~75% of enemy kills
+    if (target.side === 'enemy' && U.rand(1, 4) >= 2) Snd.weGotThem();
     // kill credit & XP
     const credit = target.lastHitBy ? Game.ship(target.lastHitBy) : null;
     if (credit && credit.side === 'player' && target.side === 'enemy') {
@@ -1670,6 +1682,7 @@ const Game = {
     if (Game.checkEnd()) return;
     b.phase = 'fire';
     b.sel = null;
+    b.rangeVoiceDone = false;   // re-arm the "enemy in range" callout for this turn
     const first = Game.playerShips(b).find(s => s.weapons.some(w => w.reload === 0));
     b.sel = first ? first.id : (Game.playerShips(b)[0] || {}).id || null;
     b.armed = null;

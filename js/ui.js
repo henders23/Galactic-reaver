@@ -9,7 +9,7 @@ const UI = {
 
   init() {
     ['topbar', 'missionTag', 'pipTurn', 'pipMove', 'pipFire', 'pipRes', 'reqTag',
-      'btnMute', 'volSlider', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
+      'btnMute', 'volSlider', 'btnMusic', 'btnHelp', 'btnMenu', 'btnSpeed', 'btnAuto', 'roster', 'context', 'btnAction', 'map',
       'hint', 'tip', 'banner', 'bannerText', 'bannerSub', 'bannerBtn',
       'readout', 'logToggle', 'logCount', 'logPanel', 'logClose', 'log', 'screen', 'screenInner'].forEach(id => UI.el[id] = document.getElementById(id));
 
@@ -71,6 +71,14 @@ const UI = {
       if (window.Music) Music.syncMute();
       UI.syncVolumeUI();
     });
+    // dedicated music on/off (separate from the master mute — SFX keep playing)
+    if (window.Music) Music.loadEnabled();
+    UI.syncMusicUI();
+    UI.el.btnMusic.addEventListener('click', () => {
+      Snd.init();
+      if (window.Music) Music.toggleEnabled();
+      UI.syncMusicUI();
+    });
     UI.el.volSlider.addEventListener('input', () => {
       Snd.init(); Snd.resume();
       Snd.setVolume(Number(UI.el.volSlider.value) / 100);
@@ -125,6 +133,15 @@ const UI = {
       const pct = Math.round((muted ? 0 : Snd.volume) * 100);
       UI.el.volSlider.value = pct;
       UI.el.volSlider.style.backgroundSize = pct + '% 100%, 100% 100%';
+    }
+  },
+
+  /* keep the music on/off button in step with the music-enabled state */
+  syncMusicUI() {
+    const on = !window.Music || Music.enabled;
+    if (UI.el.btnMusic) {
+      UI.el.btnMusic.classList.toggle('off', !on);
+      UI.el.btnMusic.title = on ? 'Music: on' : 'Music: off';
     }
   },
 
