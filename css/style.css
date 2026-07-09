@@ -503,6 +503,13 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
    ordinary (faction-coloured) engage pulse: a steady GOLD throb on the emblem
    plus an expanding homing reticle radiating out of it. */
 .gnode.story { z-index: 6; pointer-events: auto; cursor: pointer; }
+/* the active priority-op target stays fully lit even on a greyed / locked system
+   the player can't yet reach, so the objective is never lost on the map */
+.gnode.story, .gnode.story.locked { opacity: 1; }
+.gnode.story.locked .gemblem img {
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.95)) drop-shadow(0 0 5px rgba(0,0,0,.75)) contrast(1.12) brightness(1.06);
+}
+.gnode.story .glbl { text-shadow: 0 0 6px rgba(0,0,0,.95), 0 0 11px rgba(255,212,101,.55); }
 .gnode.story .gemblem { animation: gstorypulse 1.3s ease-in-out infinite; border-radius: 50%; }
 .gnode.story .gemblem img { width: 54px; position: relative; z-index: 1; }
 @keyframes gstorypulse {

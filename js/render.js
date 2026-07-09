@@ -145,17 +145,30 @@ const Rend = {
       }
     },
 
-    // one tracer per die in the pool; misses streak wide of the hull
+    // one tracer per die in the pool; every shell flies at the hull — misses just
+    // streak a little wide or long of it rather than off in a random direction
     volley(from, to, dieHits, color, human) {
       const shell = human ? 'shellPlayer' : 'shellEnemy';
       const spark = human ? 'sparkPlayer' : 'sparkEnemy';
-      const ma = Math.atan2(to.y - from.y, to.x - from.x) / U.D2R;
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;   // unit vector toward the target
+      const px = -uy, py = ux;              // perpendicular (lateral) to the firing line
+      const ma = Math.atan2(dy, dx) / U.D2R;
       // one muzzle flash at the battery for the salvo
       Rend.fx.add({ type: 'imgflash', x: from.x, y: from.y, angle: ma, r: 30, sprite: 'muzzle', dur: 220 });
       dieHits.forEach((hit, i) => {
         const x1 = from.x + U.frand(-10, 10), y1 = from.y + U.frand(-10, 10);
-        const tx = (hit ? to.x + U.frand(-10, 10) : to.x + U.frand(-95, 95));
-        const ty = (hit ? to.y + U.frand(-10, 10) : to.y + U.frand(-95, 95));
+        let tx, ty;
+        if (hit) {
+          tx = to.x + U.frand(-10, 10); ty = to.y + U.frand(-10, 10);
+        } else {
+          // a miss still tracks toward the ship: a tight lateral spread and a
+          // slight over/undershoot, so the salvo fans just past the hull
+          const lat = U.frand(-34, 34), lon = U.frand(-12, 44);
+          tx = to.x + px * lat + ux * lon;
+          ty = to.y + py * lat + uy * lon;
+        }
         Rend.fx.add({
           type: 'tracer', x1, y1, x2: tx, y2: ty, color, dur: 340, delay: i * 55,
           sprite: shell, angle: Math.atan2(ty - y1, tx - x1) / U.D2R

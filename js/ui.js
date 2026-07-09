@@ -614,7 +614,7 @@ const UI = {
 
   /* ---------------- briefing dossier: who you are, who you fight ----------------
      Shown once when a new campaign opens, before the sector map. Introduces the
-     Terran Alliance, the Dominion, and Admiral Voss (whose portrait rides here). */
+     Terran Alliance, the Crimson Reach, and Admiral Voss (whose portrait rides here). */
   showContext() {
     UI.screen(
       '<div class="brief-cols">' +
@@ -624,9 +624,9 @@ const UI = {
       '<div class="briefbody">' +
       '<p><b>You</b> are a newly-posted captain of the <b>Terran Alliance</b>, sent to the Verge — the ragged frontier where Alliance space frays into the dark. Your command carries the <b>TAS</b> pennant, and a fleet that is yours to grow, keep alive, and bury. Ships lost out here do not come back; neither do their crews.</p>' +
       '<p>The <b>Kessel Drift</b> is the choke point of the whole Verge — a slow river of derelicts, ice and ore that every convoy must thread. Hold it and the Alliance breathes. Lose it and a dozen worlds go dark.</p>' +
-      '<p>Against you stands the <b>Dominion</b> — the crimson fleets that broke the Alliance line at Meridian and now claim the Drift as their own. Their ships fly the <b>DKV</b> transponder: fast jackal escorts, ravager raiders, carriers that bleed you white with bomber waves, and at the far end of the sector their flagship, the heavy cruiser <b>DREADMAW</b>. Break her and the whole Dominion line breaks with her.</p>' +
+      '<p>Against you stands the <b>Crimson Reach</b> — the pirate confederation that broke the Alliance line at Meridian and now claims the Drift as its own. Its ships fly the <b>DKV</b> transponder: fast jackal escorts, ravager raiders, carriers that bleed you white with bomber waves, and at the far end of the sector their flagship, the heavy cruiser <b>DREADMAW</b>. Break her and the whole Reach breaks with her.</p>' +
       '<p>Caught between them are the <b>haulers of the Verge</b> — unarmed freighters and couriers who fly for whoever keeps the lane open. Protect them and they fly for you.</p>' +
-      '<p style="color:#7ce8f7">Your standing orders come from <b>Admiral Kade Voss</b>, who broke more Dominion hulls than anyone alive and expects you to do the same. Listen to him. The Verge keeps what it takes.</p>' +
+      '<p style="color:#7ce8f7">Your standing orders come from <b>Admiral Kade Voss</b>, who broke more enemy hulls than anyone alive and expects you to do the same. Listen to him. The Verge keeps what it takes.</p>' +
       '</div>' +
       '<div class="btnrow left">' +
       '<button class="menu-btn primary slim" id="mnCtxGo">TAKE COMMAND ▸</button>' +
@@ -1119,7 +1119,7 @@ const UI = {
       '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + lines + '</svg>' +
       nodeHtml + fleetMarker +
       '<div class="seccorner tl">TERRAN ALLIANCE ADVANCE · 7TH EXPEDITIONARY</div>' +
-      '<div class="seccorner br">DOMINION LINE — CRIMSON REACH ▸</div>' +
+      '<div class="seccorner br">CRIMSON REACH LINE ▸</div>' +
       '</div>' +
       '<div class="sector-foot">' +
       '<div class="reqpill"><span class="req">⬡ ' + sv.req + ' REQ</span><span class="sep">|</span>' +
@@ -1135,6 +1135,43 @@ const UI = {
     });
     document.getElementById('mnFleetMgmt').addEventListener('click', () => UI.showRefit(null, 0, null));
     document.getElementById('mnTitleSec').addEventListener('click', () => UI.showTitle());
+  },
+
+  /* ---------------- pre-combat briefing ----------------
+     A short orders screen shown immediately before every campaign / story battle
+     (see Game.beginBattle), so the player drops into the fight already knowing the
+     objective. onBegin() actually spins up the battle when they confirm. */
+  showCombatBrief(m, onBegin) {
+    const fleet = (Game.save && Game.save.fleet)
+      ? Game.save.fleet.map(f => f.name + ' (' + DATA.CLASSES[f.cls].short + ')').join(' · ') : '';
+    // hostile contact artwork: the priority target if there is one, else the heaviest hull
+    const foe = (m.enemies || []).slice().sort((a, b2) =>
+      (b2.vip ? 1 : 0) - (a.vip ? 1 : 0) || DATA.CLASSES[b2.cls].pts - DATA.CLASSES[a.cls].pts)[0];
+    const foeArt = foe ? '<div class="brief-art">' + UI.shipImg(foe.cls, 340, 'transform:rotate(-14deg)') +
+      '<div class="contact">⨂ HOSTILE CONTACT — ' + U.esc(foe.name) + '</div>' +
+      '<div class="contact sub">LONG-RANGE PICKET IMAGERY · ' + U.esc(DATA.CLASSES[foe.cls].label) + '</div></div>' : '';
+    const diffName = (Game.mode !== 'skirmish' && Game.diff) ? ' · ' + Game.diff().name : '';
+    UI.screen(
+      '<div class="brief-cols"><div class="brief-main">' +
+      '<div class="brieftitle">' + U.esc(m.name || 'ENGAGEMENT') + '</div>' +
+      '<div class="briefsub">' + U.esc(m.sub || 'KESSEL DRIFT') + diffName + '</div>' +
+      '<div class="briefbody">' + (m.briefing || []).map(p =>
+        '<p class="' + (p.startsWith('OBJECTIVE') ? 'obj' : '') + '">' + U.esc(p) + '</p>').join('') +
+      (m.bonus ? '<p style="color:#7ce8f7">SECONDARY — ' + U.esc(m.bonus.desc) + ' (+' + m.bonus.reward + ' REQ)</p>' : '') +
+      '</div>' +
+      (fleet ? '<div class="fleetline">' + UI.shipImg(Game.save.fleet[0].cls, 26, 'vertical-align:middle;transform:rotate(90deg);margin-right:8px') +
+        'YOUR FLEET — ' + U.esc(fleet) + '</div>' : '') +
+      '<div class="btnrow left">' +
+      '<button class="menu-btn primary slim" id="mnEngage">BEGIN ENGAGEMENT ▸</button>' +
+      '</div></div>' + foeArt + '</div>',
+      { bg: 'starfield', wide: true, left: true }
+    );
+    document.getElementById('mnEngage').addEventListener('click', () => {
+      Snd.init(); Snd.click();
+      UI.closeScreen();
+      onBegin();
+      UI.rebuildLog();
+    });
   },
 
   showBriefing(nodeId) {
@@ -1517,10 +1554,10 @@ const UI = {
       '<h4>GUNNERY — DICE POOLS</h4>Every gun throws a pool of D6 — a light escort flicks 3 dice, a capital broadside hurls 12. Each die <b>hits on its to-hit number</b> (lances 3+, batteries 4+), and each hit deals its damage. Orders, criticals, evasion and nebulae shift the to-hit number; the log shows every die rolled.' +
       '<h4>FACING & SHIELDS</h4>Ships have separate <b>fore / side / aft</b> shields, and each shield point soaks one hit from a volley — but <b>the stern has no protection</b>: aft hits bypass shields entirely and critical-hit on 5+ instead of 6. Shields recharge only on turns a ship wasn\'t hit.' +
       '<h4>TORPEDOES & ATTACK CRAFT</h4><b>Torpedoes</b> run straight each movement phase and strike whatever crosses their path — friend or foe — D6 hull per fish, shields bypassed. <b>Bombers</b> (from carriers) home on their mark each turn and bomb through shields; flak turrets thin both. <b>Fighters</b> fly cover over a friendly ship and intercept incoming torpedoes and bomber waves. Bays and tubes take 2 turns to rearm.' +
-      '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet. Beware: <b>the Dominion boards back</b> — enemy ships alongside will raid your decks, and their scuttling parties will try to blow up prizes you\'ve taken.' +
-      '<h4>MORALE</h4>The Dominion fights to win, not to die. Kill the flagship and <b>the whole line breaks and runs</b>; batter their fleet below strength and ships start disengaging one by one (crippled ships may bolt on their own). A routing ship stops firing and runs for the map edge — the battle is <b>won the moment no willing combatant remains</b>, but escapees pay no bounty and leave no salvage. Chase or let them go.' +
+      '<h4>BOARDING & PRIZES</h4>Ships killed by gunfire sometimes <b>break into drifting hulks</b> instead of exploding. Close to within 150 and use <b>BOARDING ACTION</b>: raid a live enemy (hit-and-run criticals) or board a hulk to <b>capture it as a prize</b> — after victory, salvage prizes for requisition or commission them into your fleet. Beware: <b>the enemy boards back</b> — enemy ships alongside will raid your decks, and their scuttling parties will try to blow up prizes you\'ve taken.' +
+      '<h4>MORALE</h4>The enemy fights to win, not to die. Kill the flagship and <b>the whole line breaks and runs</b>; batter their fleet below strength and ships start disengaging one by one (crippled ships may bolt on their own). A routing ship stops firing and runs for the map edge — the battle is <b>won the moment no willing combatant remains</b>, but escapees pay no bounty and leave no salvage. Chase or let them go.' +
       '<h4>CRITICAL HITS</h4>Every damaging volley rolls a die (massed volleys of 4+ hits crit one easier): <b>WEAPONS</b> · <b>ENGINES</b> · <b>SHIELD EMITTER</b> · <b>BRIDGE</b> · <b>FIRE</b> (burns until contained — and a botched containment roll <b>spreads the blaze</b>) · <b>HULL BREACH</b>. Damage crews attempt repairs each turn. When a ship dies by gunfire her <b>magazine may cook off</b>, hammering everything nearby — think twice before killing a cruiser at point-blank range.' +
-      '<h4>OBJECTIVES & DIFFICULTY</h4>Campaign missions carry an optional <b>secondary objective</b> paying bonus requisition — shown in the briefing. Difficulty (chosen at commissioning) shifts Dominion gunnery by ±1, their breaking point, and requisition earned.' +
+      '<h4>OBJECTIVES & DIFFICULTY</h4>Campaign missions carry an optional <b>secondary objective</b> paying bonus requisition — shown in the briefing. Difficulty (chosen at commissioning) shifts enemy gunnery by ±1, their breaking point, and requisition earned.' +
       '<h4>VETERANCY</h4>Named ships earn XP for kills, boarding actions and surviving missions: <b>SEASONED</b> ' + DATA.RANKS[1].desc + ' · <b>VETERAN</b> ' + DATA.RANKS[2].desc + ' · <b>ELITE</b> ' + DATA.RANKS[3].desc + '. Ships lost in battle are gone for good — with all their experience.' +
       '<h4>HELM ORDERS</h4><b>ALL AHEAD FULL</b> covers ground but barely turns. <b>COME ABOUT</b> swings you around a short arc. <b>EVASIVE</b> makes you +1 to hit and dodges torpedoes. <b>HOLD & LOCK</b> steadies your guns to −1. <b>BRACE FOR IMPACT</b> halves incoming damage but seals tubes and bays.' +
       '<h4>TERRAIN</h4>Asteroid shoals block line of fire and grind 1–3 hull off ships that pass through (torpedoes die in the rocks; bombers fly over). Nebulae hide ships inside (+1 to be hit).' +
