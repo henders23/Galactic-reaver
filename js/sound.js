@@ -1,4 +1,4 @@
-/* Galactic Reaver — procedural WebAudio sound */
+/* Reaverbane — procedural WebAudio sound */
 'use strict';
 
 const Snd = {

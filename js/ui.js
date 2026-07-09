@@ -1,4 +1,4 @@
-/* Galactic Reaver — DOM UI: panels, screens, sector map, campaign flow */
+/* Reaverbane — DOM UI: panels, screens, sector map, campaign flow */
 'use strict';
 
 const UI = {
@@ -633,8 +633,8 @@ const UI = {
     UI.screen(
       '<div class="hero">' +
       '<div class="hero-kicker">▮ TERRAN ALLIANCE NAVAL COMMAND</div>' +
-      '<div class="title-big">GALACTIC<br><span>REAVER</span></div>' +
-      '<div class="title-sub">BATTLE FOR THE KESSEL DRIFT</div>' +
+      '<div class="title-big">REAVER<br><span>BANE</span></div>' +
+      '<div class="title-sub">THE MERIDIAN WAR</div>' +
       '<div class="hero-menu">' +
       (save && !save.done ? '<button class="menu-btn primary" id="mnContinue">CONTINUE CAMPAIGN <span class="btn-note">' +
         (save.galaxy ? Object.values(save.galaxy.owner).filter(o => o === 'terran').length + '/' + DATA.GALAXY.systems.length + ' SYSTEMS' : 'IN PROGRESS') + '</span></button>' : '') +

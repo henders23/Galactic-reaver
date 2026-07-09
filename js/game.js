@@ -1,4 +1,4 @@
-/* Galactic Reaver — game state machine, combat resolution, AI, campaign */
+/* Reaverbane — game state machine, combat resolution, AI, campaign */
 'use strict';
 
 const Game = {

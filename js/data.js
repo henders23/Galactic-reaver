@@ -1,4 +1,4 @@
-/* Galactic Reaver — static game data: hulls, weapons, orders, sector map, store */
+/* Reaverbane — static game data: hulls, weapons, orders, sector map, store */
 'use strict';
 
 const DATA = {};

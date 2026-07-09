@@ -1,4 +1,4 @@
-/* Galactic Reaver — image assets: faction ship sprites + backgrounds +
+/* Reaverbane — image assets: faction ship sprites + backgrounds +
    planet portraits, weapon projectiles and animated explosion spritesheets. */
 'use strict';
 

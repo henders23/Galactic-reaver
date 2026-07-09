@@ -1,4 +1,4 @@
-/* Galactic Reaver — canvas renderer + effects */
+/* Reaverbane — canvas renderer + effects */
 'use strict';
 
 const Rend = {

@@ -1,4 +1,4 @@
-/* Galactic Reaver — math & misc helpers */
+/* Reaverbane — math & misc helpers */
 'use strict';
 
 const U = {

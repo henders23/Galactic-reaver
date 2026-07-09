@@ -1,4 +1,4 @@
-# GALACTIC REAVER — Battle for the Kessel Drift
+# REAVERBANE — The Meridian War
 
 A Battlefleet Gothic–inspired tactical space combat game, developed from the original
 combat prototype (`Combat Prototype (standalone).html`, kept unchanged in this repo).
