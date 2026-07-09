@@ -49,8 +49,8 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 - **Boarding actions & prizes** — ships killed by gunfire may break into
   **drifting hulks**. Close alongside to raid live enemies with hit-and-run
   criticals, or board a hulk to capture it — then salvage the prize for
-  requisition or commission it into your own fleet. The Dominion boards back:
-  enemy ships raid your decks and send scuttling parties after your prizes.
+  requisition or commission it into your own fleet. The enemy boards back:
+  their ships raid your decks and send scuttling parties after your prizes.
 - **Morale** — kill the flagship and the whole line breaks; batter their fleet
   below strength and ships start disengaging one by one. Routing ships stop
   firing and run for the map edge — the battle ends the moment no willing
@@ -61,13 +61,13 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   **magazine detonation** that hammers everything nearby — killing a cruiser at
   point-blank range is a decision.
 - **Difficulty & secondary objectives** — PATROL / LINE DUTY / FORLORN HOPE
-  shift Dominion gunnery, their breaking point and requisition earned; every
+  shift enemy gunnery, their breaking point and requisition earned; every
   campaign mission carries an optional secondary objective paying bonus
   requisition (shown in the briefing).
 - **Role-based enemy AI** — raiders hunt your stern, brawlers close, snipers hold
   broadside range, convoy hunters chase the freighter, couriers run for the jump
   point, carriers stand off behind bomber waves and fighter cover (and turn to
-  fight if you corner them). The Dominion concentrates fire on your most
+  fight if you corner them). The enemy concentrates fire on your most
   battered ship.
 - **Command comforts** — one-key **BROADSIDES AT WILL** (auto-assign every idle
   gun to its best target, then adjust by hand) and a **1×/2×/3× game-speed

@@ -694,6 +694,17 @@ const Game = {
   },
 
   beginBattle(mission, ships, terrainDensity) {
+    // show a short pre-combat briefing first, so the player goes into the fight
+    // knowing the objective — then drop into the battle on confirm. Skirmishes
+    // (and any headless caller) carry no briefing and start straight away.
+    if (window.UI && mission.briefing && mission.briefing.length) {
+      UI.showCombatBrief(mission, () => Game.enterBattle(mission, ships, terrainDensity));
+      return;
+    }
+    Game.enterBattle(mission, ships, terrainDensity);
+  },
+
+  enterBattle(mission, ships, terrainDensity) {
     Game.b = {
       mission, turn: 1, phase: 'move',
       ships, torps: [], craft: [],
@@ -994,7 +1005,7 @@ const Game = {
     if (!s || s.boarded) return false;
     if (U.dist(s, target) > DATA.BOARD_RANGE) { Snd.deny(); Game.log(s.name + ' — boarding target out of range', '#5c7089'); return false; }
     // valid targets: a living foe (raid), an unclaimed hulk (player capture),
-    // or a player-held prize (Dominion scuttling party)
+    // or a player-held prize (enemy scuttling party)
     const raid = target.alive && !target.exited && target.side !== s.side;
     const capture = target.hulked && !target.captured && s.side === 'player';
     const scuttle = target.hulked && target.captured && s.side === 'enemy';
@@ -1021,9 +1032,9 @@ const Game = {
         Snd.explosion(false);
         Rend.fx.boom(target.x, target.y, false);
         Rend.shake(9);
-        Game.log('⚠ Dominion boarders scuttle your prize — ' + target.name + ' blooms into wreckage (rolled ' + die + ')', '#ff8a84', { big: true });
+        Game.log('⚠ Enemy boarders scuttle your prize — ' + target.name + ' blooms into wreckage (rolled ' + die + ')', '#ff8a84', { big: true });
       } else {
-        Game.log('Your prize crew aboard ' + target.name + ' throws the Dominion scuttling party back into the void (rolled ' + die + ', need 4+)', '#6fe0a8');
+        Game.log('Your prize crew aboard ' + target.name + ' throws the enemy scuttling party back into the void (rolled ' + die + ', need 4+)', '#6fe0a8');
       }
     } else {
       const att = U.rand(1, 6) + s.rank + (s.hull > s.maxHull * 0.5 ? 1 : 0);
@@ -1285,7 +1296,7 @@ const Game = {
         if (w.target && w.reload === 0) b.queue.push({ shooterId: s.id, wIdx: i, targetId: w.target });
       });
     });
-    // the Dominion agrees on a priority target: the most battered player ship
+    // the enemy agrees on a priority target: the most battered player ship
     const prey = Game.active(b).filter(x => x.side !== 'enemy');
     prey.sort((a, z) =>
       (a.hull + (a.sh.F + a.sh.S + a.sh.A) * 2) / a.maxHull -

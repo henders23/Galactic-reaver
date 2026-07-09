@@ -73,7 +73,7 @@ DATA.CLASSES = {
     desc: 'Unarmed bulk hauler. Keep it alive.',
     weapons: []
   },
-  /* --- Dominion hulls --- */
+  /* --- enemy hulls --- */
   jackal: {
     sprite: 'crimson-1', cls: 'jackal', shape: 'dart', label: 'JACKAL-CLASS ESCORT', short: 'ESCORT',
     w: 80, h: 34, hull: 13, sh: { F: 1, S: 0, A: 0 },
@@ -87,7 +87,7 @@ DATA.CLASSES = {
     sprite: 'crimson-2', cls: 'ravager', shape: 'dart', label: 'RAVAGER-CLASS RAIDER', short: 'RAIDER',
     w: 120, h: 50, hull: 22, sh: { F: 1, S: 1, A: 0 },
     speed: 165, maxTurn: 45, turrets: 1, pts: 150,
-    desc: 'Dominion raider. Closes fast and hammers with flak cannon.',
+    desc: 'Crimson Reach raider. Closes fast and hammers with flak cannon.',
     weapons: [
       { name: 'FLAK CANNON', type: 'battery', arc: 'fore', range: 400, dice: 5, need: 4, dmgPer: 1 }
     ]
@@ -106,7 +106,7 @@ DATA.CLASSES = {
     sprite: 'hive-4', cls: 'hive', shape: 'slab', label: 'HIVE-CLASS CARRIER', short: 'CARRIER',
     w: 168, h: 66, hull: 45, sh: { F: 2, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 3, pts: 420,
-    desc: 'Dominion carrier. Her bomber waves will grind a fleet down from beyond gun range.',
+    desc: 'Hive carrier. Her bomber waves will grind a fleet down from beyond gun range.',
     weapons: [
       { name: 'DEFENSE FLAK', type: 'battery', arc: 'side', range: 330, dice: 5, need: 4, dmgPer: 1 },
       { name: 'BOMBER CELLS', type: 'bay', craft: 'bombers', arc: 'any', range: 900, salvo: 3, reloadTime: 1 },
@@ -117,7 +117,7 @@ DATA.CLASSES = {
     sprite: 'crimson-5', cls: 'dreadmaw', shape: 'spine', label: 'DREADMAW-CLASS HEAVY CRUISER', short: 'HEAVY CRUISER',
     w: 175, h: 66, hull: 60, sh: { F: 3, S: 2, A: 1 },
     speed: 110, maxTurn: 30, turrets: 4, pts: 500,
-    desc: 'Dominion flagship of the Drift. Kill it and the line breaks.',
+    desc: 'Crimson Reach flagship of the Drift. Kill it and the line breaks.',
     weapons: [
       { name: 'LANCE SPINE', type: 'lance', arc: 'side', range: 480, dice: 4, need: 3, dmgPer: 2 },
       { name: 'MASS BATTERIES', type: 'battery', arc: 'side', range: 420, dice: 12, need: 4, dmgPer: 1 },
@@ -259,11 +259,11 @@ DATA.CRIT_TABLE = [
 /* ---------------- difficulty ---------------- */
 DATA.DIFFS = [
   { id: 'easy', name: 'PATROL', enemyNeed: 1, morale: 0.5, reqMul: 1.25,
-    desc: 'Dominion guns hit on +1 \u00b7 their morale breaks early \u00b7 +25% requisition' },
+    desc: 'Enemy guns hit on +1 \u00b7 their morale breaks early \u00b7 +25% requisition' },
   { id: 'normal', name: 'LINE DUTY', enemyNeed: 0, morale: 0.4, reqMul: 1,
     desc: 'The war as it is' },
   { id: 'hard', name: 'FORLORN HOPE', enemyNeed: -1, morale: 0.3, reqMul: 0.8,
-    desc: 'Dominion guns hit on \u22121 \u00b7 they fight nearly to the last \u00b7 \u221220% requisition' }
+    desc: 'Enemy guns hit on \u22121 \u00b7 they fight nearly to the last \u00b7 \u221220% requisition' }
 ];
 DATA.diffOf = (id) => DATA.DIFFS.find(d => d.id === id) || DATA.DIFFS[1];
 
@@ -562,7 +562,7 @@ DATA.STORY = [
     trigger: () => true,   // the cold-open — always available, shown first thing
     body: [
       'MERIDIAN. Two years ago.',
-      'The Dominion flagship DREADMAW broke the Alliance line in ninety seconds, and Admiral Kade Voss gave the order every captain dreads — hold. You watched the fleet die holding a line that was already gone. Then you disobeyed, and cut your corvette through the enemy escorts to shield the civilian convoys running for the jump point.',
+      'The DREADMAW — Warlord Skarr\'s heavy cruiser — broke the Alliance line in ninety seconds, and Admiral Kade Voss gave the order every captain dreads: hold. You watched the fleet die holding a line that was already gone. Then you disobeyed, and cut your corvette through the enemy escorts to shield the civilian convoys running for the jump point.',
       'Eleven thousand people lived. The fleet did not. You brought one ship out of the fire: the TAS REAVER.',
       'The Alliance could not decide whether you were a hero or the coward who ran while the fleet burned — so they split the difference and sent you here. To the Verge, the dying frontier, with the ragtag 7th Expeditionary Fleet and the name they gave you in the wreckage of Meridian: the Ghost.',
       'Voss came with you. He blames himself, not you. The Kessel Drift is his second chance — and yours.'
@@ -581,8 +581,8 @@ DATA.STORY = [
     body: [
       'Voss lays the sector chart across the table and puts one word at the centre of it: DREADMAW.',
       '"This is the mission, Captain — everything else out here is just how we get to it. Warlord Skarr and the flagship that broke our line at Meridian went to ground somewhere in the Kessel Drift, and the Reach has been bleeding these convoys white to keep him fed and hidden."',
-      'WHY HER, AND NOT JUST ANY PIRATE: "The DREADMAW is not one more raider. She is the ship that killed a fleet in ninety seconds and taught the whole Verge that the Alliance can be broken. As long as she flies, every warlord and dynast in the Drift believes the same thing. Put her on the ocean floor and the Reach folds — the swarm and the Dynasty both start doing their own arithmetic. And Meridian gets its answer."',
-      'HOW WE FIND HER: "We do not go straight for the throat — we cannot, not yet. We take the Reach apart system by system and squeeze his raiding packs until one of them coughs up where the Butcher sleeps. Every world you take is a lead."',
+      '"She is not one more raider. The DREADMAW killed a fleet in ninety seconds and taught the whole Verge that the Alliance can be broken. While she flies, every warlord and dynast in the Drift believes the same. Put her on the ocean floor and the Reach folds — the swarm and the Dynasty start doing their own arithmetic, and Meridian gets its answer."',
+      '"We cannot go straight for the throat, not yet. We take the Reach apart system by system and squeeze his raiding packs until one of them gives up where the Butcher sleeps. Every world you take is a lead."',
       'OBJECTIVE — Hunt the DREADMAW. Break the Crimson Reach until Skarr has nowhere left to hide.'
     ]
   },
@@ -767,7 +767,7 @@ DATA.MISSION_DEFS = {
   m_first: {
     name: 'FIRST BLOOD', sub: 'KESSEL DRIFT · OUTER MARKER',
     briefing: [
-      'Two Dominion raiders are picking apart the Kessel relay buoys.',
+      'Two Crimson Reach raiders are picking apart the Kessel relay buoys.',
       'Voss: "Simple gunnery problem, Captain. Cross their bows, keep your stern out of their teeth, and put lances through anything flying a DKV transponder."',
       'OBJECTIVE — Destroy all hostile ships.'
     ],
@@ -786,7 +786,7 @@ DATA.MISSION_DEFS = {
   m_convoy: {
     name: 'THE CONVOY', sub: 'KESSEL DRIFT · HAULAGE LANE 7',
     briefing: [
-      'The freighter PELICAN is inbound with reactor cores for the station — and a Dominion wolfpack is vectoring on her.',
+      'The freighter PELICAN is inbound with reactor cores for the station — and a Crimson Reach wolfpack is vectoring on her.',
       'Voss: "She can\'t dodge and she can\'t shoot. That makes her yours. Escorts hunt sterns — don\'t let them slip past you."',
       'OBJECTIVE — The PELICAN must reach the far jump marker (right edge). If she dies, we lose the station.'
     ],
@@ -818,7 +818,7 @@ DATA.MISSION_DEFS = {
   m_anvil: {
     name: 'AMBUSH AT THE ANVIL', sub: 'KESSEL DRIFT · ASTEROID SHOAL',
     briefing: [
-      'A Dominion destroyer is laid up in the Anvil shoal, guns cold, escorts prowling the rocks.',
+      'A Crimson Reach destroyer is laid up in the Anvil shoal, guns cold, escorts prowling the rocks.',
       'Voss: "The rocks eat lance fire and they\'ll eat your hull if you get greedy. Use the shadows, then hit them before the MARAUDER gets her batteries lit."',
       'OBJECTIVE — Destroy all hostile ships. Asteroids block line of fire and grind hulls that pass through.'
     ],
@@ -834,12 +834,12 @@ DATA.MISSION_DEFS = {
       { cls: 'jackal', name: 'DKV WHELP', role: 'raider', x: 1520, y: 1010, angle: -160 }
     ],
     win: (b) => Game.sideDead(b, 'enemy') ? 'The Anvil falls silent. Salvage crews are already counting the wrecks.' : null,
-    lose: (b) => Game.sideDead(b, 'player') ? 'The shoal keeps your bones. The Dominion keeps the Drift.' : null
+    lose: (b) => Game.sideDead(b, 'player') ? 'The shoal keeps your bones. The Reach keeps the Drift.' : null
   },
   m_hunt: {
     name: 'THE HUNT', sub: 'KESSEL DRIFT · DEEP FIELD',
     briefing: [
-      'The courier VULTURE is carrying the Dominion fleet codes home. She runs for the jump point on turn 3.',
+      'The courier VULTURE is carrying the Crimson Reach fleet codes home. She runs for the jump point on turn 3.',
       'Voss: "If that ship jumps, every ambush for a year is already planned. I don\'t care what it costs — the VULTURE burns."',
       'OBJECTIVE — Destroy the VULTURE before she escapes off the far edge. Her escort will try to make you blink.'
     ],
@@ -867,7 +867,7 @@ DATA.MISSION_DEFS = {
   m_hive: {
     name: 'THE HIVE', sub: 'KESSEL DRIFT · DARKSIDE ANCHORAGE',
     briefing: [
-      'Long-range pickets keep dying with the same last words: contacts small, fast, everywhere. The Dominion has brought a carrier into the Drift.',
+      'Long-range pickets keep dying with the same last words: contacts small, fast, everywhere. The Hive has brought a carrier into the Drift.',
       'Voss: "The HIVE will stand off and bleed you white with bomber waves. Fighters will thin them, flak will catch some — but the only cure is her flight deck on fire. Get in and gut her."',
       'OBJECTIVE — Destroy the HIVE. Her escorts rout when she dies. Watch for bomber waves — point defense and fighter cover are your friends.'
     ],
@@ -889,14 +889,14 @@ DATA.MISSION_DEFS = {
     lose: (b) => Game.sideDead(b, 'player') ? 'The bombers keep coming long after your guns stop. The Verge keeps what it takes.' : null
   },
   m_dreadmaw: {
-    name: 'THE DREADMAW', sub: 'KESSEL DRIFT · DOMINION LINE',
+    name: 'THE DREADMAW', sub: 'KESSEL DRIFT · CRIMSON REACH LINE',
     briefing: [
       'There she is. The DREADMAW — the heavy cruiser that broke the Terran Alliance line at Meridian. Her escorts have never lost her.',
-      'Voss: "No clever speech, Captain. That ship is the Dominion\'s claim on the Drift. Take her spine off and the rest of them will remember they\'re mortal."',
+      'Voss: "No clever speech, Captain. That ship is the Reach\'s claim on the Drift. Take her spine off and the rest of them will remember they\'re mortal."',
       'OBJECTIVE — Destroy the DREADMAW. Break her and her escorts rout.'
     ],
     reward: 400,
-    bonus: { desc: 'LET NONE ESCAPE: no Dominion ship leaves the field', reward: 120,
+    bonus: { desc: 'LET NONE ESCAPE: no Crimson Reach ship leaves the field', reward: 120,
       check: (b) => !b.stats.enemyEscaped },
     terrain: 'medium',
     playerSpawn: { x: 320, y: 680 },
@@ -909,7 +909,7 @@ DATA.MISSION_DEFS = {
     ],
     win: (b) => {
       const v = b.ships.find(s => s.vip);
-      return (v && !v.alive) ? 'The DREADMAW folds in on her own fires. Across the Drift, Dominion transponders go dark and running.' : null;
+      return (v && !v.alive) ? 'The DREADMAW folds in on her own fires. Across the Drift, Crimson Reach transponders go dark and running.' : null;
     },
     lose: (b) => Game.sideDead(b, 'player') ? 'The line holds — theirs, not ours. The Verge keeps what it takes.' : null
   }
