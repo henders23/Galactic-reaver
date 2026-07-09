@@ -323,7 +323,7 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
   content: ''; position: fixed; inset: 0; pointer-events: none;
   background: transparent;
 }
-#screen.bg-start { background: #04070d url('../assets/bg-start.jpg') center/cover fixed no-repeat; }
+#screen.bg-start { background: #04070d url('../assets/vanguard.png') center/cover fixed no-repeat; }
 #screen.bg-start::before { background: linear-gradient(90deg, rgba(3, 6, 12, .92) 0%, rgba(3, 6, 12, .72) 38%, rgba(3, 6, 12, .12) 70%, rgba(3, 6, 12, .4) 100%); }
 #screen.bg-starfield { background: #04070d url('../assets/bg-starfield.jpg') center/cover fixed no-repeat; }
 #screen.bg-starfield::before { background: radial-gradient(ellipse at 50% 40%, rgba(3, 6, 12, .35), rgba(3, 6, 12, .78) 85%); }
