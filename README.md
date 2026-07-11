@@ -23,8 +23,11 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   frontier systems back if you don't hold them. Progress, ownership, requisition
   and crews are saved in `localStorage`. (See `docs/CAMPAIGN_PLAN.md`.)
 - **Fleet management between missions** — commission frigates, light cruisers and
-  escort carriers (fleet of up to 4), install fleet-wide upgrades, and buy
-  per-ship **gunnery refits** (+1 die on every gun).
+  escort carriers, install fleet-wide upgrades, and buy per-ship **gunnery
+  refits** (+1 die on every gun). The fleet cap rises with your **command rank**:
+  CAPTAIN fields 4 hulls, each act's promotion (COMMODORE, REAR ADMIRAL) adds
+  one more, and winning the war confers ADMIRAL. Authored set-piece battles
+  screen themselves with extra escorts when a big late fleet returns to them.
 - **Per-ship veterancy** — named ships earn XP for kills, boarding actions and
   surviving missions: GREEN → SEASONED (+1 turret) → VETERAN (guns hit on −1)
   → ELITE (+1 shields, repairs on 4+). Ships lost in battle are gone for good,
@@ -95,9 +98,9 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
 
 | Input | Action |
 | --- | --- |
-| Click ship / `1`–`4` | Select a ship |
+| Click ship / `1`–`6` | Select a ship |
 | Click order card → click destination → click facing | Plot a move |
-| `SPACE` | Engage / Open fire / End turn |
+| `SPACE` | Engage / Open fire / End turn — or skip the maneuver/firing playback |
 | `B` | Broadsides at will (auto-assign all idle guns) |
 | `F` | Game speed 1× / 2× / 3× |
 | Mouse wheel | Zoom to cursor |

@@ -290,7 +290,23 @@ DATA.UPGRADES = [
   { id: 'crews', name: 'VETERAN DAMAGE CREWS', cost: 100, desc: 'Repairs succeed on 4+ instead of 5+' }
 ];
 DATA.refitCost = (cls) => Math.round(DATA.CLASSES[cls].pts * 0.45 / 10) * 10;
-DATA.MAX_FLEET = 4;
+/* absolute fleet ceiling (skirmish builds to it directly; the campaign cap is
+   the player's command rank — see DATA.PLAYER_RANKS / Game.maxFleet) */
+DATA.MAX_FLEET = 6;
+
+/* ---------------- player command rank ----------------
+   The player's own rank rises with the acts of the campaign, and each promotion
+   raises the fleet cap. ADMIRAL is conferred by winning the war. */
+DATA.PLAYER_RANKS = [
+  { name: 'CAPTAIN', fleet: 4,
+    voss: '"Your command, your call, Captain. Keep it alive."' },
+  { name: 'COMMODORE', fleet: 5,
+    voss: '"Fleet Command has been reading my dispatches after all. They\'ve cut you a commodore\'s pennant, Captain — wear it. And take another hull onto the line: you\'ve earned the tonnage."' },
+  { name: 'REAR ADMIRAL', fleet: 6,
+    voss: '"Rear Admiral. Say it out loud once — it helps. The whole southern front answers to that word now, so put a sixth ship in your line and go finish this war."' },
+  { name: 'ADMIRAL', fleet: 6,
+    voss: '"The Verge is yours, Admiral. Meridian is answered."' }
+];
 /* ---------------- ship name pools (per faction) ----------------
    Terran Alliance ships carry the TAS pennant and stern, disciplined names.
    The Crimson Reach are pirates — evocative, unprefixed hull names. The
@@ -448,21 +464,25 @@ DATA.GALAXY = {
   systems: [
     // --- Terran Alliance (west) ---
     { id: 'aegis', name: 'AEGIS PRIME', type: 'capital', owner: 'terran', x: 12, y: 44, links: ['celestia', 'providence', 'horizon', 'vanguard'] },
-    { id: 'vanguard', name: 'BULWARK', type: 'majorhub', owner: 'terran', x: 22, y: 22, links: ['aegis', 'northwatch', 'celestia'] },
-    { id: 'northwatch', name: 'NORTHWATCH', type: 'outpost', owner: 'terran', x: 12, y: 19, links: ['vanguard'] },
+    { id: 'vanguard', name: 'BULWARK', type: 'majorhub', owner: 'terran', x: 22, y: 22, links: ['aegis', 'northwatch', 'celestia', 'shallows'] },
+    { id: 'northwatch', name: 'NORTHWATCH', type: 'outpost', owner: 'terran', x: 12, y: 19, links: ['vanguard', 'shallows'] },
     { id: 'celestia', name: 'CELESTIA', type: 'minorhub', owner: 'terran', x: 23, y: 37, links: ['aegis', 'vanguard', 'horizon'] },
     { id: 'providence', name: 'PROVIDENCE', type: 'resource', owner: 'terran', x: 14, y: 58, links: ['aegis', 'valoris', 'fortitude'] },
     { id: 'valoris', name: 'VALORIS', type: 'shipyard', owner: 'terran', x: 11, y: 71, links: ['providence', 'fortitude'] },
     { id: 'fortitude', name: 'FORTITUDE', type: 'outpost', owner: 'terran', x: 25, y: 64, links: ['providence', 'valoris', 'horizon'] },
-    { id: 'horizon', name: 'HORIZON', type: 'minorhub', owner: 'terran', x: 31, y: 45, links: ['aegis', 'celestia', 'fortitude', 'elytra', 'centauri'] },
-    // --- Za'Argon Dynasty (centre) ---
-    { id: 'centauri', name: 'CENTAURI GATE', type: 'capital', owner: 'zaargon', x: 45, y: 30, links: ['horizon', 'elytra', 'pax', 'reavers'] },
+    { id: 'horizon', name: 'HORIZON', type: 'minorhub', owner: 'terran', x: 31, y: 45, links: ['aegis', 'celestia', 'fortitude', 'elytra'] },
+    // --- Za'Argon Dynasty (centre) — their capital sits behind the Junction, not on the front ---
+    { id: 'centauri', name: 'CENTAURI GATE', type: 'capital', owner: 'zaargon', x: 45, y: 30, links: ['elytra', 'pax', 'reavers'] },
     { id: 'elytra', name: 'ELYTRA JUNCTION', type: 'minorhub', owner: 'zaargon', x: 40, y: 52, links: ['horizon', 'centauri', 'nexus', 'churn'] },
     { id: 'pax', name: 'PAX STATION', type: 'resource', owner: 'zaargon', x: 55, y: 40, links: ['centauri', 'trinity', 'ravagers'] },
     { id: 'nexus', name: 'NEXUS POINT', type: 'outpost', owner: 'zaargon', x: 50, y: 63, links: ['elytra', 'trinity', 'churn'] },
     { id: 'trinity', name: 'TRINITY EXCHANGE', type: 'minorhub', owner: 'zaargon', x: 61, y: 55, links: ['pax', 'nexus', 'ulvor'] },
-    // --- Crimson Reach (north-east) ---
-    { id: 'reavers', name: "REAVER'S LANDING", type: 'majorhub', owner: 'crimson', x: 62, y: 16, links: ['centauri', 'dreadfall', 'ravagers'] },
+    // --- Crimson Reach (north corridor + north-east) ---
+    // The raiding corridor: pirate space touches the Terran frontier directly, so
+    // the Act I war is fought against the Reach from the first engagement.
+    { id: 'shallows', name: 'THE SHALLOWS', type: 'outpost', owner: 'crimson', x: 31, y: 12, planetCount: 2, boss: 'corsair', links: ['vanguard', 'northwatch', 'gallows'] },
+    { id: 'gallows', name: 'GALLOWS REST', type: 'minorhub', owner: 'crimson', x: 46, y: 14, links: ['shallows', 'reavers'] },
+    { id: 'reavers', name: "REAVER'S LANDING", type: 'majorhub', owner: 'crimson', x: 62, y: 16, links: ['gallows', 'centauri', 'dreadfall', 'ravagers'] },
     { id: 'dreadfall', name: 'DREADFALL', type: 'capital', owner: 'crimson', x: 76, y: 24, links: ['reavers', 'bloodmoon'] },
     { id: 'bloodmoon', name: 'BLOODMOON HOLD', type: 'outpost', owner: 'crimson', x: 82, y: 37, links: ['dreadfall', 'ravagers'] },
     { id: 'ravagers', name: "RAVAGER'S GULF", type: 'minorhub', owner: 'crimson', x: 71, y: 40, links: ['reavers', 'pax', 'bloodmoon'] },
@@ -480,7 +500,7 @@ DATA.TERRAN_CAPITAL = 'aegis';
 /* Authored set-piece anchors: 'systemId:planetIndex' → mission-def id. These launch
    the hand-built missions in place of a generated one. */
 DATA.ANCHORS = {
-  'reavers:0': 'm_first',
+  'shallows:0': 'm_first',
   'bloodmoon:0': 'm_convoy',
   'ravagers:0': 'm_anvil',
   'dreadfall:1': 'm_hunt',

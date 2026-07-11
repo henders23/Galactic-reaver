@@ -71,6 +71,18 @@ const Game = {
     return r;
   },
 
+  /* ================= player command rank =================
+     Rises with the campaign's acts (chapter 2 → COMMODORE, 3 → REAR ADMIRAL);
+     winning the war confers ADMIRAL. Each promotion raises the fleet cap. */
+  playerRankIdx() {
+    if (!Game.save) return 0;
+    if (Game.save.done && Game.save.ending) return 3;
+    const ch = (Game.save.story && Game.save.story.chapter) || 1;
+    return U.clamp(ch - 1, 0, 2);
+  },
+  playerRank() { return DATA.PLAYER_RANKS[Game.playerRankIdx()]; },
+  maxFleet() { return Game.playerRank().fleet; },
+
   /* ================= ship construction ================= */
   mkShip(cls, name, side, role, x, y, angle, opts) {
     opts = opts || {};
@@ -235,10 +247,13 @@ const Game = {
     let ri = 0;
     const roleFor = (cls) => Game.isCarrierClass(cls) ? 'carrier' : roles[ri++ % roles.length];
     // a requested flagship (e.g. a decapitation target) is always present, even if
-    // it overruns the budget — only its escort screen scales with the tier
-    if (opts.flagship && F.flagship && DATA.CLASSES[F.flagship]) {
-      remaining -= DATA.CLASSES[F.flagship].pts;
-      specs.push({ cls: F.flagship, role: 'sniper', name: Game.factionShipName(factionId, used, rng), vip: !!opts.vipFlagship, flagship: true });
+    // it overruns the budget — only its escort screen scales with the tier. A
+    // system can pin a lighter boss hull (opts.flagshipCls) so early outposts
+    // don't field the faction's capital ship.
+    const fcls = (opts.flagshipCls && DATA.CLASSES[opts.flagshipCls]) ? opts.flagshipCls : F.flagship;
+    if (opts.flagship && fcls && DATA.CLASSES[fcls]) {
+      remaining -= DATA.CLASSES[fcls].pts;
+      specs.push({ cls: fcls, role: 'sniper', name: Game.factionShipName(factionId, used, rng), vip: !!opts.vipFlagship, flagship: true });
     }
     let guard = 0;
     while (specs.length < max && guard++ < 60) {
@@ -285,7 +300,7 @@ const Game = {
     const specs = Game.rollFleet(F.id, {
       budget: wantCourier ? Math.round(budget * 0.8) : budget,
       rng, used, roles, max: 6,
-      flagship: wantFlagship, vipFlagship: wantFlagship
+      flagship: wantFlagship, vipFlagship: wantFlagship, flagshipCls: ctx.flagshipCls
     });
     const enemies = specs.map((s, i) => {
       const y = 300 + (specs.length > 1 ? i / (specs.length - 1) : 0.5) * (H - 600);
@@ -351,7 +366,7 @@ const Game = {
     return {
       name: ctx.name || (ctx.finale ? arch.name + ' — SYSTEM FINALE' : arch.name),
       sub: system.name + ' · ' + planet.name.toUpperCase(),
-      generated: true, faction: F.id, tier: tier.id, archetype: arch.id, finale: !!ctx.finale,
+      generated: true, faction: F.id, tier: tier.id, archetype: arch.id, finale: !!ctx.finale, story: !!ctx.story,
       briefing: ctx.briefing || briefing, reward: Math.round(arch.reward * tier.budgetMul * rewardMul), bonus: null,
       terrain: DATA.PLANET_TYPES[planet.type] || arch.terrain || 'medium',
       playerSpawn: { x: 340, y: H / 2 }, allies, enemies,
@@ -433,6 +448,7 @@ const Game = {
      Anchored worlds (see DATA.ANCHORS) reference indices up to :1, so the floor is 2. */
   systemPlanetCount(sysId) {
     const sys = DATA.system(sysId);
+    if (sys && sys.planetCount) return sys.planetCount;   // pinned (e.g. the first-mission outpost)
     if (sys && sys.type === 'capital') return 4;
     return 2 + (Game.hashSeed('pcount_' + sysId) % 3);   // 2, 3 or 4
   },
@@ -495,6 +511,32 @@ const Game = {
     return counts;
   },
 
+  /* Authored set-pieces carry fixed enemy fleets balanced for the original 4-ship
+     cap. When a larger, richer player fleet meaningfully outguns one, screen the
+     enemy line with extra Reach escorts so the set-piece keeps its teeth. Returns
+     spawn specs only — the shared MISSION_DEF is never mutated. */
+  reinforceAuthored(m) {
+    if (!Game.save) return [];
+    const enemyPts = m.enemies.reduce((a, e) => a + (DATA.CLASSES[e.cls] ? DATA.CLASSES[e.cls].pts : 0), 0);
+    let gap = Math.round((Game.playerFleetPts() - enemyPts) * 0.6);
+    if (gap < DATA.CLASSES.jackal.pts) return [];
+    const used = new Set(m.enemies.map(e => e.name));
+    const names = DATA.DKV_NAMES.filter(n => !used.has(n));
+    const extras = [];
+    const H = DATA.WORLD.h;
+    while (gap >= DATA.CLASSES.jackal.pts && extras.length < 4) {
+      const cls = gap >= DATA.CLASSES.marauder.pts ? 'marauder' : (gap >= DATA.CLASSES.ravager.pts ? 'ravager' : 'jackal');
+      gap -= DATA.CLASSES[cls].pts;
+      extras.push({
+        cls, name: names.shift() || ('DKV ESCORT ' + (extras.length + 1)),
+        role: extras.length % 2 ? 'raider' : 'brawler',
+        x: DATA.WORLD.w - 460 - extras.length * 70,
+        y: 320 + (extras.length * 977) % (H - 640), angle: 180
+      });
+    }
+    return extras;
+  },
+
   /* launch the mission on a planet — an authored anchor, or a generated battle */
   startPlanetMission(sysId, planetIdx, tierId) {
     const sys = DATA.system(sysId);
@@ -507,7 +549,7 @@ const Game = {
       const m = DATA.MISSION_DEFS[planet.anchor];
       const ships = Game.fleetSpawn(m.playerSpawn, Game.save.fleet);
       (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
-      m.enemies.forEach(e => {
+      m.enemies.concat(Game.reinforceAuthored(m)).forEach(e => {
         const role = e.cls === 'hive' ? 'carrier' : e.role;
         ships.push(Game.mkShip(e.cls, e.name, 'enemy', role, e.x, e.y, e.angle, { vip: e.vip }));
       });
@@ -518,7 +560,7 @@ const Game = {
       factionId: sys.owner, archetypeId: planet.archetype, tierId,
       planet: { name: planet.name, type: planet.type }, system: { name: sys.name },
       seed: Game.hashSeed(sysId + '_' + planetIdx + '_' + tierId), playerFleetPts: Game.playerFleetPts(),
-      commander: planet.commander || null, finale: !!planet.finale
+      commander: planet.commander || null, finale: !!planet.finale, flagshipCls: sys.boss || null
     });
   },
 
@@ -531,7 +573,7 @@ const Game = {
       const m = DATA.MISSION_DEFS[beat.anchor];
       const ships = Game.fleetSpawn(m.playerSpawn, Game.save.fleet);
       (m.allies || []).forEach(a => ships.push(Game.mkShip(a.cls, a.name, 'ally', a.role, a.x, a.y, a.angle)));
-      m.enemies.forEach(e => {
+      m.enemies.concat(Game.reinforceAuthored(m)).forEach(e => {
         const role = e.cls === 'hive' ? 'carrier' : e.role;
         ships.push(Game.mkShip(e.cls, e.name, 'enemy', role, e.x, e.y, e.angle, { vip: e.vip }));
       });
@@ -687,9 +729,13 @@ const Game = {
   },
   completeStoryBeat(id) {
     if (!Game.save.story) Game.save.story = { chapter: 0, done: [] };
+    const rankBefore = Game.playerRankIdx();
     if (!Game.save.story.done.includes(id)) Game.save.story.done.push(id);
     const beat = DATA.STORY.find(b => b.id === id);
     if (beat && beat.chapter > Game.save.story.chapter) Game.save.story.chapter = beat.chapter;
+    // an act change can promote the player — flag it so the galaxy screen can
+    // present the promotion (and the fleet-cap increase that rides with it)
+    if (Game.playerRankIdx() > rankBefore) Game.save.pendingPromotion = Game.playerRankIdx();
     Game.persist();
   },
 
@@ -697,7 +743,12 @@ const Game = {
     // show a short pre-combat briefing first, so the player goes into the fight
     // knowing the objective — then drop into the battle on confirm. Skirmishes
     // (and any headless caller) carry no briefing and start straight away.
-    if (window.UI && mission.briefing && mission.briefing.length) {
+    // Routine generated missions skip it too: the system map already presented
+    // the objective, threat and opposition, so they launch directly. The brief
+    // survives where the narrative matters — story ops, authored set-pieces,
+    // and system finales.
+    const routine = mission.generated && !mission.story && !mission.finale;
+    if (window.UI && mission.briefing && mission.briefing.length && !routine) {
       UI.showCombatBrief(mission, () => Game.enterBattle(mission, ships, terrainDensity));
       return;
     }
@@ -722,7 +773,9 @@ const Game = {
     if (window.Music) Music.startCombat();   // crossfade menu → combat music
     Game.autoSelect();
     if (window.Rend) Rend.initBattle();
-    if (window.UI) UI.refresh();
+    // the engagement log opens with the battle (the dice ARE the game) unless
+    // the player has explicitly collapsed it before
+    if (window.UI) { UI.setLogOpen(UI.logPref()); UI.refresh(); }
   },
 
   /* ================= helpers ================= */
@@ -965,6 +1018,12 @@ const Game = {
       return;
     }
 
+    // a click during the maneuver / firing playback fast-forwards it (unless it
+    // was aimed at a hull — inspecting mid-resolution still works)
+    if ((b.phase === 'anim' || b.phase === 'firing' || b.phase === 'firewait') && !hit) {
+      Game.skipResolution();
+      return;
+    }
     if (hit) { b.inspect = hit.id; if (window.UI) UI.refresh(); }
   },
 
@@ -1335,6 +1394,7 @@ const Game = {
       return;
     }
     b.phase = 'firing';
+    b.skipFire = false;
     b.armed = null; b.hover = null; b.boardMode = null;
     b.nextShotAt = performance.now() + 150;
     if (window.UI) UI.refresh();
@@ -1820,6 +1880,22 @@ const Game = {
     return report;
   },
 
+  /* fast-forward the current maneuver or fire resolution (SPACE / click / the
+     action button during those phases). Movement snaps to its end state; the
+     firing queue drains at a rapid cadence so the log and effects stay legible. */
+  skipResolution() {
+    const b = Game.b;
+    if (!b) return false;
+    if (b.phase === 'anim' && b.anim) {
+      b.anim = null;
+      Game.finishAnim();
+      return true;
+    }
+    if (b.phase === 'firing') { b.skipFire = true; b.nextShotAt = 0; return true; }
+    if (b.phase === 'firewait') { b.fireDoneAt = 0; return true; }
+    return false;
+  },
+
   /* ================= per-frame tick (called from render loop) ================= */
   tick(now) {
     const b = Game.b;
@@ -1832,15 +1908,16 @@ const Game = {
       const q = b.queue.shift();
       if (q) {
         Game.processShot(q);
-        b.nextShotAt = now + 420 / Game.speed;
+        b.nextShotAt = now + (b.skipFire ? 45 : 420 / Game.speed);
         if (window.UI) UI.refresh();
       }
       if (!b.queue.length && b.phase === 'firing') {
         b.phase = 'firewait';
-        b.fireDoneAt = now + 500 / Game.speed;
+        b.fireDoneAt = now + (b.skipFire ? 0 : 500 / Game.speed);
       }
     }
     if (b.phase === 'firewait' && now >= b.fireDoneAt) {
+      b.skipFire = false;
       Game.finishFiring();
     }
   }

@@ -382,18 +382,45 @@ console.log('galaxy & war');
   Game.galaxyInit(Game.save);
   eq(Game.systemOwner('aegis'), 'terran', 'Aegis Prime starts Terran');
   eq(Game.systemOwner('centauri'), 'zaargon', "Centauri Gate starts Za'Argon");
-  ok(Game.isEngageable('centauri'), "Za'Argon system bordering Terran is engageable");
+  ok(Game.isEngageable('shallows'), 'the Crimson border outpost is engageable from the start');
   ok(Game.isEngageable('elytra'), 'Elytra Junction bordering Terran is engageable');
+  ok(!Game.isEngageable('centauri'), "the Za'Argon capital no longer borders Terran space at the start");
+  ok(!Game.isEngageable('gallows'), 'the second corridor system opens only after the outpost falls');
   ok(!Game.isEngageable('dreadfall'), 'deep Crimson capital is not engageable at the start');
   ok(!Game.isEngageable('aegis'), 'a Terran-held system is not engageable');
 
   const planets = Game.systemPlanets('reavers');
   ok(planets.length >= 2 && planets.length <= 4, 'a system holds 2 to 4 planets');
   eq(Game.systemPlanets('centauri').length, 4, 'a capital system holds a full four planets');
-  eq(planets[0].anchor, 'm_first', "Reaver's Landing planet 1 anchors FIRST BLOOD");
+  const shallows = Game.systemPlanets('shallows');
+  eq(shallows.length, 2, 'the first-mission outpost is pinned to two planets');
+  eq(shallows[0].anchor, 'm_first', 'The Shallows planet 1 anchors FIRST BLOOD');
+  ok(shallows[1].finale && shallows[1].generatedBoss, 'its second planet is the generated system finale');
   eq(Game.systemPlanets('dreadfall')[0].anchor, 'm_dreadmaw', 'Dreadfall planet 1 anchors the DREADMAW finale');
   eq(Game.systemPlanets('ulvor')[0].anchor, 'm_hive', "Ul'Vor Broodworld anchors THE HIVE");
   eq(planets[1].name, Game.systemPlanets('reavers')[1].name, 'planet layout is deterministic');
+
+  // a pinned boss hull keeps the first finale off the faction capital ship
+  const bossSpecs = Game.rollFleet('crimson', { budget: 300, flagship: true, vipFlagship: true, flagshipCls: 'corsair' });
+  eq(bossSpecs[0].cls, 'corsair', 'a system can pin a lighter finale flagship');
+
+  // player command rank gates the fleet cap
+  eq(Game.maxFleet(), 4, 'a fresh campaign is capped at 4 hulls (CAPTAIN)');
+  Game.save.story.chapter = 2;
+  eq(Game.playerRank().name, 'COMMODORE', 'Act II promotes to COMMODORE');
+  eq(Game.maxFleet(), 5, 'COMMODORE fields 5 hulls');
+  Game.save.story.chapter = 3;
+  eq(Game.maxFleet(), 6, 'REAR ADMIRAL fields 6 hulls');
+  Game.save.story.chapter = 1;
+
+  // authored set-pieces gain a screening force against outsized player fleets
+  Game.save.fleet = [{ cls: 'lcruiser' }, { cls: 'lcruiser' }, { cls: 'argus' }, { cls: 'argus' }, { cls: 'lcruiser' }];
+  const extras = Game.reinforceAuthored(DATA.MISSION_DEFS.m_first);
+  ok(extras.length > 0, 'an outsized fleet draws reinforcements at a set-piece');
+  ok(extras.every(e => DATA.CLASSES[e.cls] && e.name), 'reinforcements are valid hulls with names');
+  eq(DATA.MISSION_DEFS.m_first.enemies.length, 2, 'the authored mission def itself is not mutated');
+  Game.save.fleet = [{ cls: 'corvette', name: 'TAS VANGUARD', xp: 0, refit: false }];
+  eq(Game.reinforceAuthored(DATA.MISSION_DEFS.m_first).length, 0, 'a lone corvette draws no reinforcements');
 
   Game.save.galaxy.cleared['centauri'] = [0, 1, 2, 3];
   ok(Game.isSystemTaken('centauri'), 'four cleared planets = system taken');
