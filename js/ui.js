@@ -690,7 +690,6 @@ const UI = {
       '<button class="menu-btn" id="mnSkirmish">SKIRMISH</button>' +
       '<button class="menu-btn" id="mnHelp">HOW TO PLAY</button>' +
       '</div>' +
-      '<div class="hero-note">a Battlefleet Gothic–inspired tactical space combat game<br>dice-pool broadsides · torpedo salvos · bomber waves · boarding actions<br>the Verge keeps what it takes</div>' +
       '</div>',
       { bg: 'start', wide: true, left: true }
     );
@@ -1427,11 +1426,10 @@ const UI = {
     const elsewhere = w && w.flips ? w.flips.filter(f => f.from !== 'terran') : [];
     if (elsewhere.length) para.push('Elsewhere the war grinds on — ' +
       elsewhere.map(f => DATA.faction(f.faction).short + ' takes ' + U.esc(f.name) + ' from the ' + DATA.faction(f.from).short).join(' · ') + '.');
-    para.push('The 7th holds the line another day. The Verge keeps what it takes — see it keeps ours.');
+    para.push('The system is secured. Casualties logged, requisition credited. Stand by for your next assignment.');
 
     UI.screen(
       '<div class="brieftitle" style="color:#6fe0a8">MISSION COMPLETE</div>' +
-      '<div class="briefsub">' + (w && !w.story ? U.esc(w.sysName) + ' · ' : '') + 'EXPERIENCE · KILLS · ADMIRAL\'S REPORT</div>' +
       '<div class="mc-cols">' +
       '<div class="mc-main">' +
       '<div class="reqbig">+' + earned + ' REQ EARNED</div>' +
@@ -1509,7 +1507,6 @@ const UI = {
     const backLabel = sysId ? 'RETURN TO SYSTEM MAP ▸' : 'SECTOR MAP ▸';
     UI.screen(
       '<div class="brieftitle">REFIT & REQUISITION</div>' +
-      '<div class="briefsub">STATION TENDER · HULLS REPAIRED · CREWS RESTED · VETERANS KEEP THEIR CREWS AS LONG AS THEY LIVE</div>' +
       '<div class="reqbig">⬡ ' + sv.req + ' REQUISITION</div>' +
       prizeHtml +
       '<div class="paneltitle" style="text-align:left">YOUR FLEET — ' + sv.fleet.length + '/' + cap +
