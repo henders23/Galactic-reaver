@@ -910,7 +910,7 @@ const Game = {
     const s = Game.ship(b.sel);
     if (!b || b.phase !== 'move' || !s) return;
     b.curOrder = o;
-    Snd.selectShip();
+    Snd.order();
     if (o.range === 0) {
       Game.commitPlot(s, { x: s.x, y: s.y, angle: s.angle }, o);
     } else {

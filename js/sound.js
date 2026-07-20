@@ -53,7 +53,9 @@ const Snd = {
     shipDestroyedMedium: 'assets/sounds/ship-destroyed-medium.mp3',
     // UI clicks + spoken callouts (all routed through the SFX bus, so they
     // follow the master mute/volume — not the music on/off toggle)
-    uiClick: 'assets/sounds/ui-click.mp3',
+    uiClick: 'assets/sounds/ui-click.mp3',      // ship / movement selection
+    mainClick: 'assets/sounds/main-click.mp3',  // menu selections + other clicks
+    orders: 'assets/sounds/orders.mp3',         // helm-order and fire-order selections
     weGotThem: 'assets/sounds/we-got-them.mp3',
     enemyInRange: 'assets/sounds/enemy-in-range.mp3'
   },
@@ -148,17 +150,20 @@ const Snd = {
     src.start(t0);
   },
 
-  // every click / selection effect plays the recorded 'uiClick' sample,
-  // falling back to the old procedural blips until it has loaded
-  click() { if (Snd._sample('uiClick', 0.7)) return; Snd._osc('square', 900, 700, 0.045, 0.10); },
-  select() { if (Snd._sample('uiClick', 0.7)) return; Snd._osc('square', 500, 760, 0.07, 0.11); },
+  // recorded UI samples (each falls back to the old procedural blip until it
+  // has loaded): 'mainClick' for menu selections and other clicks, 'orders'
+  // for helm/fire order selections, 'uiClick' for ship / movement selection
+  click() { if (Snd._sample('mainClick', 0.7)) return; Snd._osc('square', 900, 700, 0.045, 0.10); },
+  select() { if (Snd._sample('mainClick', 0.7)) return; Snd._osc('square', 500, 760, 0.07, 0.11); },
   deny() { Snd._osc('square', 220, 140, 0.12, 0.12); },
   lock() { Snd._osc('sine', 640, 640, 0.05, 0.14); Snd._osc('sine', 960, 960, 0.06, 0.12, 0.06); },
 
-  // selectShip — picking any friendly ship or a movement order
+  // selectShip — picking a friendly ship to move or fire (movement selection)
   selectShip() { if (Snd._sample('uiClick', 0.7)) return; Snd.select(); },
+  // order — choosing a helm order for the selected ship
+  order() { if (Snd._sample('orders', 0.7)) return; Snd.select(); },
   // targetShip — locking a weapon onto an enemy ship to fire on
-  targetShip() { if (Snd._sample('uiClick', 0.7)) return; Snd.lock(); },
+  targetShip() { if (Snd._sample('orders', 0.7)) return; Snd.lock(); },
   // spoken callouts
   weGotThem() { Snd._sample('weGotThem', 0.9); },
   enemyInRange() { Snd._sample('enemyInRange', 0.9); },
