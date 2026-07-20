@@ -53,8 +53,7 @@ const Snd = {
     shipDestroyedMedium: 'assets/sounds/ship-destroyed-medium.mp3',
     // UI clicks + spoken callouts (all routed through the SFX bus, so they
     // follow the master mute/volume — not the music on/off toggle)
-    targetShip: 'assets/sounds/target-ship.mp3',
-    selectShip: 'assets/sounds/select-ship.mp3',
+    uiClick: 'assets/sounds/ui-click.mp3',
     weGotThem: 'assets/sounds/we-got-them.mp3',
     enemyInRange: 'assets/sounds/enemy-in-range.mp3'
   },
@@ -149,16 +148,17 @@ const Snd = {
     src.start(t0);
   },
 
-  click() { Snd._osc('square', 900, 700, 0.045, 0.10); },
-  select() { Snd._osc('square', 500, 760, 0.07, 0.11); },
+  // every click / selection effect plays the recorded 'uiClick' sample,
+  // falling back to the old procedural blips until it has loaded
+  click() { if (Snd._sample('uiClick', 0.7)) return; Snd._osc('square', 900, 700, 0.045, 0.10); },
+  select() { if (Snd._sample('uiClick', 0.7)) return; Snd._osc('square', 500, 760, 0.07, 0.11); },
   deny() { Snd._osc('square', 220, 140, 0.12, 0.12); },
   lock() { Snd._osc('sine', 640, 640, 0.05, 0.14); Snd._osc('sine', 960, 960, 0.06, 0.12, 0.06); },
 
-  // recorded ship-selection clicks (fall back to the procedural blips):
   // selectShip — picking any friendly ship or a movement order
-  selectShip() { if (Snd._sample('selectShip', 0.7)) return; Snd.select(); },
+  selectShip() { if (Snd._sample('uiClick', 0.7)) return; Snd.select(); },
   // targetShip — locking a weapon onto an enemy ship to fire on
-  targetShip() { if (Snd._sample('targetShip', 0.7)) return; Snd.lock(); },
+  targetShip() { if (Snd._sample('uiClick', 0.7)) return; Snd.lock(); },
   // spoken callouts
   weGotThem() { Snd._sample('weGotThem', 0.9); },
   enemyInRange() { Snd._sample('enemyInRange', 0.9); },
