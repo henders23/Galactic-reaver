@@ -491,6 +491,9 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .storecard.owned h4 { color: #6fe0a8; }
 .storecard .refitrow { display: flex; flex-direction: column; gap: 5px; margin-top: auto; }
 .storecard .refitrow button { width: 100%; margin-top: 0; padding: 7px 6px; font-size: 10px; letter-spacing: .5px; }
+.storecard .refitrow button.tradebtn { border-color: rgba(255, 120, 110, .5); color: #ff8a80; background: rgba(255, 90, 80, .07); margin-top: 4px; }
+.storecard .refitrow button.tradebtn:hover:not(:disabled) { box-shadow: 0 0 14px rgba(255, 90, 80, .22); }
+.storecard .refitrow button.tradebtn.confirm { border-color: #ff8a80; color: #fff; background: rgba(255, 90, 80, .28); }
 .picklabel { font: 700 10px Rajdhani, sans-serif; letter-spacing: 3px; color: #6c86a0; text-align: center; margin: 10px 0 -2px; }
 
 /* ---------- galaxy (sector) map ---------- */

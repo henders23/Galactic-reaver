@@ -356,6 +356,16 @@ DATA.refitOf = (id) => DATA.REFITS.find(r => r.id === id);
 DATA.refitCostOf = (cls, mul) => Math.round(DATA.CLASSES[cls].pts * mul / 10) * 10;
 /* legacy single-refit cost (the old gunnery-only refit), kept for callers/tests */
 DATA.refitCost = (cls) => DATA.refitCostOf(cls, 0.45);
+
+/* trade-in value: sell a ship back to the yard for half the hull's price plus a
+   partial rebate on the refits fitted to it. Rounded to the nearest 10 REQ. */
+DATA.sellValue = (f) => {
+  const st = DATA.STORE_SHIPS.find(s => s.cls === f.cls);
+  let v = (st ? st.cost : DATA.CLASSES[f.cls].pts) * 0.5;
+  const refits = f.refits || (f.refit ? { gunnery: true } : {});
+  DATA.REFITS.forEach(r => { if (refits[r.id]) v += DATA.refitCostOf(f.cls, r.mul) * 0.4; });
+  return Math.round(v / 10) * 10;
+};
 /* absolute fleet ceiling (skirmish builds to it directly; the campaign cap is
    the player's command rank — see DATA.PLAYER_RANKS / Game.maxFleet) */
 DATA.MAX_FLEET = 6;

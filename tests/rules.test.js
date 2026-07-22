@@ -737,6 +737,20 @@ console.log('roster & refits');
   Game.mode = 'skirmish'; Game.save = null;
 }
 
+/* ================= trade-in (selling ships) ================= */
+console.log('trade-in');
+{
+  ok(DATA.sellValue({ cls: 'frigate', refits: {} }) > 0, 'a hull has a positive trade-in value');
+  ok(DATA.sellValue({ cls: 'battleship', refits: {} }) > DATA.sellValue({ cls: 'corvette', refits: {} }),
+    'a battleship trades in for more than a corvette');
+  ok(DATA.sellValue({ cls: 'lcruiser', refits: { gunnery: true, armor: true } }) >
+     DATA.sellValue({ cls: 'lcruiser', refits: {} }), 'installed refits raise the trade-in value');
+  ok(DATA.sellValue({ cls: 'frigate', refit: true }) > DATA.sellValue({ cls: 'frigate', refits: {} }),
+    'a legacy-refitted hull trades in for more');
+  const st = DATA.STORE_SHIPS.find(s => s.cls === 'lcruiser');
+  ok(DATA.sellValue({ cls: 'lcruiser', refits: {} }) < st.cost, 'trade-in refunds less than the purchase price');
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

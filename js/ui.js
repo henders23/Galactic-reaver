@@ -1473,12 +1473,20 @@ const UI = {
           r.name + ' — ' + cost + '</button>';
       }).join('');
       const installed = DATA.REFITS.filter(r => f.refits[r.id]).map(r => r.name);
+      // trade-in: the command ship (fleet[0]) is never sold, nor your last hull
+      let tradeBtn = '';
+      if (i > 0 && sv.fleet.length > 1) {
+        const val = DATA.sellValue(f);
+        tradeBtn = (UI._sellPending === i)
+          ? '<button class="tradebtn confirm" data-sell="' + i + '">CONFIRM SALE — +' + val + ' REQ</button>'
+          : '<button class="tradebtn" data-sell="' + i + '">TRADE IN — +' + val + ' REQ</button>';
+      }
       return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 112) + '</div>' +
         '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
         (installed.length ? '<br><span style="color:#6fe0a8">✓ ' + installed.join(' · ') + '</span>' : '') + '</div>' +
-        '<div class="refitrow">' + refitBtns + '</div>' +
+        '<div class="refitrow">' + refitBtns + tradeBtn + '</div>' +
         '</div>';
     }).join('');
     const cap = Game.maxFleet();
@@ -1528,7 +1536,25 @@ const UI = {
       '<button class="menu-btn primary" id="mnRefitDone">' + backLabel + '</button>',
       { bg: 'repair', wide: true }
     );
-    const rerender = () => { Game.persist(); UI.showRefit(report, earned, sysId); };
+    // any store action other than the pending trade-in cancels that confirmation
+    const rerender = () => { UI._sellPending = null; Game.persist(); UI.showRefit(report, earned, sysId); };
+    UI.el.screenInner.querySelectorAll('[data-sell]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.sell);
+        if (i <= 0 || i >= sv.fleet.length || sv.fleet.length <= 1) return;
+        if (UI._sellPending !== i) {          // first click — arm the confirmation
+          UI._sellPending = i;
+          Game.persist();
+          UI.showRefit(report, earned, sysId);
+          return;
+        }
+        sv.req += DATA.sellValue(sv.fleet[i]);  // second click — sell it
+        sv.fleet.splice(i, 1);
+        UI._sellPending = null;
+        Snd.repair();
+        rerender();
+      });
+    });
     UI.el.screenInner.querySelectorAll('[data-salv]').forEach(btn => {
       btn.addEventListener('click', () => {
         const p = report.prizes.splice(Number(btn.dataset.salv), 1)[0];
@@ -1585,6 +1611,7 @@ const UI = {
       });
     });
     document.getElementById('mnRefitDone').addEventListener('click', () => {
+      UI._sellPending = null;
       Game.persist();
       if (sysId && DATA.system(sysId)) UI.showSystem(sysId);
       else UI.showGalaxy();
