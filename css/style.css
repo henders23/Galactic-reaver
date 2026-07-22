@@ -489,6 +489,8 @@ aside { padding: 12px; overflow-y: auto; flex: none; }
 .storecard button:disabled { opacity: .35; cursor: default; }
 .storecard.owned { border-color: rgba(111, 224, 168, .4); }
 .storecard.owned h4 { color: #6fe0a8; }
+.storecard .refitrow { display: flex; flex-direction: column; gap: 5px; margin-top: auto; }
+.storecard .refitrow button { width: 100%; margin-top: 0; padding: 7px 6px; font-size: 10px; letter-spacing: .5px; }
 .picklabel { font: 700 10px Rajdhani, sans-serif; letter-spacing: 3px; color: #6c86a0; text-align: center; margin: 10px 0 -2px; }
 
 /* ---------- galaxy (sector) map ---------- */

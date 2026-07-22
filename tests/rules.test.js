@@ -676,6 +676,67 @@ console.log('finale gates');
   Game.mode = 'skirmish'; Game.save = null;
 }
 
+/* ================= convoy steers around a rock instead of stalling ================= */
+console.log('convoy pathing');
+{
+  // a rock parked on the freighter's eastbound lane used to collapse its move to
+  // 0 forever (facing locked east, no lateral steering). It must now go around,
+  // without grinding through (which would cost the convoy hull it can't spare).
+  const conv = Game.mkShip('freighter', 'TAS PELICAN', 'ally', 'convoy', 220, 600, 0);
+  const b = freshBattle([conv]);
+  b.phase = 'move';
+  b.terrain.push({ type: 'ast', x: 900, y: 600, r: 100 });
+  const WW = DATA.WORLD.w;
+  let exited = false, grinds = 0;
+  for (let turn = 1; turn <= 40 && !exited; turn++) {
+    b.turn = turn;
+    const fx = conv.x, fy = conv.y;
+    AI.plot(conv, b);
+    const arc = U.sampleCurve({ x: fx, y: fy, angle: conv.angle }, conv.plot, 18);
+    if (b.terrain.some(a => a.type === 'ast' && arc.some(p => Math.hypot(a.x - p.x, a.y - p.y) < a.r))) grinds++;
+    conv.x = conv.plot.x; conv.y = conv.plot.y; conv.angle = conv.plot.angle;
+    if (conv.x > WW - 60) exited = true;
+  }
+  ok(exited, 'the convoy reaches the far jump edge instead of stalling on the rock');
+  eq(grinds, 0, 'the convoy routes around the shoal without grinding through it');
+}
+
+/* ================= expanded roster & upgrade paths ================= */
+console.log('roster & refits');
+{
+  // the station tender offers the full escort→capital ladder
+  ['corvette', 'frigate', 'destroyer', 'lcruiser', 'argus', 'hcruiser', 'battleship'].forEach(cls => {
+    ok(DATA.CLASSES[cls], cls + ' hull is defined');
+    ok(DATA.STORE_SHIPS.some(s => s.cls === cls), cls + ' is offered at the tender');
+  });
+  ok(DATA.CLASSES.battleship.pts > DATA.CLASSES.hcruiser.pts, 'the battleship out-rates the heavy cruiser');
+
+  Game.mode = 'campaign';
+  Game.save = { fleet: [], upgrades: {}, req: 0 };
+  const gun = w => w.type === 'battery' || w.type === 'lance';
+  const dice = s => s.weapons.filter(gun).reduce((a, w) => a + w.dice, 0);
+  const base = Game.mkShip('lcruiser', 'BASE', 'player', 'brawler', 0, 0, 0, {});
+  const ref = Game.mkShip('lcruiser', 'REF', 'player', 'brawler', 0, 0, 0,
+    { refits: { gunnery: true, armor: true, engine: true, pd: true, torpedo: true } });
+  ok(dice(ref) > dice(base), 'gunnery refit adds gun dice');
+  ok(ref.maxHull > base.maxHull, 'armor refit adds hull');
+  ok(ref.speed > base.speed, 'engine overhaul adds speed');
+  ok(ref.turrets > base.turrets, 'point-defense refit adds a turret');
+  const torp = s => s.weapons.find(w => w.type === 'torp').salvo;
+  ok(torp(ref) > torp(base), 'torpedo refit adds a fish to the salvo');
+  // legacy single-refit flag still maps to the gunnery refit
+  const legacy = Game.mkShip('frigate', 'LEG', 'player', 'brawler', 0, 0, 0, { refit: true });
+  ok(dice(legacy) > dice(Game.mkShip('frigate', 'RAW', 'player', 'brawler', 0, 0, 0, {})), 'legacy refit:true still upguns the ship');
+
+  // fleet-wide upgrades apply to every campaign hull
+  Game.save.upgrades = { flak: true, armor: true, torpedoes: true };
+  const up = Game.mkShip('lcruiser', 'UP', 'player', 'brawler', 0, 0, 0, {});
+  ok(up.turrets > base.turrets, 'POINT-DEFENSE NET adds a turret fleet-wide');
+  ok(up.maxHull > base.maxHull, 'ABLATIVE PLATING adds hull fleet-wide');
+  ok(torp(up) > torp(base), 'HIGH-YIELD WARHEADS adds a fish fleet-wide');
+  Game.mode = 'skirmish'; Game.save = null;
+}
+
 U.clearSeed();
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

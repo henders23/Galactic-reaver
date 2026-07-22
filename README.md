@@ -22,9 +22,13 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   systems, and the **front can be lost**: enemy offensives besiege and flip your
   frontier systems back if you don't hold them. Progress, ownership, requisition
   and crews are saved in `localStorage`. (See `docs/CAMPAIGN_PLAN.md`.)
-- **Fleet management between missions** — commission frigates, light cruisers and
-  escort carriers, install fleet-wide upgrades, and buy per-ship **gunnery
-  refits** (+1 die on every gun). The fleet cap rises with your **command rank**:
+- **Fleet management between missions** — commission from a full escort→capital
+  ladder (corvette picket, frigate, torpedo **destroyer**, light cruiser, escort
+  carrier, **AEGIS heavy cruiser** and the **SOVEREIGN battleship**), install
+  fleet-wide upgrades (targeting uplink, reinforced emitters, veteran crews,
+  point-defense net, ablative plating, high-yield warheads), and fit each named
+  ship with its own mix of **refits** — gunnery, armor, engines, point-defense,
+  torpedoes and shields. The fleet cap rises with your **command rank**:
   CAPTAIN fields 4 hulls, each act's promotion (COMMODORE, REAR ADMIRAL) adds
   one more, and winning the war confers ADMIRAL. Authored set-piece battles
   screen themselves with extra escorts when a big late fleet returns to them.
@@ -32,7 +36,7 @@ Everything is plain HTML/CSS/JS; it works from a `file://` double-click.
   surviving missions: GREEN → SEASONED (+1 turret) → VETERAN (guns hit on −1)
   → ELITE (+1 shields, repairs on 4+). Ships lost in battle are gone for good,
   and their experience with them.
-- **Skirmish mode** — build a fleet from all four hulls and fight a points-matched
+- **Skirmish mode** — build a fleet from the whole Terran hull ladder and fight a points-matched
   force from any enemy faction — **Crimson Reach** pirates, the **Za'Argon
   Dynasty** or **the Hive** — on a random map. (Powered by the same procedural
   faction/mission engine that will drive the dynamic campaign; see

@@ -124,13 +124,22 @@ const Game = {
       commander: opts.commander || null,
       runTurn: opts.runTurn || null   // a fleeing ship breaks for the jump on this turn (default 3)
     };
-    // weapon refit: +1 die on all direct-fire weapons
-    if (s.refit) s.weapons.forEach(w => { if (w.type === 'lance' || w.type === 'battery') w.dice += 1; });
+    // per-ship refits (station upgrades). Legacy saves carry a single `refit`
+    // boolean — fold it into the gunnery refit so old fleets keep their guns.
+    s.refits = Object.assign({}, opts.refits);
+    if (opts.refit) s.refits.gunnery = true;
+    s.refit = !!s.refits.gunnery;   // kept for older callers / UI reading the flag
+    DATA.REFITS.forEach(r => { if (s.refits[r.id]) r.apply(s); });
     // veterancy bonuses
     if (rank >= 1) s.turrets += 1;                                      // SEASONED
     if (rank >= 3) { ['F', 'S', 'A'].forEach(a => { s.shMax[a] += 1; s.sh[a] += 1; }); } // ELITE
-    if (side === 'player' && Game.mode === 'campaign' && Game.save && Game.save.upgrades.shields) {
-      s.shMax.F += 1; s.sh.F += 1;
+    // fleet-wide upgrades bought at the station tender (campaign player only)
+    const upg = (side === 'player' && Game.mode === 'campaign' && Game.save) ? Game.save.upgrades : null;
+    if (upg) {
+      if (upg.shields) { s.shMax.F += 1; s.sh.F += 1; }
+      if (upg.flak) s.turrets += 1;
+      if (upg.armor) { const add = Math.round(s.maxHull * 0.15); s.maxHull += add; s.hull += add; }
+      if (upg.torpedoes) s.weapons.forEach(w => { if (w.type === 'torp') w.salvo += 1; });
     }
     return s;
   },
@@ -165,7 +174,7 @@ const Game = {
     return fleet.map((f, i) => {
       const y = spawn.y + (i - (fleet.length - 1) / 2) * 150;
       return Game.mkShip(f.cls, f.name, 'player', 'player', spawn.x, y, -15 + i * 8,
-        { xp: f.xp, refit: f.refit, fleetRef: i });
+        { xp: f.xp, refit: f.refit, refits: f.refits, fleetRef: i });
     });
   },
 
@@ -1943,6 +1952,25 @@ const AI = {
   desired(s, b, target) {
     const W = DATA.WORLD.w;
     if (s.role === 'convoy') {
+      // run for the far jump edge, but steer around any rock on the lane — a
+      // freighter that grinds through a shoal loses hull it cannot spare, and one
+      // that noses straight into a rock (facing locked east) never moves at all.
+      const H = DATA.WORLD.h;
+      const look = Math.max(560, Game.effSpeed(s) * 4);
+      const rock = b.terrain
+        .filter(a => a.type === 'ast' && a.x + a.r > s.x && a.x - a.r < s.x + look &&
+                     Math.abs(a.y - s.y) < a.r + 80)
+        .sort((p, q) => p.x - q.x)[0];
+      if (rock) {
+        const margin = rock.r + 95;
+        const up = rock.y - margin, down = rock.y + margin;
+        let goY;                                   // steer to whichever side stays on the map / is nearer
+        if (up < 90) goY = down;
+        else if (down > H - 90) goY = up;
+        else goY = Math.abs(up - s.y) <= Math.abs(down - s.y) ? up : down;
+        const wp = { x: Math.max(rock.x, s.x + 60), y: goY };
+        return { pt: wp, face: U.angleTo(s, wp) };
+      }
       return { pt: { x: W + 120, y: s.y }, face: 0 };
     }
     if (s.role === 'flee' && b.turn >= (s.runTurn || 3)) {
@@ -2046,15 +2074,49 @@ const AI = {
       return;
     }
     const dWant = U.dist(s, want.pt);
-    const course = s.angle + U.clamp(U.norm180(U.angleTo(s, want.pt) - s.angle), -o.maxTurn, o.maxTurn);
-    let travel = U.clamp(dWant, o.minMove, o.range);
-    const rad = course * U.D2R;
-    for (let t = travel; t >= 0; t -= 10) {
-      const px = s.x + Math.cos(rad) * t, py = s.y + Math.sin(rad) * t;
-      const inAst = b.terrain.some(a => a.type === 'ast' && Math.hypot(a.x - px, a.y - py) < a.r + 24);
-      if (!inAst) { travel = t; break; }
-      if (t < 10) travel = 0;
+    const toWant = U.norm180(U.angleTo(s, want.pt) - s.angle);
+    const desiredTravel = U.clamp(dWant, o.minMove, o.range);
+    // Combat hulls may plot straight through a shoal — grinding costs a little
+    // hull but is a valid tactic. A convoy freighter must not: it stops at the
+    // last point clear of every rock and steers around (see AI.desired).
+    const avoidRocks = s.role === 'convoy';
+    const clearTravel = (courseDeg) => {
+      const rr = courseDeg * U.D2R;
+      if (avoidRocks) {
+        let last = 0;
+        for (let t = 0; t <= desiredTravel; t += 10) {
+          const px = s.x + Math.cos(rr) * t, py = s.y + Math.sin(rr) * t;
+          if (b.terrain.some(a => a.type === 'ast' && Math.hypot(a.x - px, a.y - py) < a.r + 30)) break;
+          last = t;
+        }
+        return last;
+      }
+      for (let t = desiredTravel; t >= 0; t -= 10) {
+        const px = s.x + Math.cos(rr) * t, py = s.y + Math.sin(rr) * t;
+        const inAst = b.terrain.some(a => a.type === 'ast' && Math.hypot(a.x - px, a.y - py) < a.r + 24);
+        if (!inAst) return t;
+      }
+      return 0;
+    };
+    // steer toward the waypoint; but if asteroids choke that heading, fan out
+    // within the ship's turn envelope and take the course that advances furthest.
+    // Without this a convoy (or any hull that runs straight for a fixed edge)
+    // whose lane is blocked by a rock collapses its travel to 0 and never moves.
+    let course = s.angle + U.clamp(toWant, -o.maxTurn, o.maxTurn);
+    let travel = clearTravel(course);
+    if (travel < Math.min(desiredTravel, o.minMove + 10)) {
+      let bestCourse = course, bestTravel = travel;
+      for (let off = 10; off <= o.maxTurn; off += 10) {
+        for (const dir of [1, -1]) {
+          const c = s.angle + U.clamp(toWant + dir * off, -o.maxTurn, o.maxTurn);
+          const tv = clearTravel(c);
+          if (tv > bestTravel + 1) { bestTravel = tv; bestCourse = c; }
+        }
+        if (bestTravel >= desiredTravel - 1) break;
+      }
+      course = bestCourse; travel = bestTravel;
     }
+    const rad = course * U.D2R;
     const escaping = s.role === 'flee' || s.role === 'convoy' || s.role === 'rout';
     const nx = U.clamp(s.x + Math.cos(rad) * travel, s.role === 'rout' ? -200 : 40, DATA.WORLD.w + (escaping ? 200 : -40));
     const ny = U.clamp(s.y + Math.sin(rad) * travel, s.role === 'rout' ? -200 : 40, DATA.WORLD.h + (s.role === 'rout' ? 200 : -40));

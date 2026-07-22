@@ -65,6 +65,39 @@ DATA.CLASSES = {
       { name: 'FIGHTER BAY', type: 'bay', craft: 'fighters', arc: 'any', range: 900, salvo: 3, reloadTime: 2 }
     ]
   },
+  destroyer: {
+    sprite: 'terran-3', cls: 'destroyer', shape: 'blade', label: 'VIGILANT-CLASS DESTROYER', short: 'DESTROYER',
+    w: 132, h: 52, hull: 38, sh: { F: 2, S: 1, A: 1 },
+    speed: 155, maxTurn: 50, turrets: 2, pts: 280,
+    desc: 'Torpedo destroyer. Runs escorts down and puts fish in a cruiser\'s flank.',
+    weapons: [
+      { name: 'FORE LANCE', type: 'lance', arc: 'fore', range: 440, dice: 2, need: 3, dmgPer: 2 },
+      { name: 'FLANK BATTERY', type: 'battery', arc: 'side', range: 380, dice: 5, need: 4, dmgPer: 1 },
+      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 640, salvo: 4, reloadTime: 2 }
+    ]
+  },
+  hcruiser: {
+    sprite: 'terran-4', cls: 'hcruiser', shape: 'spine', label: 'AEGIS-CLASS HEAVY CRUISER', short: 'HVY CRUISER',
+    w: 168, h: 64, hull: 58, sh: { F: 3, S: 2, A: 1 },
+    speed: 118, maxTurn: 32, turrets: 4, pts: 500,
+    desc: 'The Alliance answer to the DREADMAW — heavy lances, a wall of batteries, torpedoes.',
+    weapons: [
+      { name: 'LANCE SPINE', type: 'lance', arc: 'side', range: 480, dice: 5, need: 3, dmgPer: 2 },
+      { name: 'MASS BATTERIES', type: 'battery', arc: 'side', range: 420, dice: 11, need: 4, dmgPer: 1 },
+      { name: 'TORPEDO TUBES', type: 'torp', arc: 'fore', range: 640, salvo: 3, reloadTime: 2 }
+    ]
+  },
+  battleship: {
+    sprite: 'terran-5', cls: 'battleship', shape: 'slab', label: 'SOVEREIGN-CLASS BATTLESHIP', short: 'BATTLESHIP',
+    w: 186, h: 72, hull: 78, sh: { F: 4, S: 3, A: 2 },
+    speed: 98, maxTurn: 24, turrets: 5, pts: 640,
+    desc: 'Capital ship of the line. Turns like a continent, but nothing crosses her broadside twice.',
+    weapons: [
+      { name: 'GRAND LANCES', type: 'lance', arc: 'side', range: 500, dice: 6, need: 3, dmgPer: 2 },
+      { name: 'MASS BROADSIDE', type: 'battery', arc: 'side', range: 430, dice: 13, need: 4, dmgPer: 1 },
+      { name: 'PROW TORPEDOES', type: 'torp', arc: 'fore', range: 640, salvo: 3, reloadTime: 2 }
+    ]
+  },
   /* --- civilian --- */
   freighter: {
     sprite: 'zaargon-2', cls: 'freighter', shape: 'box', label: 'PELICAN-CLASS FREIGHTER', short: 'FREIGHTER',
@@ -279,17 +312,50 @@ DATA.RANKS = [
 DATA.BOARD_RANGE = 150;
 
 /* ---------------- store ---------------- */
+/* The station tender offers a full escort→capital ladder, cheapest first.
+   Heavier hulls only become fieldable as command rank raises the fleet cap. */
 DATA.STORE_SHIPS = [
+  { cls: 'corvette', cost: 150 },
   { cls: 'frigate', cost: 220 },
+  { cls: 'destroyer', cost: 320 },
   { cls: 'lcruiser', cost: 380 },
-  { cls: 'argus', cost: 420 }
+  { cls: 'argus', cost: 420 },
+  { cls: 'hcruiser', cost: 620 },
+  { cls: 'battleship', cost: 820 }
 ];
 DATA.UPGRADES = [
   { id: 'uplink', name: 'TARGETING UPLINK', cost: 140, desc: 'All guns hit on −1 (e.g. 4+ becomes 3+), fleet-wide' },
   { id: 'shields', name: 'REINFORCED EMITTERS', cost: 120, desc: '+1 fore shield on every fleet ship' },
-  { id: 'crews', name: 'VETERAN DAMAGE CREWS', cost: 100, desc: 'Repairs succeed on 4+ instead of 5+' }
+  { id: 'crews', name: 'VETERAN DAMAGE CREWS', cost: 100, desc: 'Repairs succeed on 4+ instead of 5+' },
+  { id: 'flak', name: 'POINT-DEFENSE NET', cost: 130, desc: '+1 point-defense turret on every fleet ship (guns down torpedoes & bombers)' },
+  { id: 'armor', name: 'ABLATIVE PLATING', cost: 160, desc: '+15% hull integrity on every fleet ship' },
+  { id: 'torpedoes', name: 'HIGH-YIELD WARHEADS', cost: 130, desc: '+1 torpedo per salvo on every fleet ship with tubes' }
 ];
-DATA.refitCost = (cls) => Math.round(DATA.CLASSES[cls].pts * 0.45 / 10) * 10;
+
+/* ---------------- per-ship refits (station tender) ----------------
+   Each named hull can be refitted in several independent ways; cost scales with
+   the hull's point value. `req(cls)` gates refits that need a matching system
+   (e.g. torpedo tubes). `apply(ship)` mutates a freshly-built ship at spawn. */
+DATA.REFITS = [
+  { id: 'gunnery', name: 'GUNNERY REFIT', mul: 0.45, desc: '+1 die on every lance & battery',
+    apply: (s) => s.weapons.forEach(w => { if (w.type === 'lance' || w.type === 'battery') w.dice += 1; }) },
+  { id: 'armor', name: 'ARMOR REFIT', mul: 0.40, desc: '+20% hull integrity',
+    apply: (s) => { const add = Math.round(s.maxHull * 0.20); s.maxHull += add; s.hull += add; } },
+  { id: 'engine', name: 'ENGINE OVERHAUL', mul: 0.30, desc: '+15% speed · sharper turns',
+    apply: (s) => { s.speed = Math.round(s.speed * 1.15); s.maxTurn = Math.min(180, Math.round(s.maxTurn * 1.2)); } },
+  { id: 'pd', name: 'POINT-DEFENSE REFIT', mul: 0.25, desc: '+1 turret (flak vs torpedoes & bombers)',
+    apply: (s) => { s.turrets += 1; } },
+  { id: 'torpedo', name: 'TORPEDO REFIT', mul: 0.35, desc: '+1 torpedo per salvo',
+    req: (c) => c.weapons.some(w => w.type === 'torp'),
+    apply: (s) => s.weapons.forEach(w => { if (w.type === 'torp') w.salvo += 1; }) },
+  { id: 'shield', name: 'SHIELD REFIT', mul: 0.40, desc: '+1 shield on all facings',
+    req: (c) => (c.sh.F + c.sh.S + c.sh.A) > 0,
+    apply: (s) => ['F', 'S', 'A'].forEach(a => { s.shMax[a] += 1; s.sh[a] += 1; }) }
+];
+DATA.refitOf = (id) => DATA.REFITS.find(r => r.id === id);
+DATA.refitCostOf = (cls, mul) => Math.round(DATA.CLASSES[cls].pts * mul / 10) * 10;
+/* legacy single-refit cost (the old gunnery-only refit), kept for callers/tests */
+DATA.refitCost = (cls) => DATA.refitCostOf(cls, 0.45);
 /* absolute fleet ceiling (skirmish builds to it directly; the campaign cap is
    the player's command rank — see DATA.PLAYER_RANKS / Game.maxFleet) */
 DATA.MAX_FLEET = 6;

@@ -1462,14 +1462,23 @@ const UI = {
       const c = DATA.CLASSES[f.cls];
       const rank = DATA.RANKS[Game.rankOf(f.xp)];
       const nextRank = DATA.RANKS[Game.rankOf(f.xp) + 1];
-      const cost = DATA.refitCost(f.cls);
+      f.refits = f.refits || {};
+      if (f.refit) f.refits.gunnery = true;   // migrate the legacy single-refit flag
+      const refitBtns = DATA.REFITS.filter(r => !r.req || r.req(c)).map(r => {
+        const owned = !!f.refits[r.id];
+        const cost = DATA.refitCostOf(f.cls, r.mul);
+        if (owned) return '<button disabled>' + r.name + ' ✓</button>';
+        return '<button data-refit="' + i + '" data-rid="' + r.id + '" ' +
+          (sv.req < cost ? 'disabled' : '') + ' title="' + U.esc(r.desc) + '">' +
+          r.name + ' — ' + cost + '</button>';
+      }).join('');
+      const installed = DATA.REFITS.filter(r => f.refits[r.id]).map(r => r.name);
       return '<div class="storecard"><div class="art">' + UI.shipImg(f.cls, 112) + '</div>' +
         '<h4>' + (rank.chev ? '<span style="color:#ffd465">' + rank.chev + '</span> ' : '') + U.esc(f.name) + '</h4>' +
         '<div class="ds">' + c.short + ' · ' + rank.name + (rank.desc ? ' — ' + rank.desc : '') +
         '<br>XP ' + f.xp + (nextRank ? ' / ' + nextRank.xp + ' → ' + nextRank.name : ' · MAX RANK') +
-        (f.refit ? '<br>✓ GUNNERY REFIT (+1 die, all guns)' : '') + '</div>' +
-        (f.refit ? '<button disabled>REFITTED ✓</button>'
-          : '<button data-refit="' + i + '" ' + (sv.req < cost ? 'disabled' : '') + '>GUNNERY REFIT +1 DIE — ' + cost + ' REQ</button>') +
+        (installed.length ? '<br><span style="color:#6fe0a8">✓ ' + installed.join(' · ') + '</span>' : '') + '</div>' +
+        '<div class="refitrow">' + refitBtns + '</div>' +
         '</div>';
     }).join('');
     const cap = Game.maxFleet();
@@ -1540,10 +1549,15 @@ const UI = {
     UI.el.screenInner.querySelectorAll('[data-refit]').forEach(btn => {
       btn.addEventListener('click', () => {
         const f = sv.fleet[Number(btn.dataset.refit)];
-        const cost = DATA.refitCost(f.cls);
-        if (f.refit || sv.req < cost) return;
+        const r = DATA.refitOf(btn.dataset.rid);
+        if (!r) return;
+        f.refits = f.refits || {};
+        if (f.refit) f.refits.gunnery = true;
+        const cost = DATA.refitCostOf(f.cls, r.mul);
+        if (f.refits[r.id] || sv.req < cost) return;
         sv.req -= cost;
-        f.refit = true;
+        f.refits[r.id] = true;
+        if (r.id === 'gunnery') f.refit = true;   // keep the legacy flag in sync
         Snd.repair();
         rerender();
       });
@@ -1637,7 +1651,7 @@ const UI = {
     const picks = ['corvette'];
     let diffId = 'normal';
     let factionId = 'crimson';
-    const HULLS = ['corvette', 'frigate', 'lcruiser', 'argus'];
+    const HULLS = ['corvette', 'frigate', 'destroyer', 'lcruiser', 'argus', 'hcruiser', 'battleship'];
     const render = () => {
       const cards = HULLS.map(cls => {
         const c = DATA.CLASSES[cls];
