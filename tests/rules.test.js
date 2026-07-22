@@ -701,6 +701,28 @@ console.log('convoy pathing');
   eq(grinds, 0, 'the convoy routes around the shoal without grinding through it');
 }
 
+/* ================= guard outpost holds post but tracks threats ================= */
+console.log('guard outpost');
+{
+  // a defended outpost must not sit frozen on HOLD & LOCK: it pivots to keep its
+  // bow to the enemy (stern crits on 5+) while holding station near its post.
+  const H = DATA.WORLD.h;
+  const guard = Game.mkShip('freighter', 'OUTPOST ALPHA', 'ally', 'guard', 480, H / 2, 0);
+  const foe = Game.mkShip('ravager', 'DKV RAIDER', 'enemy', 'brawler', 480, H / 2 - 400, -90);
+  const b = freshBattle([guard, foe]);
+  b.phase = 'move';
+  // enemy is off the guard's bow — it should turn to face rather than lock down
+  AI.plot(guard, b);
+  eq(guard.order.id, 'about', 'the outpost comes about to face a threat off its beam');
+  const faceErr = Math.abs(U.norm180(U.angleTo(guard.plot, foe) - guard.plot.angle));
+  ok(faceErr < 46, 'the outpost turns toward the raider');
+  ok(U.dist({ x: guard.plot.x, y: guard.plot.y }, { x: 480, y: H / 2 }) < 40, 'the outpost holds station near its post');
+  // once it is on station and on target, it locks down and fires
+  guard.angle = U.angleTo(guard, foe);
+  AI.plot(guard, b);
+  eq(guard.order.id, 'hold', 'on-post and on-target, the outpost holds & locks');
+}
+
 /* ================= expanded roster & upgrade paths ================= */
 console.log('roster & refits');
 {

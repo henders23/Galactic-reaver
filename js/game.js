@@ -1984,8 +1984,11 @@ const AI = {
       return { pt, face: U.angleTo(s, pt) };
     }
     if (s.role === 'guard') {
-      // a defended outpost holds station and keeps its bows to the enemy
-      return { pt: { x: s.x, y: s.y }, face: target ? U.angleTo(s, target) : s.angle };
+      // a defended outpost holds its post — but it isn't dead in space. It keeps
+      // station near where it started, pivots to bring its guns onto the nearest
+      // threat, and steams back to its post if it gets shoved off it.
+      if (!s.anchor) s.anchor = { x: s.x, y: s.y };
+      return { pt: { x: s.anchor.x, y: s.anchor.y }, face: target ? U.angleTo(s, target) : s.angle };
     }
     if (!target) return { pt: { x: s.x, y: s.y }, face: s.angle };
     const dToT = U.angleTo(s, target);
@@ -2045,7 +2048,15 @@ const AI = {
     const orders = DATA.orders(s);
     const find = id => orders.find(o => o.id === id) || orders[0];
     if (s.role === 'convoy') return find('heading');
-    if (s.role === 'guard') return find('hold');
+    if (s.role === 'guard') {
+      // steam back to post if displaced; otherwise pivot in place to face the
+      // threat (COME ABOUT has no minimum move, so it turns without wandering),
+      // and only lock down once it's on station and already on target.
+      if (U.dist(s, want.pt) > 50) return find('heading');
+      const turnNeeded = Math.abs(U.norm180(want.face - s.angle));
+      if (turnNeeded > 15) return find('about');
+      return find('hold');
+    }
     if (s.role === 'flee' && b.turn >= (s.runTurn || 3)) return find('full');
     if (s.role === 'rout') {
       const turnNeeded = Math.abs(U.norm180(U.angleTo(s, want.pt) - s.angle));
